@@ -1,0 +1,53 @@
+Package: WASS2SHydroR
+Type: Package
+Title: What the Package Does (Title Case)
+Version: 0.1.0
+Authors@R: c(
+    person(
+      "Jane", "Doe",
+      email = "jane@example.com",
+      role = c("aut", "cre")
+    )
+  )
+Description: More about what it does (maybe more than one line).
+    Continuation lines should be indented.
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true
+RoxygenNote: 7.3.3
+Suggests: 
+    testthat (>= 3.0.0),
+	future,
+    furrr,
+    doParallel,
+	ggspatial,
+	knitr,
+    rmarkdown,
+    stringi
+Config/testthat/edition: 3
+Imports: 
+    cli,
+    dials,
+    dplyr,
+    ecmwfr,
+    ggplot2,
+    glue,
+    magrittr,
+    parsnip,
+    patchwork,
+    purrr,
+    recipes,
+    rlang,
+    rsample,
+    rules,
+    sf,
+    stats,
+    stringr,
+    terra,
+    tibble,
+    tidyr,
+    tune,
+    viridis,
+    workflows,
+    yaml,
+    yardstick
