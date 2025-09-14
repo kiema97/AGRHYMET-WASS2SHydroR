@@ -1,16 +1,14 @@
 Package: WASS2SHydroR
-Type: Package
-Title: What the Package Does (Title Case)
+Title: West-African and Sahel S2S Hydrology (Meta Package)
 Version: 0.1.0
 Authors@R: c(
-    person(
-      "Jane", "Doe",
-      email = "jane@example.com",
-      role = c("aut", "cre")
-    )
-  )
-Description: More about what it does (maybe more than one line).
-    Continuation lines should be indented.
+    person("Arsène", "Kiema", role = c("aut","cre"), email = "kiema.arsene@cilss.int"),
+    person("Abdou", "Ali", role = "ctb", email = "abou.ali@cilss.int"),
+    person("Bernard", "Minoungou", role = "ctb", email = "bminoungou@wmo.int"),
+    person("Mandela", "Houngnibo", role = "ctb", email = "mandela.houngnibo@cilss.int"),
+    person("Hamatan", "Mohamed", role = "ctb", email = "mohamed.hamatan@cilss.int"))
+Description: Meta package that bundles the core, statistical, hydro-ML and AI subpackages
+    for the WASS2S hydrological seasonal-to-subseasonal forecasting system.
 License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
