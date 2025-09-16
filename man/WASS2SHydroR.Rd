@@ -11,7 +11,15 @@ subseasonal-to-seasonal (S2S) hydrological forecasts
 in West Africa and the Sahel.
 }
 \author{
-\strong{Maintainer}: Jane Doe \email{jane@example.com}
+\strong{Maintainer}: Arsène Kiema \email{kiema.arsene@cilss.int}
+
+Other contributors:
+\itemize{
+  \item Abdou Ali \email{abou.ali@cilss.int} [contributor]
+  \item Bernard Minoungou \email{bminoungou@wmo.int} [contributor]
+  \item Mandela Houngnibo \email{mandela.houngnibo@cilss.int} [contributor]
+  \item Hamatan Mohamed \email{mohamed.hamatan@cilss.int} [contributor]
+}
 
 }
 \keyword{internal}

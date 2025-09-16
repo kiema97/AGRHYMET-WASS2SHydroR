@@ -20,3 +20,4 @@ Results from the specific method implementation.
 Each package (stat/hydro/ml) implements its own S3 method:
 `run_method.method_stat()`, `run_method.method_hydro()`, etc.
 }
+\keyword{internal}

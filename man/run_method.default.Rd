@@ -16,3 +16,4 @@
 \description{
 Default method for unregistered method types
 }
+\keyword{internal}

@@ -2,81 +2,142 @@
 % Please edit documentation in R/wass2s_download_cds.R
 \name{wass2s_download_cds}
 \alias{wass2s_download_cds}
-\title{Robust downloader for Copernicus/ECMWF datasets (via ecmwfr)}
+\title{Robust Parallel Downloader for CDS/ECMWF (via ecmwfr) with Year Chunking}
 \usage{
 wass2s_download_cds(
   dataset_short_name,
   base_query,
+  center_variables,
   years,
-  months = NULL,
-  days = NULL,
-  times = NULL,
-  leadtime_hour = NULL,
-  area = NULL,
+  months,
+  days,
+  times = "00:00",
+  leadtime_hour,
+  area = c(28.5, -25.5, 4, 26.6),
   out_dir = ".",
   user = "ecmwf",
   service = c("cds", "ads", "cems"),
-  chunk = c("year", "year-month"),
-  job_name = job_name,
   filename_tpl = NULL,
   tries = 3,
   sleep_sec = 15,
   timeout_sec = 3600,
   force_download = FALSE,
+  parallel = FALSE,
+  workers = 2,
+  job_name = "default",
   verbose = TRUE,
   ...
 )
 }
 \arguments{
-\item{dataset_short_name}{Character. CDS/ADS/CEMS dataset name (e.g. "reanalysis-era5-single-levels",
-"seasonal-original-single-levels", "cams-global-reanalysis-eac4", etc.).}
+\item{dataset_short_name}{Character. The dataset short name on CDS/ADS/CEMS,
+e.g., \code{"seasonal-original-single-levels"}.}
 
-\item{base_query}{Named list. Static part of the query (e.g. variables, product_type, pressure_level).
-You can leave out time-varying fields (year, month, day, leadtime_hour) — they are handled below.
-Names must match the dataset API fields (e.g. `variable`, `product_type`, `format`).}
+\item{base_query}{Named list. Static part of the query (e.g., \code{product_type},
+\code{pressure_level}, \code{format}). Time-varying fields like \code{year},
+\code{month}, \code{day}, \code{leadtime_hour} are set by this function.}
 
-\item{years}{Integer or character vector. Years to download.}
+\item{center_variables}{Character vector of entries \code{"model_system.variable"},
+e.g., \code{"meteo_france_9.TMAX"}, \code{"ecmwf_51.TMAX"}.
+Only one variable per entry is supported.}
 
-\item{months}{Integer/character vector [1..12] or NULL. If NULL, will not include `month` in query.}
+\item{years}{Integer/character vector. **Required.** Years to request.
+When multiple years are provided, requests are split one-per-year.}
 
-\item{days}{Character/integer vector or NULL. E.g. c("01","02") or NULL.}
+\item{months}{Integer/character vector in \code{1..12}. **Required.**}
 
-\item{times}{Character vector or NULL. E.g. c("00:00","06:00","12:00","18:00") for ERA5 single levels.}
+\item{days}{Character/integer vector (e.g., \code{c("01","02")}). **Required.**}
 
-\item{leadtime_hour}{Character/integer vector or NULL. E.g. c("24","48",...) for seasonal original.}
+\item{times}{Character vector (e.g., \code{c("00:00","12:00")}). **Required.**}
 
-\item{area}{Numeric length-4 (N,W,S,E) or NULL.}
+\item{leadtime_hour}{Character/integer vector (e.g., \code{c("24","48",...)}). **Required.**}
 
-\item{out_dir}{Character. Output directory.}
+\item{area}{Optional numeric length-4 \code{c(N, W, S, E)} bounding box.}
 
-\item{user}{Character. Your CDS/ADS user ID (e.g., "12345"). Must match the key registered with `wf_set_key()`.}
+\item{out_dir}{Output directory. Created if missing.}
 
-\item{service}{Character. One of "cds","ads","cems". Default "cds".}
+\item{user}{CDS/ADS/CEMS user ID used with \code{ecmwfr::wf_set_key()}.}
 
-\item{chunk}{Character. "year" or "year-month". Controls file granularity.}
+\item{service}{One of \code{"cds"}, \code{"ads"}, \code{"cems"} (case-insensitive). Default \code{"cds"}.}
 
-\item{job_name}{optional name to use as an RStudio job and as output variable name. It has to be a syntactically valid name.}
+\item{filename_tpl}{Glue-like template for filenames. Placeholders available:
+\code{{modelsys}}, \code{{var}}, \code{{init}}, \code{{period}}, \code{{lead}}, \code{{dataset}}, \code{{year}}.
+Default: \code{"{modelsys}_{var}_{init}_{period}_{lead}.nc"}.}
 
-\item{filename_tpl}{Character glue-like template. Available fields: {dataset}, {year}, {month}, {var}.
-Default: "{dataset}_{year}.nc". If chunk = "year-month", default becomes "{dataset}_{year}{month}.nc".}
+\item{tries}{Integer. Number of retry attempts per request (sequential mode). Default \code{3}.}
 
-\item{tries}{Integer. Number of retry attempts per chunk (default 3).}
+\item{sleep_sec}{Numeric. Seconds between retries (sequential mode). Default \code{15}.}
 
-\item{sleep_sec}{Numeric. Seconds to wait between retries (default 15).}
+\item{timeout_sec}{Numeric. Timeout per request (seconds). Default \code{3600}.
+Passed to \code{wf_request()} or \code{wf_request_batch()} as \code{time_out}.}
 
-\item{timeout_sec}{Numeric. Timeout per request in seconds (default 3600).}
+\item{force_download}{Logical. If \code{FALSE} (default), existing files are skipped.}
 
-\item{force_download}{Logical. If FALSE (default), skip chunks whose file already exists.}
+\item{parallel}{Logical. If \code{TRUE}, use \code{wf_request_batch()} to submit requests in parallel.
+Falls back to sequential mode if batch is unavailable.}
 
-\item{verbose}{Logical. Pass to `wf_request()`; also controls message printing.}
+\item{workers}{Integer. Number of parallel workers for batch submission. Default \code{2}.}
 
-\item{...}{Others parameters pass to `ecmwfr::wf_request()`}
+\item{job_name}{Optional string passed to \code{wf_request()} (sequential mode).}
+
+\item{verbose}{Logical. Verbose logging. Default \code{TRUE}.}
+
+\item{...}{Additional arguments forwarded to \code{ecmwfr::wf_request()}.}
 }
 \value{
-A data.frame (invisible) with columns: chunk, file, status ("ok","skip","fail"), error.
+(Invisibly) a \code{data.frame} with columns:
+\itemize{
+  \item \code{file} – full path to the output file
+  \item \code{status} – one of \code{"ok"}, \code{"skip"}, \code{"fail"}
+  \item \code{error} – last error message (if any)
+  \item \code{model}, \code{system}, \code{variable}, \code{year}
+}
 }
 \description{
-Downloads climate/meteorological data from CDS/ADS/CEMS using `ecmwfr`,
-chunked by year (or year-month), with retries, resume on existing files,
-and clear status reporting.
+Downloads climate/meteorological data from CDS/ADS/CEMS using \pkg{ecmwfr},
+with support for multiple variables and models, robust retries, optional
+batch-parallel submission, resume-on-existing files, and clear status reporting.
+}
+\details{
+To comply with CDS request-size limits, when multiple years are provided the
+function automatically **splits requests per year** (internal year chunking).
+This yields one output file per year. If your \code{filename_tpl} does not
+contain \code{{year}}, a \code{_{year}} suffix is appended before the extension
+to avoid overwriting.
+
+File naming follows by default:
+\preformatted{ModelSystem_Variable_InitDate_Period_Leadtime.nc}
+e.g., \code{meteo_france9_TMAX_Apr01_1993_2016_24-5160.nc}
+When year-chunking is active and \code{{year}} is not present in the template,
+files will be named like \code{..._1993.nc}, \code{..._1994.nc}, etc.
+}
+\section{Notes}{
+
+\itemize{
+  \item Unknown models (not listed in internal \code{VALID_MODELS}) trigger a warning but do not stop execution.
+  \item \code{retry} in \code{wf_request_batch()} is a polling interval (seconds), not a count.
+  \item Include \code{{year}} in \code{filename_tpl} if you prefer to control where the year appears.
+}
+}
+
+\examples{
+\dontrun{
+center_variables <- c("meteo_france_9.TMAX","ecmwf_51.TMAX")
+res <- wass2s_download_cds(
+  dataset_short_name = "seasonal-original-single-levels",
+  base_query = list(format = "netcdf"),
+  center_variables = center_variables,
+  years = 1993:1995,
+  months = 4, days = "01",
+  times = "00:00",
+  leadtime_hour = seq(24,240,24),
+  out_dir = "out",
+  parallel = TRUE, workers = 4,
+  service = "cds", verbose = TRUE
+)
+}
+
+}
+\seealso{
+\code{\link[ecmwfr]{wf_request}}, \code{\link[ecmwfr]{wf_request_batch}}
 }

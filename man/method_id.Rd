@@ -19,3 +19,4 @@ Build a method id (S3 tag)
 method_id("stat")
 method_id("hydro")
 }
+\keyword{internal}

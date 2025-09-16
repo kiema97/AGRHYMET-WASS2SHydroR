@@ -21,13 +21,13 @@ Suggests:
 	ggspatial,
 	knitr,
     rmarkdown,
-    stringi
+    stringi,	
+    ecmwfr
 Config/testthat/edition: 3
 Imports: 
     cli,
     dials,
     dplyr,
-    ecmwfr,
     ggplot2,
     glue,
     magrittr,

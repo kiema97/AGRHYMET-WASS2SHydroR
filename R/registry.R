@@ -2,7 +2,7 @@
 #'
 #' Simple plugin registry so the core can discover and run methods
 #' (e.g. "stat", "hydro", "ml") without hard dependencies.
-#' 
+#'
 #' @format An environment containing registered method constructors.
 #' @export
 hf_registry <- new.env(parent = emptyenv())
@@ -18,16 +18,16 @@ register_method <- function(name, constructor) {
   if (!is.character(name) || nchar(name) == 0) {
     stop("Method name must be a non-empty character string", call. = FALSE)
   }
-  
+
   if (!is.function(constructor)) {
     stop("Constructor must be a function", call. = FALSE)
   }
-  
+
   # Check if method already exists
   if (exists(name, envir = hf_registry, inherits = FALSE)) {
     warning("Method '", name, "' is already registered. Overwriting.", call. = FALSE)
   }
-  
+
   assign(name, constructor, envir = hf_registry)
   invisible(name)
 }
@@ -41,13 +41,13 @@ get_method <- function(name) {
   if (!is.character(name) || nchar(name) == 0) {
     stop("Method name must be a non-empty character string", call. = FALSE)
   }
-  
+
   ctor <- get0(name, envir = hf_registry, inherits = FALSE)
   if (is.null(ctor)) {
-    stop("Method '", name, "' is not registered. Available methods: ", 
+    stop("Method '", name, "' is not registered. Available methods: ",
          paste(ls(hf_registry), collapse = ", "), call. = FALSE)
   }
-  
+
   # Try to create the method object
   tryCatch({
     ctor()
@@ -60,7 +60,7 @@ get_method <- function(name) {
 #'
 #' @param x Character tag, e.g. "stat".
 #' @return An object with S3 class `c(paste0("method_", x), "method")`.
-#' @export
+#' @keywords internal
 #' @examples
 #' method_id("stat")
 #' method_id("hydro")
@@ -69,13 +69,13 @@ method_id <- function(x) {
   if (!is.character(x) || nchar(x) == 0) {
     stop("Method ID must be a non-empty character string", call. = FALSE)
   }
-  
+
   # Check if method is registered
   if (!exists(x, envir = hf_registry, inherits = FALSE)) {
-    warning("Method '", x, "' is not registered. Available methods: ", 
+    warning("Method '", x, "' is not registered. Available methods: ",
             paste(ls(hf_registry), collapse = ", "), call. = FALSE)
   }
-  
+
   structure(list(id = x), class = c(paste0("method_", x), "method"))
 }
 
@@ -88,25 +88,25 @@ method_id <- function(x) {
 #' @param data_by_product Named list of data.frames for each climate product.
 #' @param cfg Parsed YAML config (list).
 #' @return Results from the specific method implementation.
-#' @export
+#' @keywords internal
 run_method <- function(method, data_by_product, cfg) {
   # Input validation
   if (!inherits(method, "method")) {
     stop("method must be an object created by method_id()", call. = FALSE)
   }
-  
+
   if (!is.list(data_by_product) || length(data_by_product) == 0) {
     stop("data_by_product must be a non-empty named list", call. = FALSE)
   }
-  
+
   if (!all(sapply(data_by_product, is.data.frame))) {
     stop("All elements of data_by_product must be data frames", call. = FALSE)
   }
-  
+
   if (!is.list(cfg)) {
     stop("cfg must be a list (parsed YAML configuration)", call. = FALSE)
   }
-  
+
   UseMethod("run_method", method)
 }
 
@@ -115,9 +115,9 @@ run_method <- function(method, data_by_product, cfg) {
 #' @param method An object created by [method_id()].
 #' @param data_by_product Named list of data.frames for each climate product.
 #' @param cfg Parsed YAML config (list).
-#' @export
+#' @keywords internal
 run_method.default <- function(method, data_by_product, cfg) {
-  stop("No run_method method implemented for class: ", 
+  stop("No run_method method implemented for class: ",
        paste(class(method), collapse = ", "), call. = FALSE)
 }
 
@@ -138,11 +138,11 @@ run_wass2s <- function(method, data_by_product, cfg) {
   if (!is.character(method) || length(method) != 1) {
     stop("method must be a single character string", call. = FALSE)
   }
-  
+
   if (!is.list(data_by_product) && !is.character(data_by_product)) {
     stop("data_by_product must be a list or a file path", call. = FALSE)
   }
-  
+
   # Load configuration if path is provided
   if (is.character(cfg) && file.exists(cfg)) {
     cfg <- tryCatch({
@@ -151,18 +151,18 @@ run_wass2s <- function(method, data_by_product, cfg) {
       stop("Failed to read YAML configuration: ", e$message, call. = FALSE)
     })
   }
-  
+
   if (!is.list(cfg)) {
     stop("cfg must be a list or a valid path to a YAML file", call. = FALSE)
   }
-  
+
   # Create method object
   m <- tryCatch({
     method_id(method)
   }, error = function(e) {
     stop("Failed to create method ID: ", e$message, call. = FALSE)
   })
-  
+
   # Run the method
   tryCatch({
     run_method(m, data_by_product, cfg)
@@ -175,10 +175,10 @@ run_wass2s <- function(method, data_by_product, cfg) {
 .onLoad <- function(libname, pkgname) {
   # Register statistical method
   register_method("stat", function() method_id("stat"))
-  
+
   # Register hydro (ML) method
   register_method("hydro", function() method_id("hydro"))
-  
+
   # Add more methods as they become available
   # register_method("ml", function() method_id("ml"))
   # register_method("ai", function() method_id("ai"))
