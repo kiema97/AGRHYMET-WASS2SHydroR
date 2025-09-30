@@ -20,7 +20,9 @@ wass2s_tune_pred_ml(
   n_splits = 3,
   cumulative = TRUE,
   quiet = TRUE,
-  target_positive = TRUE
+  target_positive = TRUE,
+  allow_par = TRUE,
+  ...
 )
 }
 \arguments{
@@ -66,6 +68,10 @@ If \code{NULL} (default), every possible split is produced (\code{skip = 0}).}
 requested \code{n_splits} cannot be reached (default \code{TRUE}).}
 
 \item{target_positive}{Logical; if TRUE, force negative predictions to zero.}
+
+\item{allow_par}{A logical to allow parallel processing (if a parallel backend is registered).}
+
+\item{...}{Others parameters passed to \code{tune::control_grid()}}
 }
 \value{
 A list with the following elements:

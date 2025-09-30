@@ -4,7 +4,7 @@
 \alias{model_spec}
 \title{Model specification factory (parsnip)}
 \usage{
-model_spec(name)
+model_spec(name, strict = TRUE)
 }
 \arguments{
 \item{name}{One of \code{SUPPORTED_MODELS}, e.g. \code{"rf"}, \code{"xgb"},

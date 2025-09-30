@@ -17,6 +17,7 @@
 #' @param ensemble_reduce "mean","median","min","max","none". Default "mean".
 #' @param verbose print progress. Default TRUE.
 #' @return data.frame with DATE and values (shape depends on args).
+#' @export
 wass2s_prepare_data <- function(
     x,
     bbox = NULL,

@@ -18,6 +18,7 @@ wass2s_tune_pred_stat(
   n_splits = NULL,
   cumulative = TRUE,
   quiet = TRUE,
+  allow_par = TRUE,
   ...
 )
 }
@@ -55,7 +56,9 @@ is used instead of the default grid for the specified model.}
 
 \item{quiet}{Logical; if \code{FALSE}, emits informative messages.}
 
-\item{...}{Additional arguments passed to \code{make_rolling()}.}
+\item{allow_par}{A logical to allow parallel processing (if a parallel backend is registered).}
+
+\item{...}{Others parameters passed to \code{tune::control_grid()}}
 }
 \value{
 A list with:
