@@ -23,6 +23,9 @@
 #'
 #' @return data.frame with DATE and values (shape depends on args).
 #' @export
+#' @importFrom data.table as.data.table setDT setorder dcast
+#' @importFrom data.table :=
+#' @importFrom stats median
 wass2s_prepare_data <- function(
     x,
     bbox = NULL,
