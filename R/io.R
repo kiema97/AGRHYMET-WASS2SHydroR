@@ -15,5 +15,6 @@ read_cfg <- function(path) {
 utils::globalVariables(c(
   ".config", "id", ".pred", "kge", "kge_mean",
   "YYYY", "w", "pred", "Q", "class_hat", "quality",
-  "value", "prob","pred_final",".", "across"
+  "value", "prob","pred_final",".", "across",
+  "DATE","lon","lat","KEY","cell_id"
 ))

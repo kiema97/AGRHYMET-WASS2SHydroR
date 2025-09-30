@@ -21,7 +21,8 @@ Suggests:
 	ggspatial,
 	knitr,
     rmarkdown,
-    stringi,	
+    stringi,
+    terra,	
     ecmwfr
 Config/testthat/edition: 3
 Imports: 
@@ -37,12 +38,12 @@ Imports:
     recipes,
     rlang,
     rsample,
+	data.table,
 	ranger,
     rules,
     sf,
     stats,
     stringr,
-    terra,
     tibble,
     tidyr,
     tune,
