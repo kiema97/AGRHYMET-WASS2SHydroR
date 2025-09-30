@@ -1,6 +1,3 @@
-# util
-`%||%` <- function(a,b) if (is.null(a) || length(a) == 0) b else a
-
 #' Preprocess a NetCDF (.nc) to a tidy data.frame (DF-first pipeline)
 #'
 #' Works with single-time dims (`time|valid_time|T`) or split time
