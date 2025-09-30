@@ -38,6 +38,8 @@ min_analysis_n <- function(rset) {
 #' @param quiet Logical; if \code{FALSE}, emits informative messages when the
 #'   requested \code{n_splits} cannot be reached (default \code{TRUE}).
 #' @param target_positive Logical; if TRUE, force negative predictions to zero.
+#' @param allow_par A logical to allow parallel processing (if a parallel backend is registered).
+#' @param ... Others parameters passed to \code{tune::control_grid()}
 #' @return A list with the following elements:
 #' \itemize{
 #'   \item \code{kge_cv_mean} Mean KGE of the best configuration across CV splits.
@@ -93,10 +95,13 @@ wass2s_tune_pred_ml <- function(
     n_splits    = 3,
     cumulative  = TRUE,
     quiet       = TRUE,
-    target_positive = TRUE
+    target_positive = TRUE,
+    allow_par = TRUE,
+    ...
 ){
   set.seed(seed)
   model <- match.arg(model, SUPPORTED_MODELS)
+  spec <- model_spec(model,strict = TRUE)
 
   # Input validation
   if (!target %in% names(df_basin_product)) {
@@ -151,7 +156,7 @@ wass2s_tune_pred_ml <- function(
 
    # Create recipe and model spec
   rec <- make_recipe(df_basin_product, predictors, target = "Q")
-  spec <- model_spec(model)
+
 
   if (is.null(resamples)) resamples <- make_rolling(df_basin_product,
                                                     year_col = "YYYY",
@@ -191,7 +196,10 @@ wass2s_tune_pred_ml <- function(
 
   # Tune model
   wflow <- workflows::workflow() |> workflows::add_model(spec) |> workflows::add_recipe(rec)
-  ctrl <- tune::control_grid(save_pred = TRUE, verbose = !quiet, allow_par = TRUE)
+  ctrl <- tune::control_grid(save_pred = TRUE,
+                             verbose = !quiet,
+                             allow_par=allow_par,
+                             ... )
   rs <- tryCatch({
     tune::tune_grid(
       object    = wflow,

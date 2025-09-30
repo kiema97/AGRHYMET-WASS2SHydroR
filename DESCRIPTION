@@ -37,6 +37,7 @@ Imports:
     recipes,
     rlang,
     rsample,
+	ranger,
     rules,
     sf,
     stats,

@@ -18,6 +18,7 @@ SUPPORTED_FUSERS <- c("rf","xgb","glmnet","kknn","svmLinear","mars","cubist")
 
 SUPPORTED_MODELS <- c("rf","xgb","mlp","kknn","svmLinear","mars","cubist")
 
+
 # parsnip specs (unifiées)
 #' Model specification factory (parsnip)
 #'
@@ -32,9 +33,27 @@ SUPPORTED_MODELS <- c("rf","xgb","mlp","kknn","svmLinear","mars","cubist")
 #' @seealso \code{\link{model_grid}}
 #' @keywords internal
 
-model_spec <- function(name) {
+model_spec <- function(name, strict = TRUE) {
   name <- match.arg(name, SUPPORTED_MODELS)
+  # map modèle -> package du moteur
+  engine_pkg <- c(
+    rf        = "ranger",
+    xgb       = "xgboost",
+    glmnet    = "glmnet",
+    kknn      = "kknn",
+    svmLinear = "kernlab",
+    mars      = "earth",
+    cubist    = "Cubist",
+    mlp       = "nnet"
+  )
 
+  pkg <- engine_pkg[[name]]
+  ok <- engine_is_available(pkg, strict = strict)
+
+  # if (!engine_is_available(pkg, strict = strict)) {
+  #   install.packages(pkg)
+  #   return(NULL)
+  # }
   switch(name,
          rf = parsnip::rand_forest(
            mtry = tune(),
