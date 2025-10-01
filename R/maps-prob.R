@@ -37,6 +37,7 @@ plot_prob_maps <- function(
     title = NULL,
     file = NULL, width = 10, height = 6
 ){
+  .need("ggplot2")
   sf_b <- as_sf(sf_basins)
 
   required_cols <- c(basin_col, "p_below", "p_normal", "p_above")

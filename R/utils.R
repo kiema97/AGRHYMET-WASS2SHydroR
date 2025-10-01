@@ -180,3 +180,8 @@ engine_is_available <- function(pkg, feature = NULL, strict = FALSE,
 
   return(all_available)
 }
+
+
+.need <- function(pkg) if (!requireNamespace(pkg, quietly = TRUE))
+  stop(sprintf("Package '%s' is required for this feature. Install it.", pkg), call. = FALSE)
+

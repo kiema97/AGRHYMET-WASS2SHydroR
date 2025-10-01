@@ -27,6 +27,7 @@ plot_class_map <- function(
     title = NULL,
     file = NULL, width = 7, height = 6
 ){
+  .need("ggplot2")
   sf_b <- as_sf(sf_basins)
 
   required_cols <- c(basin_col, "class_hat")

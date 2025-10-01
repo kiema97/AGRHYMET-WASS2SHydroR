@@ -2,7 +2,7 @@
 % Please edit documentation in R/wass2s_prepare_data.R
 \name{wass2s_prepare_data}
 \alias{wass2s_prepare_data}
-\title{Preprocess a NetCDF (.nc) to a tidy data.frame (DF-first pipeline)}
+\title{Preprocess NetCDF/stars to tidy df (stars-first, multi-ref-time + temporal agg)}
 \usage{
 wass2s_prepare_data(
   x,
@@ -21,30 +21,38 @@ wass2s_prepare_data(
 )
 }
 \arguments{
-\item{x}{path to .nc file or a `stars` object.}
+\item{x}{path to .nc or a `stars` object.}
 
-\item{bbox}{optional c(N, W, S, E) in lon/lat.}
+\item{bbox}{optional numeric c(N, W, S, E) in lon/lat.}
 
 \item{spatial_reduce}{"none","mean","median","min","max". Default "none".}
 
-\item{cell_layout}{"long" or "wide" when spatial_reduce = "none". Default "long".}
+\item{cell_layout}{when spatial_reduce="none": "long" (default) or "wide".}
 
 \item{cell_prefix}{prefix for wide columns. Default "val".}
 
-\item{dim_lon, dim_lat, dim_time}{optional overrides of column names for lon/lat/time.}
+\item{dim_lon, dim_lat, dim_time}{optional overrides for lon/lat/time dims.}
 
-\item{dim_ref_time, dim_period}{optional overrides for ref time & lead/period columns.}
+\item{dim_ref_time, dim_period}{optional overrides for ref-time & lead/period dims.}
 
-\item{dim_member}{optional override for ensemble/member column (e.g. "number").}
+\item{dim_member}{optional override for member/ensemble dim (e.g. "number").}
 
 \item{ensemble_reduce}{"mean","median","min","max","none". Default "mean".}
 
 \item{verbose}{print progress. Default TRUE.}
+
+\item{time_agg}{"year","month","none". Default "year".}
 }
 \value{
 data.frame with DATE and values (shape depends on args).
 }
 \description{
-Works with single-time dims (`time|valid_time|T`) or split time
-(`forecast_reference_time` + `forecast_period`).
+This function keeps computations in `stars`/arrays as long as possible:
+- optional bbox crop,
+- optional ensemble aggregation on the member dimension,
+- drops/averages any extra dims,
+- reconstructs a single time dim T from (time|valid_time) or (forecast_reference_time + forecast_period),
+- temporal aggregation on the (X,Y,T) cube: "year" (default), "month", or "none",
+- optional spatial aggregation,
+- finally returns a tidy `data.frame` (long or wide).
 }

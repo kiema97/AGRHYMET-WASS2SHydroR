@@ -82,7 +82,6 @@
 #' }
 #'
 #' @seealso \code{\link[ecmwfr]{wf_request}}, \code{\link[ecmwfr]{wf_request_batch}}
-#' @importFrom ecmwfr wf_get_key wf_request wf_request_batch
 #' @export
 wass2s_download_cds <- function(
     dataset_short_name,
@@ -108,6 +107,7 @@ wass2s_download_cds <- function(
     verbose = TRUE,
     ...
 ) {
+  .need("ecmwfr")
   # ---- validations ----
   stopifnot(is.character(dataset_short_name), length(dataset_short_name) == 1)
   stopifnot(is.list(base_query))

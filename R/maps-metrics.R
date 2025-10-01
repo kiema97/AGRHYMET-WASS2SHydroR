@@ -28,6 +28,7 @@ plot_metric_maps <- function(
     title = NULL,
     file = NULL, width = 10, height = 6
 ){
+  .need("ggplot2")
   # helper: path or sf -> sf
   as_sf <- function(x) {
     if (inherits(x, "sf")) return(x)

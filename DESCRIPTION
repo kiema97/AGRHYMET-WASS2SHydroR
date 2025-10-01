@@ -22,14 +22,14 @@ Suggests:
 	knitr,
     rmarkdown,
     stringi,
-    terra,	
-    ecmwfr
+    terra
 Config/testthat/edition: 3
 Imports: 
     cli,
     dials,
     dplyr,
     ggplot2,
+	ecmwfr,
     glue,
     magrittr,
     parsnip,
