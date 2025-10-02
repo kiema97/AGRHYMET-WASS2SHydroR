@@ -22,14 +22,16 @@ Suggests:
 	knitr,
     rmarkdown,
     stringi,
-    terra
+    terra,
+	ggplot2,
+	ecmwfr,
+	viridis,
+	    
 Config/testthat/edition: 3
 Imports: 
     cli,
     dials,
-    dplyr,
-    ggplot2,
-	ecmwfr,
+    dplyr,	
     glue,
     magrittr,
     parsnip,
@@ -46,8 +48,7 @@ Imports:
     stringr,
     tibble,
     tidyr,
-    tune,
-    viridis,
+    tune,    
     workflows,
     yaml,
     yardstick
