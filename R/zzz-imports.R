@@ -18,6 +18,10 @@
 #' @importFrom stringr str_detect str_replace str_subset
 #' @importFrom rlang .data .env !!
 #' @importFrom grid unit
-#' @importFrom stats rnorm setNames predict
+#' @importFrom stats rnorm setNames predict time
 #' @importFrom glue glue
+#' @importFrom utils head tail
+#' @importFrom data.table setnames
 "_PACKAGE"
+
+

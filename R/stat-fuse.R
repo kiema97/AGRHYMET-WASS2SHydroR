@@ -30,7 +30,7 @@
 #' @param quiet Logical; if \code{FALSE}, emits informative messages.
 #' @param verbose Logical, emit diagnostic messages.
 #' @param ... Additional arguments passed to \code{wass2s_tune_pred_stat}.
-#' 
+#'
 #' @return A list with:
 #'   \itemize{
 #'     \item `fused` (tibble): columns `YYYY`, `pred_fused`.
@@ -66,61 +66,61 @@ wass2s_cons_mods_stat <- function(
 ) {
   model <- match.arg(model)
   prods <- names(data_by_product)
-  
+
   # Input validation
   if (length(prods) == 0) {
     stop("data_by_product must be a named list", call. = FALSE)
   }
-  
+
   if (topK < 1) {
     stop("topK must be at least 1", call. = FALSE)
   }
-  
+
   if (!is.null(prediction_years) && length(prediction_years) != 2) {
     stop("prediction_years must be length 2 (start, end).", call. = FALSE)
   }
-  
+
   if (min_kge_model > 1) {
     stop("min_kge_model cannot be greater than 1.", call. = FALSE)
   }
-  
+
   # Collect all years present (to create a "fused" even if no product is valid)
   years_all <- sort(unique(unlist(lapply(prods, function(p){
     dfp <- data_by_product[[p]]
     dfp <- dplyr::filter(dfp, .data[[basin_col]] == basin_id)
     dfp$YYYY
   }))))
-  
+
   # Product loop
   results <- purrr::map(prods, function(p){
     dfp <- data_by_product[[p]] %>%
       dplyr::filter(.data[[basin_col]] == basin_id) %>%
       dplyr::ungroup()
-    
+
     if (nrow(dfp) < 8) {
       if (verbose) message("[", model, "] ", p, " : skipped (nrow < 8).")
       return(NULL)
     }
-    
+
     # Predictor pattern (via core::select_predictors)
     pat <- if (!is.null(pred_pattern_by_product) && p %in% names(pred_pattern_by_product)) {
       pred_pattern_by_product[[p]]
     } else "^pt_"
-    
+
     predictors <- select_predictors(
       dfp,
       pattern = pat,
       exclude = c(basin_col, "YYYY", "Q")
     )
-    
+
     if (verbose) message("[", model, "] ", p, " : ",
                          length(predictors), " predictors using pattern '", pat, "'")
-    
+
     if (length(predictors) < min_predictors) {
       if (verbose) message("[", model, "] ", p, " : skipped (predictors < ", min_predictors, ").")
       return(NULL)
     }
-    
+
     # Call tuner + predictions with all additional parameters
     out <- wass2s_tune_pred_stat(
       df_basin_product = dplyr::select(dfp, YYYY, Q, tidyselect::all_of(predictors)),
@@ -138,15 +138,15 @@ wass2s_cons_mods_stat <- function(
       quiet = quiet,
       ...
     )
-    
+
     # If tuner failed properly
     if (is.null(out) || !is.list(out) || !"preds" %in% names(out)) {
       if (verbose) message("[", model, "] ", p, " : tuning/pred failed (NULL).")
       return(NULL)
     }
-    
+
     sd_pred <- stats::sd(out$preds$pred, na.rm = TRUE)
-    
+
     list(
       product = p,
       kge     = out$kge_cv_mean,
@@ -155,8 +155,8 @@ wass2s_cons_mods_stat <- function(
       sd_pred = sd_pred
     )
   }) %>% purrr::compact()
-  
-  # No valid product → return an "empty" fused (NA)
+
+  # No valid product  return an "empty" fused (NA)
   if (length(results) == 0) {
     if (verbose) message("[", model, "] No valid product for basin ", basin_id, ".")
     fused_empty <- tibble::tibble(YYYY = years_all, pred_fused = NA_real_)
@@ -168,7 +168,7 @@ wass2s_cons_mods_stat <- function(
       )
     ))
   }
-  
+
   # Product leaderboard (may contain NA)
   lb <- tibble::tibble(
     product = purrr::map_chr(results, "product"),
@@ -176,21 +176,21 @@ wass2s_cons_mods_stat <- function(
     n_pred  = purrr::map_int(results, "n_pred"),
     sd_pred = purrr::map_dbl(results, "sd_pred")
   )
-  
+
   # Isolate those with defined KGE
   lb_kge_ok <- dplyr::filter(lb, is.finite(kge))
-  
+
   if (nrow(lb_kge_ok) > 0) {
     lb_kge_ok <- dplyr::arrange(lb_kge_ok, dplyr::desc(kge))
     keep_names <- head(lb_kge_ok$product, n = min(topK, nrow(lb_kge_ok)))
     results_top <- results[match(keep_names, purrr::map_chr(results, "product"))]
-    
+
     kg <- lb_kge_ok$kge[match(keep_names, lb_kge_ok$product)]
-    
+
     # Apply KGE thresholds
     kg[kg < 0] <- 0
     kg[kg < min_kge_model] <- 0
-    
+
     # If all weights become zero after thresholding
     if (all(kg == 0)) {
       if (verbose) message("[", model, "] All KGE values below threshold (", min_kge_model, ") for basin ", basin_id, ".")
@@ -201,12 +201,12 @@ wass2s_cons_mods_stat <- function(
         all_results = results
       ))
     }
-    
+
     w <- kg
-    
+
   } else {
-    # Fallback: no valid KGE → keep products with non-constant predictions
-    if (verbose) message("[", model, "] All KGEs NA → fallback: equal weights for non-constant products.")
+    # Fallback: no valid KGE  keep products with non-constant predictions
+    if (verbose) message("[", model, "] All KGEs NA  fallback: equal weights for non-constant products.")
     non_const <- dplyr::filter(lb, is.finite(sd_pred) & sd_pred > 0)
     if (nrow(non_const) == 0) {
       # nothing usable
@@ -221,13 +221,13 @@ wass2s_cons_mods_stat <- function(
     results_top <- results[match(keep_names, purrr::map_chr(results, "product"))]
     w <- rep(1 / length(keep_names), length(keep_names))  # equal weights
   }
-  
+
   # Fusion construction (via core::fuse_topk)
   preds_long <- purrr::imap_dfr(results_top, ~ dplyr::mutate(.x$preds,
                                                              product = .x$product,
                                                              w = w[.y]))
   fused <- fuse_topk(preds_long)
-  
+
   # Complete with all years if needed
   if (length(years_all) > 0) {
     fused <- dplyr::full_join(
@@ -235,11 +235,11 @@ wass2s_cons_mods_stat <- function(
       fused, by = "YYYY"
     ) %>% dplyr::arrange(YYYY)
   }
-  
+
   # Leaderboard enriched with weights
   lb$weight <- 0
   lb$weight[match(keep_names, lb$product)] <- w
-  
+
   list(
     fused = fused,
     leaderboard_products = lb %>% dplyr::arrange(dplyr::desc(weight), dplyr::desc(kge)),

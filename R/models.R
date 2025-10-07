@@ -28,11 +28,9 @@ SUPPORTED_MODELS <- c("rf","xgb","mlp","kknn","svmLinear","mars","cubist")
 #' @param name One of \code{SUPPORTED_MODELS}, e.g. \code{"rf"}, \code{"xgb"},
 #'   \code{"lgbm"}, \code{"mlp"}, \code{"kknn"}, \code{"svmLinear"}, \code{"mars"}, \code{"cubist"}.
 #' @return A \pkg{parsnip} model specification (mode = regression).
-#' @examples
-#' spec <- model_spec("rf")
 #' @seealso \code{\link{model_grid}}
 #' @keywords internal
-
+#' @noRd
 model_spec <- function(name, strict = TRUE) {
   name <- match.arg(name, SUPPORTED_MODELS)
   # map modèle -> package du moteur
@@ -146,10 +144,9 @@ model_spec <- function(name, strict = TRUE) {
 #' @param p Integer, number of predictors (used to bound \code{mtry} where relevant).
 #' @param levels Integer number of levels per parameter (default: 5).
 #' @return A tibble of hyperparameter combinations (dials grid).
-#' @examples
-#' model_grid("rf", p = 10, levels = 3)
 #' @seealso \code{\link{model_spec}}
 #' @keywords internal
+#' @noRd
 model_grid <- function(name, p, levels = 5, n_min = Inf) {
   name <- match.arg(name, SUPPORTED_MODELS)
   # helper borne
@@ -226,10 +223,9 @@ model_grid <- function(name, p, levels = 5, n_min = Inf) {
 #' @param name One of \code{SUPPORTED_FUSERS}, e.g. \code{"rf"}, \code{"xgb"},
 #'   \code{"glmnet"}, \code{"kknn"}, \code{"svmLinear"}, \code{"gbm"}, \code{"mars"}, \code{"cubist"}.
 #' @return A \pkg{parsnip} model specification (mode = regression).
-#' @examples
-#' meta_spec("glmnet")
 #' @seealso \code{\link{meta_grid}}
 #' @keywords internal
+#' @noRd
 meta_spec <- function(name) {
   name <- match.arg(name, SUPPORTED_FUSERS)
 
@@ -286,10 +282,9 @@ meta_spec <- function(name) {
 #' @param p Integer, number of meta-features (number of consolidated model columns).
 #' @param levels Integer number of levels per parameter (default: 5).
 #' @return A tibble of hyperparameter combinations.
-#' @examples
-#' meta_grid("rf", p = 3, levels = 4)
 #' @seealso \code{\link{meta_spec}}
 #' @keywords internal
+#' @noRd
 meta_grid <- function(name, p, levels = 5) {
   name <- match.arg(name, SUPPORTED_FUSERS)
 
@@ -346,6 +341,7 @@ meta_grid <- function(name, p, levels = 5) {
 #' @param target Target column name (default `"Q"`).
 #' @return A \code{recipes::recipe()}.
 #' @keywords internal
+#' @noRd
 make_recipe <- function(df, predictors, target = "Q") {
   # garde-fous
   if (!target %in% names(df)) {

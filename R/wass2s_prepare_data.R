@@ -11,7 +11,6 @@
 #'
 #' @param x path to .nc or a `stars` object.
 #' @param bbox optional numeric c(N, W, S, E) in lon/lat.
-#' @param time_agg "year","month","none". Default "year".
 #' @param spatial_reduce "none","mean","median","min","max". Default "none".
 #' @param cell_layout when spatial_reduce="none": "long" (default) or "wide".
 #' @param cell_prefix prefix for wide columns. Default "val".

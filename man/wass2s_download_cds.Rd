@@ -87,9 +87,9 @@ Falls back to sequential mode if batch is unavailable.}
 \value{
 (Invisibly) a \code{data.frame} with columns:
 \itemize{
-  \item \code{file} – full path to the output file
-  \item \code{status} – one of \code{"ok"}, \code{"skip"}, \code{"fail"}
-  \item \code{error} – last error message (if any)
+  \item \code{file} : full path to the output file
+  \item \code{status} : one of \code{"ok"}, \code{"skip"}, \code{"fail"}
+  \item \code{error} : last error message (if any)
   \item \code{model}, \code{system}, \code{variable}, \code{year}
 }
 }

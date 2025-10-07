@@ -45,6 +45,8 @@ start and end years for a holdout prediction period.}
 
 \item{quiet}{Logical; if \code{FALSE}, emits informative messages.}
 
+\item{target_positive}{Logical; if TRUE, force negative predictions to zero.}
+
 \item{...}{Additional parameters passed to \code{wass2s_cons_mods_stat}.}
 }
 \value{

@@ -3,7 +3,7 @@
 \docType{data}
 \name{VAR_API_FROM_SHORT}
 \alias{VAR_API_FROM_SHORT}
-\title{Short ↔ API Variable Name Mappings}
+\title{Short API Variable Name Mappings}
 \format{
 Named character vectors.
 }

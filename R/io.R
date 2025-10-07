@@ -16,5 +16,9 @@ utils::globalVariables(c(
   ".config", "id", ".pred", "kge", "kge_mean",
   "YYYY", "w", "pred", "Q", "class_hat", "quality",
   "value", "prob","pred_final",".", "across",
-  "DATE","lon","lat","KEY","cell_id"
+  "DATE","lon","lat","KEY","cell_id",
+  "time","leadtime_hour","sd_pred","weight","pred_fused","kge_split",".I"
+
 ))
+
+

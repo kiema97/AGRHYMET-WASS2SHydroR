@@ -22,7 +22,7 @@
     year_file   <- if (length(g) >= 9) g[9] else NA_character_
   } else {
     # fallback: parse via positions
-    warning("Filename did not match strict pattern: ", fname, " — using relaxed parsing.")
+    warning("Filename did not match strict pattern: ", fname, " - using relaxed parsing.")
     split <- strsplit(sub("\\.nc$","", low), "_")[[1]]
     # modelsys, var, init_token, periodStart, periodEnd, lead, [year]
     model_sys <- split[1]

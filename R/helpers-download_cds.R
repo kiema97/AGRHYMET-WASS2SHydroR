@@ -58,7 +58,7 @@ parse_center_variable <- function(x) {
   parts <- regmatches(y, m)[[1]]
   if (length(parts) != 4) {
     stop("Invalid 'center_variables' format: ", x,
-         " — expected 'model_system.variable' (e.g., 'meteo_france_9.TMAX')", call. = FALSE)
+         " - expected 'model_system.variable' (e.g., 'meteo_france_9.TMAX')", call. = FALSE)
   }
   list(model = parts[2], system = parts[3], variable = parts[4])
 }
@@ -104,7 +104,7 @@ var_api_name <- function(v) {
 #' @keywords internal
 VALID_MODELS <- c("ecmwf","meteo_france","ukmo","dwd","cmcc","ncep","eccc","bom")
 
-#' Short ↔ API Variable Name Mappings
+#' Short API Variable Name Mappings
 #'
 #' Two named character vectors used to convert between short variable codes
 #' (e.g., \code{"TMAX"}) and the corresponding API names expected by CDS/ECMWF

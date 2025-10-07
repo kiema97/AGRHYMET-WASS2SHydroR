@@ -40,8 +40,6 @@ wass2s_prepare_data(
 \item{ensemble_reduce}{"mean","median","min","max","none". Default "mean".}
 
 \item{verbose}{print progress. Default TRUE.}
-
-\item{time_agg}{"year","month","none". Default "year".}
 }
 \value{
 data.frame with DATE and values (shape depends on args).

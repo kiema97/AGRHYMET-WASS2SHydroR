@@ -10,6 +10,14 @@ Tools for downloading, preparing, modeling and evaluating
 subseasonal-to-seasonal (S2S) hydrological forecasts
 in West Africa and the Sahel.
 }
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://github.com/kiema97/WASS2SHydroR}
+  \item Report bugs at \url{https://github.com/kiema97/WASS2SHydroR/issues}
+}
+
+}
 \author{
 \strong{Maintainer}: Arsène Kiema \email{kiema.arsene@cilss.int}
 

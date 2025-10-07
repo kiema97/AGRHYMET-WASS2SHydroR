@@ -13,6 +13,7 @@ hf_registry <- new.env(parent = emptyenv())
 #' @param constructor Function returning a method id (see [method_id()]).
 #' @return Invisibly returns the name of the registered method.
 #' @keywords internal
+#' @noRd
 register_method <- function(name, constructor) {
   # Input validation
   if (!is.character(name) || nchar(name) == 0) {
@@ -37,6 +38,7 @@ register_method <- function(name, constructor) {
 #' @param name Character ID registered with [register_method()].
 #' @return A `method` object produced by the registered constructor.
 #' @keywords internal
+#' @noRd
 get_method <- function(name) {
   if (!is.character(name) || nchar(name) == 0) {
     stop("Method name must be a non-empty character string", call. = FALSE)
@@ -61,9 +63,7 @@ get_method <- function(name) {
 #' @param x Character tag, e.g. "stat".
 #' @return An object with S3 class `c(paste0("method_", x), "method")`.
 #' @keywords internal
-#' @examples
-#' method_id("stat")
-#' method_id("hydro")
+#' @noRd
 method_id <- function(x) {
   # Input validation
   if (!is.character(x) || nchar(x) == 0) {
@@ -89,6 +89,7 @@ method_id <- function(x) {
 #' @param cfg Parsed YAML config (list).
 #' @return Results from the specific method implementation.
 #' @keywords internal
+#' @noRd
 run_method <- function(method, data_by_product, cfg) {
   # Input validation
   if (!inherits(method, "method")) {
@@ -116,6 +117,7 @@ run_method <- function(method, data_by_product, cfg) {
 #' @param data_by_product Named list of data.frames for each climate product.
 #' @param cfg Parsed YAML config (list).
 #' @keywords internal
+#' @noRd
 run_method.default <- function(method, data_by_product, cfg) {
   stop("No run_method method implemented for class: ",
        paste(class(method), collapse = ", "), call. = FALSE)

@@ -84,19 +84,19 @@ plot_prob_maps <- function(
     ggplot2::coord_sf(expand = FALSE) +
     ggplot2::theme_minimal() +
     ggplot2::theme(
-      panel.grid.major.x = element_blank(),
-      panel.grid.minor = element_blank(),
-      panel.background = element_rect(fill = "white"),
-      plot.background = element_rect(fill = "white", color = NA),
-      strip.background = element_rect(fill = "#f0f0f0", color = NA),
-      strip.text = element_text(face = "bold", size = 12),
-      axis.text.x = element_text(angle = 0, hjust = 1),
+      panel.grid.major.x = ggplot2::element_blank(),
+      panel.grid.minor = ggplot2::element_blank(),
+      panel.background = ggplot2::element_rect(fill = "white"),
+      plot.background = ggplot2::element_rect(fill = "white", color = NA),
+      strip.background = ggplot2::element_rect(fill = "#f0f0f0", color = NA),
+      strip.text = ggplot2::element_text(face = "bold", size = 12),
+      axis.text.x = ggplot2::element_text(angle = 0, hjust = 1),
       legend.position = "bottom",
       legend.key.width = unit(2, "cm"),
-      legend.title = element_text(face = "bold"),
-      plot.title = element_text(face = "bold", size = 16, hjust = 0.5),
-      plot.subtitle = element_text(size = 12, hjust = 0.5),
-      plot.margin = margin(1, 1, 1, 1)
+      legend.title = ggplot2::element_text(face = "bold"),
+      plot.title = ggplot2::element_text(face = "bold", size = 16, hjust = 0.5),
+      plot.subtitle = ggplot2::element_text(size = 12, hjust = 0.5),
+      plot.margin = ggplot2::margin(1, 1, 1, 1)
     )+
     ggplot2::labs(title = title)
 

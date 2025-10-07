@@ -24,9 +24,9 @@
 #' @examples
 #' df <- tibble::tibble(YYYY = 1990:2010, Q = rnorm(21))
 #' # All possible splits
-#' rs1 <- make_rolling(df)
+#' rs1 <- wass2s_rolling_cv(df)
 #' # About 5 splits
-#' rs2 <- make_rolling(df, n_splits = 5)
+#' rs2 <- wass2s_rolling_cv(df, n_splits = 5)
 #'
 #' @export
 wass2s_rolling_cv <- function(df,
@@ -35,11 +35,11 @@ wass2s_rolling_cv <- function(df,
                          assess_frac = 0.20,
                          n_splits    = NULL,
                          cumulative  = TRUE,
-                         quiet       = TRUE){ 
-  
+                         quiet       = TRUE){
+
   df <- dplyr::arrange(df, .data[[year_col]])
   n  <- nrow(df)
-  
+
   # Input validation
   if (n < 2L) {
     stop("make_rolling(): not enough rows (need >= 2). Got n = ", n, call. = FALSE)
@@ -50,11 +50,11 @@ wass2s_rolling_cv <- function(df,
       stop("make_rolling(): n_splits must be >= 1.", call. = FALSE)
     }
   }
-  
+
   # Compute initial and assessment sizes
   initial_target <- max(8L, floor(n * init_frac))
   assess_target  <- max(3L, ceiling(n * assess_frac))
-  
+
   # Adjust to ensure initial + assess <= n
   if (initial_target + assess_target > n) {
     initial <- max(1L, n - assess_target)
@@ -63,11 +63,11 @@ wass2s_rolling_cv <- function(df,
     initial <- initial_target
     assess  <- assess_target
   }
-  
+
   # Maximum possible number of splits
   available <- n - initial - assess + 1L
   if (available < 1L) available <- 1L
-  
+
   # Handle n_splits logic
   if (is.null(n_splits)) {
     skip <- 0L
@@ -81,26 +81,26 @@ wass2s_rolling_cv <- function(df,
       k <- ceiling((available - 1L) / (n_splits - 1L))
       skip <- max(0L, k - 1L)
       splits_target <- floor((available - 1L) / (skip + 1L)) + 1L
-      
+
       # Adjust if overshooting
       if (splits_target > n_splits) {
         skip <- skip + (splits_target - n_splits)
         splits_target <- floor((available - 1L) / (skip + 1L)) + 1L
       }
     }
-    
+
     # Informative messages
     if (!quiet && splits_target != n_splits) {
       if (splits_target < n_splits) {
-        message("Requested ", n_splits, " splits but only ", splits_target, 
+        message("Requested ", n_splits, " splits but only ", splits_target,
                 " are achievable. Using ", splits_target, " splits.")
       } else {
-        message("Requested ", n_splits, " splits but got ", splits_target, 
+        message("Requested ", n_splits, " splits but got ", splits_target,
                 ". Adjusting skip to achieve exact count.")
       }
     }
   }
-  
+
   # Create rolling-origin resamples
   rsample::rolling_origin(
     data       = df,
@@ -114,6 +114,6 @@ wass2s_rolling_cv <- function(df,
 #' @rdname wass2s_rolling_cv
 #' @keywords internal
 make_rolling <- function(...) {
-  .Deprecated("wass2s_rolling_cv")
+  #.Deprecated("wass2s_rolling_cv")
   wass2s_rolling_cv(...)
 }

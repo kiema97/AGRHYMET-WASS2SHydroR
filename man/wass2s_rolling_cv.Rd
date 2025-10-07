@@ -50,9 +50,9 @@ maximum achievable, it falls back to the maximum.
 \examples{
 df <- tibble::tibble(YYYY = 1990:2010, Q = rnorm(21))
 # All possible splits
-rs1 <- make_rolling(df)
+rs1 <- wass2s_rolling_cv(df)
 # About 5 splits
-rs2 <- make_rolling(df, n_splits = 5)
+rs2 <- wass2s_rolling_cv(df, n_splits = 5)
 
 }
 \keyword{internal}
