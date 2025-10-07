@@ -14,7 +14,18 @@ Encoding: UTF-8
 LazyData: true
 RoxygenNote: 7.3.3
 Suggests: 
-    testthat (>= 3.0.0)
+    testthat (>= 3.0.0),
+	future,
+    furrr,
+    doParallel,
+	ggspatial,
+	knitr,
+    rmarkdown,
+    stringi,
+    terra,
+	ggplot2,
+	ecmwfr,
+	viridis,
 	    
 Config/testthat/edition: 3
 Imports: 
@@ -41,15 +52,4 @@ Imports:
     tune,    
     workflows,
     yaml,
-    yardstick,
-	future,
-    furrr,
-    doParallel,
-	ggspatial,
-	knitr,
-    rmarkdown,
-    stringi,
-    terra,
-	ggplot2,
-	ecmwfr,
-	viridis,
+    yardstick
