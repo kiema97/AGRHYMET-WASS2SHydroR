@@ -33,7 +33,7 @@ SUPPORTED_MODELS <- c("rf","xgb","mlp","kknn","svmLinear","mars","cubist")
 #' @noRd
 model_spec <- function(name, strict = TRUE) {
   name <- match.arg(name, SUPPORTED_MODELS)
-  # map modèle -> package du moteur
+
   engine_pkg <- c(
     rf        = "ranger",
     xgb       = "xgboost",
@@ -46,12 +46,10 @@ model_spec <- function(name, strict = TRUE) {
   )
 
   pkg <- engine_pkg[[name]]
-  ok <- engine_is_available(pkg, strict = strict)
+  if (!requireNamespace(pkg, quietly = TRUE)) {
+    stop(paste0("Package ", pkg, " is required for this function. Please install it."))
+  }
 
-  # if (!engine_is_available(pkg, strict = strict)) {
-  #   install.packages(pkg)
-  #   return(NULL)
-  # }
   switch(name,
          rf = parsnip::rand_forest(
            mtry = tune(),
@@ -149,6 +147,21 @@ model_spec <- function(name, strict = TRUE) {
 #' @noRd
 model_grid <- function(name, p, levels = 5, n_min = Inf) {
   name <- match.arg(name, SUPPORTED_MODELS)
+
+  engine_pkg <- c(
+    rf        = "ranger",
+    xgb       = "xgboost",
+    glmnet    = "glmnet",
+    kknn      = "kknn",
+    svmLinear = "kernlab",
+    mars      = "earth",
+    cubist    = "Cubist",
+    mlp       = "nnet"
+  )
+  pkg <- engine_pkg[[name]]
+  if (!requireNamespace(pkg, quietly = TRUE)) {
+    stop(paste0("Package ", pkg, " is required for this function. Please install it."))
+  }
   # helper borne
   cap <- function(x, m) max(1L, min(x, m))
 
@@ -213,125 +226,6 @@ model_grid <- function(name, p, levels = 5, n_min = Inf) {
          )
   )
 }
-
-
-#' Meta-learner specification factory (parsnip)
-#'
-#' Return a \pkg{parsnip} specification for the final fusion model
-#' (stacking/blending of consolidated ML outputs).
-#'
-#' @param name One of \code{SUPPORTED_FUSERS}, e.g. \code{"rf"}, \code{"xgb"},
-#'   \code{"glmnet"}, \code{"kknn"}, \code{"svmLinear"}, \code{"gbm"}, \code{"mars"}, \code{"cubist"}.
-#' @return A \pkg{parsnip} model specification (mode = regression).
-#' @seealso \code{\link{meta_grid}}
-#' @keywords internal
-#' @noRd
-meta_spec <- function(name) {
-  name <- match.arg(name, SUPPORTED_FUSERS)
-
-  switch(name,
-         rf = parsnip::rand_forest(mtry = tune(), min_n = tune(), trees = 500) |>
-           parsnip::set_engine("ranger") |> parsnip::set_mode("regression"),
-
-         xgb = parsnip::boost_tree(
-           trees = 800, learn_rate = tune(), tree_depth = tune(),
-           loss_reduction = tune(), mtry = tune(), min_n = tune()
-         ) |>
-           parsnip::set_engine("xgboost") |> parsnip::set_mode("regression"),
-
-         glmnet = parsnip::linear_reg(penalty = tune(), mixture = tune()) |>
-           parsnip::set_engine("glmnet", standardize = TRUE) |> parsnip::set_mode("regression"),
-
-         kknn = parsnip::nearest_neighbor(neighbors = tune(), weight_func = tune()) |>
-           parsnip::set_engine("kknn") |> parsnip::set_mode("regression"),
-
-         svmLinear = parsnip::svm_linear(cost = tune()) |>
-           parsnip::set_engine("kernlab") |> parsnip::set_mode("regression"),
-
-         # gbm = parsnip::boost_tree(
-         #   trees = 800, learn_rate = tune(), tree_depth = tune(),
-         #   loss_reduction = tune(), mtry = tune(), min_n = tune()
-         # ) |>
-         #   set_engine("gbm") |> set_mode("regression"),
-
-         # lgbm = bonsai::boost_tree(
-         #   trees = 1000,
-         #   learn_rate    = tune(),
-         #   tree_depth    = tune(),
-         #   loss_reduction= tune(),
-         #   mtry          = tune(),
-         #   min_n         = tune()
-         # ) |>
-         #   parsnip::set_engine("lightgbm") |>
-         #   parsnip::set_mode("regression"),
-
-         mars = parsnip::mars(num_terms = tune(), prod_degree = tune(), prune_method = "backward") |>
-           parsnip::set_engine("earth") |> parsnip::set_mode("regression"),
-
-         cubist = parsnip::cubist_rules(committees = tune(), neighbors = tune()) |>
-           parsnip::set_engine("Cubist") |> parsnip::set_mode("regression")
-  )
-}
-
-
-#' Hyperparameter grid for meta-learner (dials)
-#'
-#' Build a tuning grid for the chosen fusion model.
-#'
-#' @param name One of \code{SUPPORTED_FUSERS}.
-#' @param p Integer, number of meta-features (number of consolidated model columns).
-#' @param levels Integer number of levels per parameter (default: 5).
-#' @return A tibble of hyperparameter combinations.
-#' @seealso \code{\link{meta_spec}}
-#' @keywords internal
-#' @noRd
-meta_grid <- function(name, p, levels = 5) {
-  name <- match.arg(name, SUPPORTED_FUSERS)
-
-  switch(name,
-         rf = dials::grid_regular(dials::mtry(range = c(1L, max(1L, p))), dials::min_n(), levels = levels),
-         xgb = dials::grid_regular(
-           dials::learn_rate(range = c(-3, -1)),
-           dials::tree_depth(range = c(2L, 6L)),
-           dials::loss_reduction(),
-           dials::mtry(range = c(1L, max(1L, p))),
-           dials::min_n(),
-           levels = levels
-         ),
-
-         glmnet = dials::grid_regular(
-           dials::penalty(range = c(-6, 1)),
-           dials::mixture(range = c(0, 1)),
-           levels = levels),
-
-         kknn = dials::grid_regular(
-           dials::neighbors(range = c(3L, 25L)),
-           dials::weight_func(),
-           levels = levels),
-
-         svmLinear = dials::grid_regular(
-           dials::cost(range = c(-6, 4)),
-           levels = levels),
-         # lgbm = dials::grid_regular(
-         #   dials::learn_rate(range = c(-3, -1)),
-         #   dials::tree_depth(range = c(2L, 6L)),
-         #   dials::loss_reduction(),
-         #   dials::mtry(range = c(1L, max(1L, p))),
-         #   dials::min_n(),
-         #   levels = levels
-         # ),
-         mars = dials::grid_regular(
-           dials::num_terms(range = c(4L, 40L)),
-           dials::prod_degree(range = c(1L, 2L)),
-           levels = levels),
-
-         cubist = dials::grid_regular(
-           rules::committees(range = c(1L, 50L)),
-           dials::neighbors(range = c(0L, 9L)),
-           levels = levels)
-  )
-}
-
 
 
 #' Build a preprocessing recipe (role-based, no formula)

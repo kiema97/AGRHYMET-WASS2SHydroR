@@ -40,9 +40,7 @@ Imports:
     utils,
     workflows,
     yaml,
-    yardstick,
-    ranger,
-    xgboost
+    yardstick
 Suggests:
     ggplot2,
     ecmwfr,
@@ -57,7 +55,15 @@ Suggests:
     stringi,
     terra,
     testthat (>= 3.0.0),
-    viridis
+    viridis,
+    ranger,
+    xgboost,
+	glmnet,
+	kknn,
+	kernlab,
+	earth,
+	Cubist,
+	nnet
 Config/testthat/edition: 3
 URL: https://github.com/kiema97/WASS2SHydroR
 BugReports: https://github.com/kiema97/WASS2SHydroR/issues

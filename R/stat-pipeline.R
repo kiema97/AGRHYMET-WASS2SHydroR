@@ -246,8 +246,8 @@ wass2s_run_basin_mods_stat <- function(
     recipes::step_zv(recipes::all_predictors()) |>
     recipes::step_impute_median(recipes::all_predictors())
 
-  spec <- meta_spec(final_fuser)
-  grid <- meta_grid(final_fuser, p = length(pred_cols), levels = grid_levels)
+  spec <- model_spec(final_fuser)
+  grid <- model_grid(final_fuser, p = length(pred_cols), levels = grid_levels)
 
   wf_meta <- workflows::workflow() |>
     workflows::add_recipe(rec_meta) |>
