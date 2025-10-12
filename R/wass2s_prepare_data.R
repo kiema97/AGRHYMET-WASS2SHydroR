@@ -42,12 +42,15 @@ wass2s_prepare_data <- function(
 
   if (!requireNamespace("stars", quietly = TRUE))
     stop("Package 'stars' is required.")
+  if (!requireNamespace("ncdf4", quietly = TRUE))
+    stop("Package 'ncdf4' is required.")
   if (!requireNamespace("data.table", quietly = TRUE))
     stop("Package 'data.table' is required.")
   # units est souvent installé avec stars; on l'utilise si dispo
   has_units <- requireNamespace("units", quietly = TRUE)
 
   # --- read stars object
+
   obj <- if (inherits(x, "stars")) {
     x
   } else {
@@ -56,12 +59,13 @@ wass2s_prepare_data <- function(
     suppressWarnings(stars::read_stars(x, proxy = FALSE, quiet = TRUE))
   }
 
-  # --- stars -> data.frame (long)
-  df <- as.data.frame(obj)  # colonnes: dims + variable
-  if (!nrow(df)) return(data.frame(DATE = as.POSIXct(NA))[0, ])
+  nc <- ncdf4::nc_open(x)
+  x_vals <- ncdf4::ncvar_get(nc, "X")
+  y_vals <- ncdf4::ncvar_get(nc, "Y")
+  ncdf4::nc_close(nc)
 
   # detect dimension columns present in df
-  cn <- names(df)
+  cn <- names(stars::st_dimensions(obj))
   # guess lon/lat cols from df colnames, then allow overrides
   guess_lon <- intersect(c("x","lon","longitude","long"), tolower(cn))
   guess_lat <- intersect(c("y","lat","latitude"), tolower(cn))
@@ -73,6 +77,14 @@ wass2s_prepare_data <- function(
   }
   lon_col <- dim_lon %||% pick_name(guess_lon, cn)
   lat_col <- dim_lat %||% pick_name(guess_lat, cn)
+  stars::st_dimensions(obj)[[lon_col]]$values <- x_vals
+  stars::st_dimensions(obj)[[lat_col]]$values <- y_vals
+
+  # --- stars -> data.frame (long)
+  df <- as.data.frame(obj)  # colonnes: dims + variable
+  if (!nrow(df)) return(data.frame(DATE = as.POSIXct(NA))[0, ])
+  cn <- names(df)
+
   if (is.null(lon_col) || is.null(lat_col))
     stop("Could not resolve lon/lat columns in data.frame. Found: ", paste(cn, collapse = ", "))
 

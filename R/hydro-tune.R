@@ -199,7 +199,7 @@ wass2s_tune_pred_ml <- function(
   # Tune model
   wflow <- workflows::workflow() |> workflows::add_model(spec) |> workflows::add_recipe(rec)
   ctrl <- tune::control_grid(save_pred = TRUE,
-                             verbose = verbose_tune,
+                             verbose = !verbose_tune,
                              allow_par=allow_par,
                              ... )
   rs <- tryCatch({

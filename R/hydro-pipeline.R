@@ -289,7 +289,7 @@ wass2s_run_bas_mod_ml <- function(
 
   # Tune meta-learner
   if (!is.null(rset)) {
-    ctrl <- tune::control_grid(save_pred = TRUE, verbose = verbose_tune, allow_par = TRUE)
+    ctrl <- tune::control_grid(save_pred = TRUE, verbose = !verbose_tune, allow_par = TRUE)
 
     rs <- tryCatch({
       tune::tune_grid(

@@ -293,7 +293,7 @@ wass2s_tune_pred_stat <- function(df_basin_product, predictors,
 
   # Tune model
   ctrl <- tune::control_grid(save_pred = TRUE,
-                             verbose = verbose_tune,
+                             verbose = !verbose_tune,
                              allow_par=allow_par,
                              parallel_over = "resamples",
                              ... )

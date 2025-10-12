@@ -47,6 +47,7 @@ Suggests:
     tidyselect,
     units,
     stars,
+	ncdf4,
     furrr,
     future,
     ggspatial,
