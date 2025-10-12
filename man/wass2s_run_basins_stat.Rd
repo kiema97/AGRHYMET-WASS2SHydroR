@@ -31,7 +31,7 @@ select predictor columns for that product.}
 
 \item{basins}{Optional vector of basin IDs to process; default uses all found.}
 
-\item{parallel}{Logical, run basins in parallel using `{furrr}`.}
+\item{parallel}{Logical, run basins in parallel using \pkg{furrr}.}
 
 \item{workers}{Integer, number of parallel workers when `parallel = TRUE`.}
 

@@ -39,6 +39,7 @@ min_analysis_n <- function(rset) {
 #'   requested \code{n_splits} cannot be reached (default \code{TRUE}).
 #' @param target_positive Logical; if TRUE, force negative predictions to zero.
 #' @param allow_par A logical to allow parallel processing (if a parallel backend is registered).
+#' @param verbose_tune A logical for logging results (other than warnings and errors, which are always shown) as they are generated during training in a single R process.
 #' @param ... Others parameters passed to \code{tune::control_grid()}
 #' @return A list with the following elements:
 #' \itemize{
@@ -95,6 +96,7 @@ wass2s_tune_pred_ml <- function(
     n_splits    = 3,
     cumulative  = TRUE,
     quiet       = TRUE,
+    verbose_tune = TRUE,
     target_positive = TRUE,
     allow_par = TRUE,
     ...
@@ -197,7 +199,7 @@ wass2s_tune_pred_ml <- function(
   # Tune model
   wflow <- workflows::workflow() |> workflows::add_model(spec) |> workflows::add_recipe(rec)
   ctrl <- tune::control_grid(save_pred = TRUE,
-                             verbose = !quiet,
+                             verbose = verbose_tune,
                              allow_par=allow_par,
                              ... )
   rs <- tryCatch({

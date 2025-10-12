@@ -19,6 +19,7 @@ wass2s_tune_pred_stat(
   cumulative = TRUE,
   quiet = TRUE,
   allow_par = TRUE,
+  verbose_tune = TRUE,
   ...
 )
 }
@@ -57,6 +58,8 @@ is used instead of the default grid for the specified model.}
 \item{quiet}{Logical; if \code{FALSE}, emits informative messages.}
 
 \item{allow_par}{A logical to allow parallel processing (if a parallel backend is registered).}
+
+\item{verbose_tune}{A logical for logging results (other than warnings and errors, which are always shown) as they are generated during training in a single R process.}
 
 \item{...}{Others parameters passed to \code{tune::control_grid()}}
 }

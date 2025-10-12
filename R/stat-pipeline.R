@@ -18,6 +18,7 @@
 #' @param final_fuser Name of the meta-learner to use (subset of \code{SUPPORTED_FUSERS}).
 #' @param grid_levels Grid density for tuning both base models and meta-learner.
 #' @param quiet Logical; if \code{FALSE}, emits informative messages.
+#' @param verbose_tune A logical for logging results (other than warnings and errors, which are always shown) as they are generated during training in a single R process.
 #' @param target_positive Logical; if TRUE, force negative predictions to zero.
 #' @param ... Additional parameters passed to \code{wass2s_cons_mods_stat}.
 #'
@@ -42,10 +43,12 @@ wass2s_run_basin_mods_stat <- function(
     final_fuser = "rf",
     grid_levels = 5,
     quiet = TRUE,
+    verbose_tune = TRUE,
     target_positive = TRUE,
     ...
 ) {
   # Input validation
+
   if (length(data_by_product) == 0) {
     stop("data_by_product cannot be empty", call. = FALSE)
   }
@@ -57,6 +60,10 @@ wass2s_run_basin_mods_stat <- function(
   if (!is.null(prediction_years) && prediction_years[1] > prediction_years[2]) {
     stop("Starting year must be earlier than ending year.", call. = FALSE)
   }
+
+  final_fuser <- match.arg(final_fuser, SUPPORTED_FUSERS)
+  .require_pkg(engine_pkg[final_fuser])
+
 
   # 1) Consolidate by model
   models <- list(
@@ -247,7 +254,7 @@ wass2s_run_basin_mods_stat <- function(
     recipes::step_impute_median(recipes::all_predictors())
 
   spec <- model_spec(final_fuser)
-  grid <- model_grid(final_fuser, p = length(pred_cols), levels = grid_levels)
+   grid <- model_grid(final_fuser, p = length(pred_cols), levels = grid_levels)
 
   wf_meta <- workflows::workflow() |>
     workflows::add_recipe(rec_meta) |>
@@ -270,7 +277,7 @@ wass2s_run_basin_mods_stat <- function(
 
   # Tune meta-learner
   if (!is.null(rset)) {
-    ctrl <- tune::control_grid(save_pred = TRUE, verbose = !quiet, allow_par = TRUE)
+    ctrl <- tune::control_grid(save_pred = TRUE, verbose = verbose_tune, allow_par = TRUE)
 
     rs <- tryCatch({
       tune::tune_grid(
@@ -375,7 +382,7 @@ wass2s_run_basin_mods_stat <- function(
 #' @param topK Integer, number of top products to keep in the fusion (by KGE).
 #' @param final_fuser Name of the meta-learner to use (subset of \code{SUPPORTED_FUSERS}).
 #' @param basins Optional vector of basin IDs to process; default uses all found.
-#' @param parallel Logical, run basins in parallel using `{furrr}`.
+#' @param parallel Logical, run basins in parallel using \pkg{furrr}.
 #' @param workers Integer, number of parallel workers when `parallel = TRUE`.
 #' @param quiet Logical; if \code{FALSE}, emits informative messages.
 #' @param ... Additional arguments passed to \code{wass2s_run_basin_mods_stat}.
@@ -399,6 +406,8 @@ wass2s_run_basins_stat <- function(data_by_product,
                                    quiet = TRUE,
                                    ...) {
   # Input validation
+  .require_pkg(engine_pkg[final_fuser])
+
   if (length(data_by_product) == 0) {
     stop("data_by_product cannot be empty", call. = FALSE)
   }
@@ -436,7 +445,7 @@ wass2s_run_basins_stat <- function(data_by_product,
 
   # Runner function with error handling
   runner <- function(bid) {
-    if (!quiet) message("Processing basin: ", bid)
+  message("Processing basin: ", bid)
 
     tryCatch({
       wass2s_run_basin_mods_stat(
@@ -449,7 +458,7 @@ wass2s_run_basins_stat <- function(data_by_product,
         ...
       )
     }, error = function(e) {
-      if (!quiet) warning("Error processing basin ", bid, ": ", e$message)
+      warning("Error processing basin ", bid, ": ", e$message)
       # Return a structured error result
       list(
         fused_by_model = tibble::tibble(YYYY = integer(), Q = numeric()),
@@ -479,7 +488,7 @@ wass2s_run_basins_stat <- function(data_by_product,
     old_plan <- future::plan(future::multisession, workers = workers)
     on.exit(future::plan(old_plan), add = TRUE)
 
-    if (!quiet) message("Running in parallel with ", workers, " workers")
+    message("Running in parallel with ", workers, " workers")
 
     res <- furrr::future_map(
       all_basins,
@@ -491,7 +500,7 @@ wass2s_run_basins_stat <- function(data_by_product,
       )
     )
   } else {
-    if (!quiet) message("Running sequentially")
+    message("Running sequentially")
     res <- purrr::map(all_basins, runner)
   }
 
@@ -500,7 +509,7 @@ wass2s_run_basins_stat <- function(data_by_product,
 
   # Count successes and failures
   success_count <- sum(sapply(res, function(x) is.null(x$error)))
-  if (!quiet) {
+  if (TRUE) {
     message("Completed: ", success_count, " successful, ",
             length(all_basins) - success_count, " failed")
   }

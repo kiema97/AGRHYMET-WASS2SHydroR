@@ -6,7 +6,7 @@
 #'
 #' @param sf_basins sf object or path to a vector file (shapefile, gpkg, …).
 #' @param class_df data.frame with one row per basin and columns:
-#'   `basin_col`, `class_hat` in {"below","normal","above"}.
+#'   \code{basin_col}, \code{class_hat} in \code{c("below", "normal", "above")}.
 #' @param basin_col name of the basin id column shared by both inputs.
 #' @param colors named colors for classes, default:
 #'   list(above="#41AB5D", normal="#A1D937", below="#EC7014", climatology="#BEBEBE").

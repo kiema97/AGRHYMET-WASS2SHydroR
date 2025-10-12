@@ -25,6 +25,7 @@
 #' @param cumulative Logical; passed to \code{rsample::rolling_origin()}.
 #' @param quiet Logical; if \code{FALSE}, emits informative messages.
 #' @param allow_par A logical to allow parallel processing (if a parallel backend is registered).
+#' @param verbose_tune A logical for logging results (other than warnings and errors, which are always shown) as they are generated during training in a single R process.
 #' @param ... Others parameters passed to \code{tune::control_grid()}
 #' @return A list with:
 #'   \itemize{
@@ -52,6 +53,7 @@ wass2s_tune_pred_stat <- function(df_basin_product, predictors,
                                   cumulative = TRUE,
                                   quiet = TRUE,
                                   allow_par = TRUE,
+                                  verbose_tune = TRUE,
                                   ...) {
 
   # Input validation
@@ -291,7 +293,7 @@ wass2s_tune_pred_stat <- function(df_basin_product, predictors,
 
   # Tune model
   ctrl <- tune::control_grid(save_pred = TRUE,
-                             verbose = !quiet,
+                             verbose = verbose_tune,
                              allow_par=allow_par,
                              parallel_over = "resamples",
                              ... )

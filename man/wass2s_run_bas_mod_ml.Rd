@@ -18,6 +18,7 @@ wass2s_run_bas_mod_ml(
   grid_levels = 5,
   final_fuser = "rf",
   quiet = TRUE,
+  verbose_tune = TRUE,
   ...
 )
 }
@@ -48,6 +49,8 @@ start and end years for a holdout prediction period. These years}
 \item{final_fuser}{Name of the meta-learner to use (subset of \code{SUPPORTED_FUSERS}).}
 
 \item{quiet}{Logical; if \code{FALSE}, emits informative messages.}
+
+\item{verbose_tune}{A logical for logging results (other than warnings and errors, which are always shown) as they are generated during training in a single R process.}
 
 \item{...}{Passed to \code{WASS2SHydroR::wass2s_cons_mods_ml}.}
 }

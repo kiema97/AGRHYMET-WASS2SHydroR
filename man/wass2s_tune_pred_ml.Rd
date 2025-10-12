@@ -20,6 +20,7 @@ wass2s_tune_pred_ml(
   n_splits = 3,
   cumulative = TRUE,
   quiet = TRUE,
+  verbose_tune = TRUE,
   target_positive = TRUE,
   allow_par = TRUE,
   ...
@@ -66,6 +67,8 @@ If \code{NULL} (default), every possible split is produced (\code{skip = 0}).}
 
 \item{quiet}{Logical; if \code{FALSE}, emits informative messages when the
 requested \code{n_splits} cannot be reached (default \code{TRUE}).}
+
+\item{verbose_tune}{A logical for logging results (other than warnings and errors, which are always shown) as they are generated during training in a single R process.}
 
 \item{target_positive}{Logical; if TRUE, force negative predictions to zero.}
 

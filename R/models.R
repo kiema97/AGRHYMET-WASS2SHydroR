@@ -18,6 +18,54 @@ SUPPORTED_FUSERS <- c("rf","xgb","glmnet","kknn","svmLinear","mars","cubist")
 
 SUPPORTED_MODELS <- c("rf","xgb","mlp","kknn","svmLinear","mars","cubist")
 
+#' Mapping of ML engines to required R packages
+#' @format A named character vector:
+#' - **names**: internal engine identifiers
+#' - **values**: required R package names
+#'
+#' @keywords internal
+#' @noRd
+
+engine_pkg <- c(
+  rf        = "ranger",
+  xgb       = "xgboost",
+  glmnet    = "glmnet",
+  kknn      = "kknn",
+  svmLinear = "kernlab",
+  mars      = "earth",
+  cubist    = "Cubist",
+  mlp       = "nnet"
+)
+
+
+
+#' Check that required packages are installed
+#'
+#' This internal utility checks whether one or more required packages
+#' are installed. If not, it throws a clear error message.
+#'
+#' @param pkg A character vector of package names.
+#'
+#' @keywords internal
+#' @noRd
+.require_pkg <- function(pkg) {
+  stopifnot(is.character(pkg), length(pkg) >= 1L)
+
+  missing_pkgs <- pkg[!vapply(pkg, requireNamespace, logical(1), quietly = TRUE)]
+
+  if (length(missing_pkgs) > 0) {
+    msg <- paste0(
+      "The following required package(s) are missing: ",
+      paste(missing_pkgs, collapse = ", "),
+      "\nPlease install them with:\n  install.packages(c(\"",
+      paste(missing_pkgs, collapse = "\", \""),
+      "\"))"
+    )
+    stop(msg, call. = FALSE)
+  }
+
+  invisible(TRUE)
+}
 
 # parsnip specs (unifiées)
 #' Model specification factory (parsnip)
@@ -33,22 +81,8 @@ SUPPORTED_MODELS <- c("rf","xgb","mlp","kknn","svmLinear","mars","cubist")
 #' @noRd
 model_spec <- function(name, strict = TRUE) {
   name <- match.arg(name, SUPPORTED_MODELS)
-
-  engine_pkg <- c(
-    rf        = "ranger",
-    xgb       = "xgboost",
-    glmnet    = "glmnet",
-    kknn      = "kknn",
-    svmLinear = "kernlab",
-    mars      = "earth",
-    cubist    = "Cubist",
-    mlp       = "nnet"
-  )
-
   pkg <- engine_pkg[[name]]
-  if (!requireNamespace(pkg, quietly = TRUE)) {
-    stop(paste0("Package ", pkg, " is required for this function. Please install it."))
-  }
+  .require_pkg(pkg)
 
   switch(name,
          rf = parsnip::rand_forest(
@@ -147,21 +181,8 @@ model_spec <- function(name, strict = TRUE) {
 #' @noRd
 model_grid <- function(name, p, levels = 5, n_min = Inf) {
   name <- match.arg(name, SUPPORTED_MODELS)
-
-  engine_pkg <- c(
-    rf        = "ranger",
-    xgb       = "xgboost",
-    glmnet    = "glmnet",
-    kknn      = "kknn",
-    svmLinear = "kernlab",
-    mars      = "earth",
-    cubist    = "Cubist",
-    mlp       = "nnet"
-  )
   pkg <- engine_pkg[[name]]
-  if (!requireNamespace(pkg, quietly = TRUE)) {
-    stop(paste0("Package ", pkg, " is required for this function. Please install it."))
-  }
+  .require_pkg(pkg)
   # helper borne
   cap <- function(x, m) max(1L, min(x, m))
 

@@ -16,6 +16,7 @@ wass2s_run_basin_mods_stat(
   final_fuser = "rf",
   grid_levels = 5,
   quiet = TRUE,
+  verbose_tune = TRUE,
   target_positive = TRUE,
   ...
 )
@@ -44,6 +45,8 @@ start and end years for a holdout prediction period.}
 \item{grid_levels}{Grid density for tuning both base models and meta-learner.}
 
 \item{quiet}{Logical; if \code{FALSE}, emits informative messages.}
+
+\item{verbose_tune}{A logical for logging results (other than warnings and errors, which are always shown) as they are generated during training in a single R process.}
 
 \item{target_positive}{Logical; if TRUE, force negative predictions to zero.}
 

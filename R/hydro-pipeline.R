@@ -18,6 +18,7 @@
 #' @param final_fuser Name of the meta-learner to use (subset of \code{SUPPORTED_FUSERS}).
 #' @param grid_levels Grid density for tuning both base models and meta-learner.
 #' @param quiet Logical; if \code{FALSE}, emits informative messages.
+#' @param verbose_tune A logical for logging results (other than warnings and errors, which are always shown) as they are generated during training in a single R process.
 #' @param ... Passed to \code{WASS2SHydroR::wass2s_cons_mods_ml}.
 #' @return A list with:
 #' \itemize{
@@ -45,6 +46,7 @@ wass2s_run_bas_mod_ml <- function(
     grid_levels = 5,
     final_fuser = "rf",
     quiet = TRUE,
+    verbose_tune = TRUE,
     ...
 ) {
 
@@ -55,6 +57,8 @@ wass2s_run_bas_mod_ml <- function(
     models <- intersect(models, SUPPORTED_MODELS)
   }
   final_fuser <- match.arg(final_fuser, SUPPORTED_FUSERS)
+  .require_pkg(engine_pkg[c(final_fuser,models)])
+
 
   # 1) Consolidate per base model with error handling
   outs <- purrr::map(models, function(m) {
@@ -267,8 +271,8 @@ wass2s_run_bas_mod_ml <- function(
     recipes::step_zv(recipes::all_predictors()) |>
     recipes::step_impute_median(recipes::all_predictors())
 
-  spec <- model_spec(final_fuser)
-  grid <- model_grid(final_fuser, p = ncol(df_tr) - 2L, levels = grid_levels)
+   spec <- model_spec(final_fuser)
+   grid <- model_grid(final_fuser, p = ncol(df_tr) - 2L, levels = grid_levels)
 
   wf_meta <- workflows::workflow() |>
     workflows::add_recipe(rec_meta) |>
@@ -285,7 +289,7 @@ wass2s_run_bas_mod_ml <- function(
 
   # Tune meta-learner
   if (!is.null(rset)) {
-    ctrl <- tune::control_grid(save_pred = TRUE, verbose = !quiet, allow_par = TRUE)
+    ctrl <- tune::control_grid(save_pred = TRUE, verbose = verbose_tune, allow_par = TRUE)
 
     rs <- tryCatch({
       tune::tune_grid(
@@ -413,6 +417,8 @@ wass2s_run_basins_ml <- function(
     ...
 ) {
   # Input validation
+  .require_pkg(engine_pkg[c(final_fuser,models)])
+
   if (length(data_by_product) == 0) {
     stop("data_by_product cannot be empty", call. = FALSE)
   }
@@ -436,11 +442,11 @@ wass2s_run_basins_ml <- function(
     stop("No basins found in the data", call. = FALSE)
   }
 
-  if (!quiet) message("Processing ", length(basins), " basins")
+  if (TRUE) message("Processing ", length(basins), " basins")
 
   # Define the runner function with error handling
   runner <- function(bid) {
-    if (!quiet) message("Processing basin: ", bid)
+    if (TRUE) message("Processing basin: ", bid)
 
     tryCatch({
       result <- wass2s_run_bas_mod_ml(
@@ -461,7 +467,7 @@ wass2s_run_basins_ml <- function(
       result$basin_id <- bid
       result
     }, error = function(e) {
-      if (!quiet) warning("Error processing basin ", bid, ": ", e$message)
+      if (TRUE) warning("Error processing basin ", bid, ": ", e$message)
 
       # Return a structured error result
       list(
@@ -492,7 +498,7 @@ wass2s_run_basins_ml <- function(
     old_plan <- future::plan(future::multisession, workers = workers)
     on.exit(future::plan(old_plan), add = TRUE)
 
-    if (!quiet) message("Running in parallel with ", workers, " workers")
+    if (TRUE) message("Running in parallel with ", workers, " workers")
 
     res <- furrr::future_map(
       basins,
@@ -501,7 +507,7 @@ wass2s_run_basins_ml <- function(
       .options = furrr::furrr_options(seed = TRUE)
     )
   } else {
-    if (!quiet) message("Running sequentially")
+    if (TRUE) message("Running sequentially")
     res <- purrr::map(basins, runner)
   }
 
@@ -510,7 +516,7 @@ wass2s_run_basins_ml <- function(
 
   # Summarize results
   success_count <- sum(sapply(res, function(x) is.null(x$error)))
-  if (!quiet) message("Completed: ", success_count, " successful, ",
+  if (TRUE) message("Completed: ", success_count, " successful, ",
                       length(basins) - success_count, " failed")
 
   # Return results
