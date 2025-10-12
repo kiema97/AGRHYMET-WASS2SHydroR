@@ -1,6 +1,6 @@
 Package: WASS2SHydroR
 Title: West-African and Sahel S2S Hydrology (Meta Package)
-Version: 0.1.0
+Version: 0.1.0.9000
 Authors@R: c(
     person("Arsène", "Kiema", role = c("aut", "cre"), email = "kiema.arsene@cilss.int"),
     person("Abdou", "Ali", role = "ctb", email = "abou.ali@cilss.int"),
