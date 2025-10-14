@@ -343,7 +343,7 @@ make_recipe <- function(
     df,
     predictors,
     target = "Q",
-    corr_threshold = 0.7,
+    corr_threshold = 1,
     corr_method = "pearson",
     impute_nominal = TRUE,
     include_dummy  = FALSE,
