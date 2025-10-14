@@ -291,6 +291,7 @@ model_grid <- function(name, p, levels = 5, n_min = Inf) {
 #'   threshold (disables auto-PCA). Do not set together with \code{pca_num_comp}.
 #' @param remove_linear_comb Logical; if \code{TRUE} (default), remove linear
 #'   combinations using \code{step_lincomb()}.
+#' @param auto_pca Logical; if \code{TRUE}, enable automatical PCA. Default: \code{TRUE}.
 #' @param auto_pca_when_gt Integer; enable auto-PCA when the number of predictors
 #'   is greater than this threshold. Default: \code{15}.
 #' @param auto_pca_var_threshold Numeric in (0, 1); cumulative variance target used
@@ -342,7 +343,7 @@ make_recipe <- function(
     df,
     predictors,
     target = "Q",
-    corr_threshold = 0.70,
+    corr_threshold = 1,
     corr_method = "pearson",
     impute_nominal = TRUE,
     include_dummy  = FALSE,
@@ -350,6 +351,7 @@ make_recipe <- function(
     pca_num_comp = NULL,
     pca_var_threshold = NULL,
     remove_linear_comb = TRUE,
+    auto_pca = TRUE,
     auto_pca_when_gt = 15,
     auto_pca_var_threshold = 0.80,
     verbose = FALSE
@@ -420,7 +422,7 @@ make_recipe <- function(
   # If user explicitly set pca_ respect that.
   # Else, auto-enable PCA when number of predictors > auto_pca_when_gt.
   do_auto_pca <- is.null(pca_num_comp) && is.null(pca_var_threshold) &&
-    length(predictors) > auto_pca_when_gt
+    length(predictors) > auto_pca_when_gt && auto_pca
 
   if (do_auto_pca) {
     if (isTRUE(verbose)) message("Auto PCA enabled (predictors > ", auto_pca_when_gt, ").")

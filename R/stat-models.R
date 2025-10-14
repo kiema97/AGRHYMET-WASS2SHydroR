@@ -40,7 +40,8 @@ wf_lasso <- function(rec){
 #' @return A `dials` grid for `threshold` in [0.70, 0.995].
 #' @keywords internal
 grid_pcr <- function(){
-  dials::grid_regular(dials::threshold(range = c(0.70, 0.995)), levels = 8)
+  dials::grid_regular(dials::threshold(range = c(0.70, 0.995)),
+                      levels = 8)
 }
 
 #' Grid for glmnet penalties
@@ -48,5 +49,6 @@ grid_pcr <- function(){
 #' @return A `dials` grid for `penalty` (~ 1e-6 .. 10).
 #' @keywords internal
 grid_glm <- function(){
-  dials::grid_regular(dials::penalty(range = c(-6, 1)), levels = 30)  # ~1e-6..10
+  dials::grid_regular(dials::penalty(range = c(-6, 1)),
+                      levels = 30)  # ~1e-6..10
 }

@@ -8,7 +8,7 @@ make_recipe(
   df,
   predictors,
   target = "Q",
-  corr_threshold = 0.7,
+  corr_threshold = 1,
   corr_method = "pearson",
   impute_nominal = TRUE,
   include_dummy = FALSE,
@@ -16,6 +16,7 @@ make_recipe(
   pca_num_comp = NULL,
   pca_var_threshold = NULL,
   remove_linear_comb = TRUE,
+  auto_pca = TRUE,
   auto_pca_when_gt = 15,
   auto_pca_var_threshold = 0.8,
   verbose = FALSE
@@ -56,6 +57,8 @@ threshold (disables auto-PCA). Do not set together with \code{pca_num_comp}.}
 
 \item{remove_linear_comb}{Logical; if \code{TRUE} (default), remove linear
 combinations using \code{step_lincomb()}.}
+
+\item{auto_pca}{Logical; if \code{TRUE}, enable automatical PCA. Default: \code{TRUE}.}
 
 \item{auto_pca_when_gt}{Integer; enable auto-PCA when the number of predictors
 is greater than this threshold. Default: \code{15}.}

@@ -178,7 +178,11 @@ wass2s_tune_pred_stat <- function(df_basin_product, predictors,
 
   # Create recipe
   rec <- tryCatch({
-    make_recipe(df_basin_product, predictors)
+    if(model == "pcr"){
+      make_recipe(df_basin_product, predictors,auto_pca = FALSE)
+    }else{
+      make_recipe(df_basin_product, predictors,auto_pca = TRUE)
+    }
   }, error = function(e) {
     if (!quiet) message("Error creating recipe: ", e$message)
     return(NULL)
