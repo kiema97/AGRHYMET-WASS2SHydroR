@@ -37,10 +37,11 @@ plot_class_map <- function(
                  paste(miss, collapse = ", ")), call. = FALSE)
   }
 
+  class_df$class_hat <- base::ifelse(is.na(class_df$class_hat),"climatology",class_df$class_hat)
   map_df <- dplyr::left_join(sf_b, class_df, by = dplyr::join_by(!!rlang::sym(basin_col)))
 
   # make class_hat a factor to control legend order
-  lvl <- c("below","normal","above")
+  lvl <- c("below","normal","above","climatology")
   map_df$class_hat <- factor(map_df$class_hat, levels = lvl)
 
   p <- ggplot2::ggplot(map_df) +
@@ -49,7 +50,8 @@ plot_class_map <- function(
       values = c(
         below  = colors$below,
         normal = colors$normal,
-        above  = colors$above
+        above  = colors$above,
+        climatology = colors$climatology
       ),
       drop = FALSE,
       na.value = colors$climatology,
