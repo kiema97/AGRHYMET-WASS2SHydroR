@@ -9,7 +9,7 @@ wass2s_tune_pred_stat(
   predictors,
   model = c("pcr", "ridge", "lasso"),
   prediction_years = NULL,
-  target_positive = FALSE,
+  target_positive = TRUE,
   resamples = NULL,
   pretrained_wflow = NULL,
   grid = NULL,

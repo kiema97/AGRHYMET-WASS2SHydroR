@@ -8,7 +8,7 @@ make_recipe(
   df,
   predictors,
   target = "Q",
-  corr_threshold = 0.999,
+  corr_threshold = 0.99,
   corr_method = "pearson",
   impute_nominal = TRUE,
   include_dummy = FALSE,
