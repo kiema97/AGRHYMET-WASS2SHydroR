@@ -42,7 +42,6 @@
 #' cns <- wass2s_cons_mods_stat(1040021500, data_by_product, model = "pcr", topK = 3)
 #' }
 #' @export
-
 wass2s_cons_mods_stat <- function(
     basin_id,
     data_by_product,
@@ -51,7 +50,7 @@ wass2s_cons_mods_stat <- function(
     model = c("pcr", "ridge", "lasso"),
     topK = 3,
     min_kge_model = 0.2,
-    min_predictors = 2,
+    min_predictors = 1,
     prediction_years = NULL,
     target_positive = FALSE,
     resamples = NULL,
@@ -106,7 +105,7 @@ wass2s_cons_mods_stat <- function(
     # Predictor pattern (via core::select_predictors)
     pat <- if (!is.null(pred_pattern_by_product) && p %in% names(pred_pattern_by_product)) {
       pred_pattern_by_product[[p]]
-    } else "^pt_"
+    } else if(!is.null(pred_pattern_by_product) && length(pred_pattern_by_product) ==1) pred_pattern_by_product else "^pt_"
 
     predictors <- select_predictors(
       dfp,
@@ -151,6 +150,7 @@ wass2s_cons_mods_stat <- function(
     list(
       product = p,
       kge     = out$kge_cv_mean,
+      rsq     = out$rsq_cv_mean,
       preds   = out$preds,
       n_pred  = length(predictors),
       sd_pred = sd_pred
@@ -174,6 +174,7 @@ wass2s_cons_mods_stat <- function(
   lb <- tibble::tibble(
     product = purrr::map_chr(results, "product"),
     kge     = purrr::map_dbl(results, "kge"),
+    rsq     = purrr::map_dbl(results, "rsq"),
     n_pred  = purrr::map_int(results, "n_pred"),
     sd_pred = purrr::map_dbl(results, "sd_pred")
   )
@@ -186,8 +187,8 @@ wass2s_cons_mods_stat <- function(
     keep_names <- head(lb_kge_ok$product, n = min(topK, nrow(lb_kge_ok)))
     results_top <- results[match(keep_names, purrr::map_chr(results, "product"))]
 
-    kg <- lb_kge_ok$kge[match(keep_names, lb_kge_ok$product)]
-
+    #kg <- lb_kge_ok$kge[match(keep_names, lb_kge_ok$product)]
+    kg <- lb_kge_ok$rsq[match(keep_names, lb_kge_ok$product)]
     # Apply KGE thresholds
     kg[kg < 0] <- 0
     kg[kg < min_kge_model] <- 0
@@ -250,7 +251,7 @@ wass2s_cons_mods_stat <- function(
 
 
 
-# wass2s_cons_mods_stat_ <- function(
+# wass2s_cons_mods_stat <- function(
 #     basin_id,
 #     data_by_product,
 #     basin_col = "HYBAS_ID",
@@ -258,7 +259,7 @@ wass2s_cons_mods_stat <- function(
 #     model = c("pcr", "ridge", "lasso"),
 #     topK = 3,
 #     min_kge_model = 0.2,
-#     min_predictors = 1,
+#     min_predictors = 2,
 #     prediction_years = NULL,
 #     target_positive = FALSE,
 #     resamples = NULL,
@@ -313,7 +314,7 @@ wass2s_cons_mods_stat <- function(
 #     # Predictor pattern (via core::select_predictors)
 #     pat <- if (!is.null(pred_pattern_by_product) && p %in% names(pred_pattern_by_product)) {
 #       pred_pattern_by_product[[p]]
-#     } else if(!is.null(pred_pattern_by_product) && length(pred_pattern_by_product) ==1) pred_pattern_by_product else "^pt_"
+#     } else "^pt_"
 #
 #     predictors <- select_predictors(
 #       dfp,
@@ -358,7 +359,6 @@ wass2s_cons_mods_stat <- function(
 #     list(
 #       product = p,
 #       kge     = out$kge_cv_mean,
-#       rsq     = out$rsq_cv_mean,
 #       preds   = out$preds,
 #       n_pred  = length(predictors),
 #       sd_pred = sd_pred
@@ -382,7 +382,6 @@ wass2s_cons_mods_stat <- function(
 #   lb <- tibble::tibble(
 #     product = purrr::map_chr(results, "product"),
 #     kge     = purrr::map_dbl(results, "kge"),
-#     rsq     = purrr::map_dbl(results, "rsq"),
 #     n_pred  = purrr::map_int(results, "n_pred"),
 #     sd_pred = purrr::map_dbl(results, "sd_pred")
 #   )
@@ -395,8 +394,8 @@ wass2s_cons_mods_stat <- function(
 #     keep_names <- head(lb_kge_ok$product, n = min(topK, nrow(lb_kge_ok)))
 #     results_top <- results[match(keep_names, purrr::map_chr(results, "product"))]
 #
-#     #kg <- lb_kge_ok$kge[match(keep_names, lb_kge_ok$product)]
-#     kg <- lb_kge_ok$rsq[match(keep_names, lb_kge_ok$product)]
+#     kg <- lb_kge_ok$kge[match(keep_names, lb_kge_ok$product)]
+#
 #     # Apply KGE thresholds
 #     kg[kg < 0] <- 0
 #     kg[kg < min_kge_model] <- 0
@@ -456,3 +455,7 @@ wass2s_cons_mods_stat <- function(
 #     all_results = results
 #   )
 # }
+
+
+
+

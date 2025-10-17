@@ -41,21 +41,21 @@
 #' @seealso [make_recipe()], [make_rolling()], [wf_pcr()], [wf_ridge()], [wf_lasso()]
 #' @export
 #' @importFrom rlang .data
-wass2s_tune_pred_stat <- function(df_basin_product, predictors,
-                                  model = c("pcr", "ridge", "lasso"),
-                                  prediction_years = NULL,
-                                  target_positive = TRUE,
-                                  resamples = NULL,
-                                  pretrained_wflow = NULL,
-                                  grid = NULL,
-                                  init_frac = 0.60,
-                                  assess_frac = 0.20,
-                                  n_splits = NULL,
-                                  cumulative = TRUE,
-                                  quiet = TRUE,
-                                  allow_par = TRUE,
-                                  verbose_tune = TRUE,
-                                  ...) {
+wass2s_tune_pred_stat<- function(df_basin_product, predictors,
+                                   model = c("pcr", "ridge", "lasso"),
+                                   prediction_years = NULL,
+                                   target_positive = TRUE,
+                                   resamples = NULL,
+                                   pretrained_wflow = NULL,
+                                   grid = NULL,
+                                   init_frac = 0.60,
+                                   assess_frac = 0.20,
+                                   n_splits = NULL,
+                                   cumulative = TRUE,
+                                   quiet = TRUE,
+                                   allow_par = TRUE,
+                                   verbose_tune = TRUE,
+                                   ...) {
 
   # Input validation
   model <- match.arg(model)
@@ -66,6 +66,13 @@ wass2s_tune_pred_stat <- function(df_basin_product, predictors,
     stop("Missing required columns: ", paste(missing_cols, collapse = ", "),
          call. = FALSE)
   }
+
+  df_basin_product <- .sanitize_numeric_columns(
+    df   = df_basin_product,
+    cols = "Q",
+    max_na_frac = 0.30,
+    impute = "median"
+  )
 
   # Handle prediction years
   holdout_data <- NULL
@@ -164,7 +171,7 @@ wass2s_tune_pred_stat <- function(df_basin_product, predictors,
 
   # Filter non-informative predictors
   predictors <- usable_predictors(df_basin_product, predictors)
-  if (length(predictors) < 1L) {
+  if (length(predictors) < 2L) {
     if (!quiet) message("Insufficient usable predictors after filtering.")
     # Create empty predictions for all years (training + holdout)
     all_years <- unique(c(df_basin_product$YYYY, if (!is.null(holdout_data)) holdout_data$YYYY else NULL))
@@ -351,8 +358,13 @@ wass2s_tune_pred_stat <- function(df_basin_product, predictors,
   # Calculate KGE by split and configuration
   kge_by_split <- tryCatch({
     preds %>%
+      dplyr::filter(!is.na(Q)) %>%
       dplyr::group_by(id, .config) %>%
-      dplyr::summarise(kge_split = kge_vec(Q, .pred), .groups = "drop")
+      dplyr::summarise(kge_split = kge_vec(Q, .pred),
+                       rsq_split = yardstick::rsq_vec(truth = .data$Q, estimate = .data$.pred),
+                       .groups = "drop")
+
+
   }, error = function(e) {
     if (!quiet) message("Error calculating KGE by split: ", e$message)
     tibble::tibble(id = character(), .config = character(), kge_split = numeric())
@@ -361,7 +373,8 @@ wass2s_tune_pred_stat <- function(df_basin_product, predictors,
   kge_by_cfg <- tryCatch({
     kge_by_split %>%
       dplyr::group_by(.config) %>%
-      dplyr::summarise(kge_mean = mean(kge_split, na.rm = TRUE), .groups = "drop") %>%
+      dplyr::summarise(kge_mean = mean(kge_split, na.rm = TRUE),
+                       rsq_mean = mean(rsq_split,na.rm = TRUE),.groups = "drop") %>%
       dplyr::arrange(dplyr::desc(kge_mean))
   }, error = function(e) {
     if (!quiet) message("Error calculating KGE by config: ", e$message)
@@ -415,6 +428,7 @@ wass2s_tune_pred_stat <- function(df_basin_product, predictors,
 
     return(list(
       kge_cv_mean = if (nrow(kge_by_cfg) > 0) kge_by_cfg$kge_mean[1] else NA_real_,
+      rsq_cv_mean = if (nrow(kge_by_cfg) > 0) kge_by_cfg$rsq_mean[1] else NA_real_,
       preds = preds_empty,
       leaderboard_cfg = kge_by_cfg
     ))
@@ -450,6 +464,7 @@ wass2s_tune_pred_stat <- function(df_basin_product, predictors,
   # Return results
   list(
     kge_cv_mean = if (nrow(kge_by_cfg) > 0) kge_by_cfg$kge_mean[1] else NA_real_,
+    rsq_cv_mean = if (nrow(kge_by_cfg) > 0) kge_by_cfg$rsq_mean[1] else NA_real_,
     preds = preds_final,
     leaderboard_cfg = kge_by_cfg
   )
@@ -581,7 +596,7 @@ wass2s_tune_pred_stat <- function(df_basin_product, predictors,
 #
 #   # Filter non-informative predictors
 #   predictors <- usable_predictors(df_basin_product, predictors)
-#   if (length(predictors) < 2L) {
+#   if (length(predictors) < 1L) {
 #     if (!quiet) message("Insufficient usable predictors after filtering.")
 #     # Create empty predictions for all years (training + holdout)
 #     all_years <- unique(c(df_basin_product$YYYY, if (!is.null(holdout_data)) holdout_data$YYYY else NULL))
@@ -768,13 +783,8 @@ wass2s_tune_pred_stat <- function(df_basin_product, predictors,
 #   # Calculate KGE by split and configuration
 #   kge_by_split <- tryCatch({
 #     preds %>%
-#       dplyr::filter(!is.na(Q)) %>%
 #       dplyr::group_by(id, .config) %>%
-#       dplyr::summarise(kge_split = kge_vec(Q, .pred),
-#                        rsq_split = yardstick::rsq_vec(truth = .data$Q, estimate = .data$.pred),
-#                        .groups = "drop")
-#
-#
+#       dplyr::summarise(kge_split = kge_vec(Q, .pred), .groups = "drop")
 #   }, error = function(e) {
 #     if (!quiet) message("Error calculating KGE by split: ", e$message)
 #     tibble::tibble(id = character(), .config = character(), kge_split = numeric())
@@ -783,8 +793,7 @@ wass2s_tune_pred_stat <- function(df_basin_product, predictors,
 #   kge_by_cfg <- tryCatch({
 #     kge_by_split %>%
 #       dplyr::group_by(.config) %>%
-#       dplyr::summarise(kge_mean = mean(kge_split, na.rm = TRUE),
-#                        rsq_mean = mean(rsq_split,na.rm = TRUE),.groups = "drop") %>%
+#       dplyr::summarise(kge_mean = mean(kge_split, na.rm = TRUE), .groups = "drop") %>%
 #       dplyr::arrange(dplyr::desc(kge_mean))
 #   }, error = function(e) {
 #     if (!quiet) message("Error calculating KGE by config: ", e$message)
@@ -838,7 +847,6 @@ wass2s_tune_pred_stat <- function(df_basin_product, predictors,
 #
 #     return(list(
 #       kge_cv_mean = if (nrow(kge_by_cfg) > 0) kge_by_cfg$kge_mean[1] else NA_real_,
-#       rsq_cv_mean = if (nrow(kge_by_cfg) > 0) kge_by_cfg$rsq_mean[1] else NA_real_,
 #       preds = preds_empty,
 #       leaderboard_cfg = kge_by_cfg
 #     ))
@@ -874,8 +882,11 @@ wass2s_tune_pred_stat <- function(df_basin_product, predictors,
 #   # Return results
 #   list(
 #     kge_cv_mean = if (nrow(kge_by_cfg) > 0) kge_by_cfg$kge_mean[1] else NA_real_,
-#     rsq_cv_mean = if (nrow(kge_by_cfg) > 0) kge_by_cfg$rsq_mean[1] else NA_real_,
 #     preds = preds_final,
 #     leaderboard_cfg = kge_by_cfg
 #   )
 # }
+
+
+
+

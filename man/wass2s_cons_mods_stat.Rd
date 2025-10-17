@@ -12,7 +12,7 @@ wass2s_cons_mods_stat(
   model = c("pcr", "ridge", "lasso"),
   topK = 3,
   min_kge_model = 0.2,
-  min_predictors = 2,
+  min_predictors = 1,
   prediction_years = NULL,
   target_positive = FALSE,
   resamples = NULL,
