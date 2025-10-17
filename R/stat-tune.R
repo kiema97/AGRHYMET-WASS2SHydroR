@@ -164,7 +164,7 @@ wass2s_tune_pred_stat <- function(df_basin_product, predictors,
 
   # Filter non-informative predictors
   predictors <- usable_predictors(df_basin_product, predictors)
-  if (length(predictors) < 2L) {
+  if (length(predictors) < 1L) {
     if (!quiet) message("Insufficient usable predictors after filtering.")
     # Create empty predictions for all years (training + holdout)
     all_years <- unique(c(df_basin_product$YYYY, if (!is.null(holdout_data)) holdout_data$YYYY else NULL))
@@ -351,13 +351,8 @@ wass2s_tune_pred_stat <- function(df_basin_product, predictors,
   # Calculate KGE by split and configuration
   kge_by_split <- tryCatch({
     preds %>%
-      dplyr::filter(!is.na(Q)) %>%
       dplyr::group_by(id, .config) %>%
-      dplyr::summarise(kge_split = kge_vec(Q, .pred),
-                       rsq_split = yardstick::rsq_vec(truth = .data$Q, estimate = .data$.pred),
-                       .groups = "drop")
-
-
+      dplyr::summarise(kge_split = kge_vec(Q, .pred), .groups = "drop")
   }, error = function(e) {
     if (!quiet) message("Error calculating KGE by split: ", e$message)
     tibble::tibble(id = character(), .config = character(), kge_split = numeric())
@@ -366,8 +361,7 @@ wass2s_tune_pred_stat <- function(df_basin_product, predictors,
   kge_by_cfg <- tryCatch({
     kge_by_split %>%
       dplyr::group_by(.config) %>%
-      dplyr::summarise(kge_mean = mean(kge_split, na.rm = TRUE),
-                       rsq_mean = mean(rsq_split,na.rm = TRUE),.groups = "drop") %>%
+      dplyr::summarise(kge_mean = mean(kge_split, na.rm = TRUE), .groups = "drop") %>%
       dplyr::arrange(dplyr::desc(kge_mean))
   }, error = function(e) {
     if (!quiet) message("Error calculating KGE by config: ", e$message)
@@ -421,7 +415,6 @@ wass2s_tune_pred_stat <- function(df_basin_product, predictors,
 
     return(list(
       kge_cv_mean = if (nrow(kge_by_cfg) > 0) kge_by_cfg$kge_mean[1] else NA_real_,
-      rsq_cv_mean = if (nrow(kge_by_cfg) > 0) kge_by_cfg$rsq_mean[1] else NA_real_,
       preds = preds_empty,
       leaderboard_cfg = kge_by_cfg
     ))
@@ -457,11 +450,11 @@ wass2s_tune_pred_stat <- function(df_basin_product, predictors,
   # Return results
   list(
     kge_cv_mean = if (nrow(kge_by_cfg) > 0) kge_by_cfg$kge_mean[1] else NA_real_,
-    rsq_cv_mean = if (nrow(kge_by_cfg) > 0) kge_by_cfg$rsq_mean[1] else NA_real_,
     preds = preds_final,
     leaderboard_cfg = kge_by_cfg
   )
 }
+
 
 
 
@@ -588,7 +581,7 @@ wass2s_tune_pred_stat <- function(df_basin_product, predictors,
 #
 #   # Filter non-informative predictors
 #   predictors <- usable_predictors(df_basin_product, predictors)
-#   if (length(predictors) < 1L) {
+#   if (length(predictors) < 2L) {
 #     if (!quiet) message("Insufficient usable predictors after filtering.")
 #     # Create empty predictions for all years (training + holdout)
 #     all_years <- unique(c(df_basin_product$YYYY, if (!is.null(holdout_data)) holdout_data$YYYY else NULL))
@@ -775,8 +768,13 @@ wass2s_tune_pred_stat <- function(df_basin_product, predictors,
 #   # Calculate KGE by split and configuration
 #   kge_by_split <- tryCatch({
 #     preds %>%
+#       dplyr::filter(!is.na(Q)) %>%
 #       dplyr::group_by(id, .config) %>%
-#       dplyr::summarise(kge_split = kge_vec(Q, .pred), .groups = "drop")
+#       dplyr::summarise(kge_split = kge_vec(Q, .pred),
+#                        rsq_split = yardstick::rsq_vec(truth = .data$Q, estimate = .data$.pred),
+#                        .groups = "drop")
+#
+#
 #   }, error = function(e) {
 #     if (!quiet) message("Error calculating KGE by split: ", e$message)
 #     tibble::tibble(id = character(), .config = character(), kge_split = numeric())
@@ -785,7 +783,8 @@ wass2s_tune_pred_stat <- function(df_basin_product, predictors,
 #   kge_by_cfg <- tryCatch({
 #     kge_by_split %>%
 #       dplyr::group_by(.config) %>%
-#       dplyr::summarise(kge_mean = mean(kge_split, na.rm = TRUE), .groups = "drop") %>%
+#       dplyr::summarise(kge_mean = mean(kge_split, na.rm = TRUE),
+#                        rsq_mean = mean(rsq_split,na.rm = TRUE),.groups = "drop") %>%
 #       dplyr::arrange(dplyr::desc(kge_mean))
 #   }, error = function(e) {
 #     if (!quiet) message("Error calculating KGE by config: ", e$message)
@@ -839,6 +838,7 @@ wass2s_tune_pred_stat <- function(df_basin_product, predictors,
 #
 #     return(list(
 #       kge_cv_mean = if (nrow(kge_by_cfg) > 0) kge_by_cfg$kge_mean[1] else NA_real_,
+#       rsq_cv_mean = if (nrow(kge_by_cfg) > 0) kge_by_cfg$rsq_mean[1] else NA_real_,
 #       preds = preds_empty,
 #       leaderboard_cfg = kge_by_cfg
 #     ))
@@ -874,8 +874,8 @@ wass2s_tune_pred_stat <- function(df_basin_product, predictors,
 #   # Return results
 #   list(
 #     kge_cv_mean = if (nrow(kge_by_cfg) > 0) kge_by_cfg$kge_mean[1] else NA_real_,
+#     rsq_cv_mean = if (nrow(kge_by_cfg) > 0) kge_by_cfg$rsq_mean[1] else NA_real_,
 #     preds = preds_final,
 #     leaderboard_cfg = kge_by_cfg
 #   )
 # }
-#
