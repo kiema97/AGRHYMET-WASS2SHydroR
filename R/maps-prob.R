@@ -56,7 +56,10 @@ plot_prob_maps <- function(
     cols = c("p_below", "p_normal", "p_above"),
     names_to = "class",
     values_to = "prob"
-  )
+  ) |>
+    mutate(class = base::factor(x =class,
+                           levels = c( "p_above", "p_normal","p_below"),
+                           labels =c( "p_above", "p_normal","p_below") ))
 
   # Palette: use viridis if available; fallback to default continuous
   has_viridis <- requireNamespace("viridis", quietly = TRUE)
