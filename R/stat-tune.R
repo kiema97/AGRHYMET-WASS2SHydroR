@@ -361,7 +361,7 @@ wass2s_tune_pred_stat<- function(df_basin_product, predictors,
       dplyr::filter(!is.na(Q)) %>%
       dplyr::group_by(id, .config) %>%
       dplyr::summarise(kge_split = kge_vec(Q, .pred),
-                       rsq_split = yardstick::rsq_vec(truth = .data$Q, estimate = .data$.pred),
+                       rsq_split = wass2s_corr(truth = .data$Q, estimate = .data$.pred),
                        .groups = "drop")
 
 
@@ -469,9 +469,6 @@ wass2s_tune_pred_stat<- function(df_basin_product, predictors,
     leaderboard_cfg = kge_by_cfg
   )
 }
-
-
-
 
 # wass2s_tune_pred_stat_ <- function(df_basin_product, predictors,
 #                                   model = c("pcr", "ridge", "lasso"),
