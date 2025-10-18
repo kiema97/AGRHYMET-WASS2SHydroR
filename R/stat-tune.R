@@ -26,6 +26,12 @@
 #' @param quiet Logical; if \code{FALSE}, emits informative messages.
 #' @param allow_par A logical to allow parallel processing (if a parallel backend is registered).
 #' @param verbose_tune A logical for logging results (other than warnings and errors, which are always shown) as they are generated during training in a single R process.
+#' @param max_na_frac Numeric in \eqn{[0, 1]}: maximum allowed fraction of missing
+#'   values per column before stopping (default \code{0.20} = 20\%).
+#' @param impute Character, one of \code{"median"}, \code{"mean"}, or \code{"none"}.
+#'   If \code{"none"}, no imputation is performed after the guard (default \code{"median"}).
+#' @param require_variance Logical; if \code{TRUE}, stop when a column has zero
+#'   standard deviation after imputation (default \code{TRUE}).
 #' @param ... Others parameters passed to \code{tune::control_grid()}
 #' @return A list with:
 #'   \itemize{
@@ -42,20 +48,24 @@
 #' @export
 #' @importFrom rlang .data
 wass2s_tune_pred_stat<- function(df_basin_product, predictors,
-                                   model = c("pcr", "ridge", "lasso"),
-                                   prediction_years = NULL,
-                                   target_positive = TRUE,
-                                   resamples = NULL,
-                                   pretrained_wflow = NULL,
-                                   grid = NULL,
-                                   init_frac = 0.60,
-                                   assess_frac = 0.20,
-                                   n_splits = NULL,
-                                   cumulative = TRUE,
-                                   quiet = TRUE,
-                                   allow_par = TRUE,
-                                   verbose_tune = TRUE,
-                                   ...) {
+                                 model = c("pcr", "ridge", "lasso"),
+                                 prediction_years = NULL,
+                                 target_positive = TRUE,
+                                 resamples = NULL,
+                                 pretrained_wflow = NULL,
+                                 grid = NULL,
+                                 init_frac = 0.60,
+                                 assess_frac = 0.20,
+                                 n_splits = NULL,
+                                 cumulative = TRUE,
+                                 quiet = TRUE,
+                                 allow_par = TRUE,
+                                 verbose_tune = TRUE,
+                                 max_na_frac =0.3,
+                                 impute = "median",
+                                 require_variance = TRUE,
+
+                                 ...) {
 
   # Input validation
   model <- match.arg(model)
@@ -70,8 +80,9 @@ wass2s_tune_pred_stat<- function(df_basin_product, predictors,
   df_basin_product <- .sanitize_numeric_columns(
     df   = df_basin_product,
     cols = "Q",
-    max_na_frac = 0.30,
-    impute = "median"
+    max_na_frac = max_na_frac,
+    impute = impute,
+    require_variance = require_variance
   )
 
   # Handle prediction years

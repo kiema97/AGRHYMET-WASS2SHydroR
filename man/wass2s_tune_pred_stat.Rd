@@ -20,6 +20,9 @@ wass2s_tune_pred_stat(
   quiet = TRUE,
   allow_par = TRUE,
   verbose_tune = TRUE,
+  max_na_frac = 0.3,
+  impute = "median",
+  require_variance = TRUE,
   ...
 )
 }
@@ -60,6 +63,15 @@ is used instead of the default grid for the specified model.}
 \item{allow_par}{A logical to allow parallel processing (if a parallel backend is registered).}
 
 \item{verbose_tune}{A logical for logging results (other than warnings and errors, which are always shown) as they are generated during training in a single R process.}
+
+\item{max_na_frac}{Numeric in \eqn{[0, 1]}: maximum allowed fraction of missing
+values per column before stopping (default \code{0.20} = 20\%).}
+
+\item{impute}{Character, one of \code{"median"}, \code{"mean"}, or \code{"none"}.
+If \code{"none"}, no imputation is performed after the guard (default \code{"median"}).}
+
+\item{require_variance}{Logical; if \code{TRUE}, stop when a column has zero
+standard deviation after imputation (default \code{TRUE}).}
 
 \item{...}{Others parameters passed to \code{tune::control_grid()}}
 }

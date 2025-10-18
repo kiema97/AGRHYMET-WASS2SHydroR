@@ -189,6 +189,9 @@ wass2s_cons_mods_stat <- function(
 
     #kg <- lb_kge_ok$kge[match(keep_names, lb_kge_ok$product)]
     kg <- wass2s_minmax(lb_kge_ok$rsq[match(keep_names, lb_kge_ok$product)])
+
+    # Alternative
+    kg <- base::rep(1, min(topK, nrow(lb_kge_ok)))
     # Apply KGE thresholds
     kg[kg < 0] <- 0
     kg[kg < min_kge_model] <- 0
