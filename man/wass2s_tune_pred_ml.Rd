@@ -15,14 +15,18 @@ wass2s_tune_pred_ml(
   grid_levels = 5,
   seed = 123,
   pretrained_wflow = NULL,
-  init_frac = 0.6,
+  init_frac = 0.8,
   assess_frac = 0.2,
   n_splits = 3,
   cumulative = TRUE,
   quiet = TRUE,
-  verbose_tune = TRUE,
   target_positive = TRUE,
   allow_par = TRUE,
+  verbose_tune = TRUE,
+  max_na_frac = 0.3,
+  impute = "median",
+  require_variance = TRUE,
+  min_data_required = 10,
   ...
 )
 }
@@ -68,11 +72,22 @@ If \code{NULL} (default), every possible split is produced (\code{skip = 0}).}
 \item{quiet}{Logical; if \code{FALSE}, emits informative messages when the
 requested \code{n_splits} cannot be reached (default \code{TRUE}).}
 
-\item{verbose_tune}{A logical for logging results (other than warnings and errors, which are always shown) as they are generated during training in a single R process.}
-
 \item{target_positive}{Logical; if TRUE, force negative predictions to zero.}
 
 \item{allow_par}{A logical to allow parallel processing (if a parallel backend is registered).}
+
+\item{verbose_tune}{A logical for logging results (other than warnings and errors, which are always shown) as they are generated during training in a single R process.}
+
+\item{max_na_frac}{Numeric in \eqn{[0, 1]}: maximum allowed fraction of missing
+values per column before stopping (default \code{0.20} = 20\%).}
+
+\item{impute}{Character, one of \code{"median"}, \code{"mean"}, or \code{"none"}.
+If \code{"none"}, no imputation is performed after the guard (default \code{"median"}).}
+
+\item{require_variance}{Logical; if \code{TRUE}, stop when a column has zero
+standard deviation after imputation (default \code{TRUE}).}
+
+\item{min_data_required}{Minimum number of rows required to train.}
 
 \item{...}{Others parameters passed to \code{tune::control_grid()}}
 }

@@ -19,6 +19,7 @@
 #' @param min_data_required Minimum number of rows required to train.
 #' @param predictors_min Minimum number of predictors required.
 #' @param quiet Logical; if FALSE, emits informative messages (default: TRUE).
+#' @param verbose Logical, emit diagnostic messages.
 #' @param ... Passed to the underlying tuner/predictor.
 #'
 #' @return A list with elements:
@@ -47,6 +48,7 @@ wass2s_cons_mods_ml <- function(
     min_data_required = 10,
     predictors_min = 3,
     quiet = TRUE,
+    verbose = TRUE,
     ...
 ){
   model <- match.arg(model, SUPPORTED_MODELS)
@@ -76,7 +78,7 @@ wass2s_cons_mods_ml <- function(
 
     # Minimum sample size
     if (nrow(dfp) < min_data_required) {
-      if (!quiet) message(glue::glue(
+      if (!verbose) message(glue::glue(
         "Skipping product '{p}' (basin {basin_id}): ",
         "only {nrow(dfp)} rows available; at least {min_data_required} required."
       ))
@@ -91,17 +93,22 @@ wass2s_cons_mods_ml <- function(
       )
 
     # Product-specific predictor pattern (default '^pt_')
+    # pat <- if (!is.null(pred_pattern_by_product) && p %in% names(pred_pattern_by_product)) {
+    #   pred_pattern_by_product[[p]]
+    # } else {
+    #   "^pt_"
+    # }
+
     pat <- if (!is.null(pred_pattern_by_product) && p %in% names(pred_pattern_by_product)) {
       pred_pattern_by_product[[p]]
-    } else {
-      "^pt_"
-    }
+    } else if(!is.null(pred_pattern_by_product) && length(pred_pattern_by_product) ==1) pred_pattern_by_product else "^pt_"
+
 
     # Select predictors: all columns except id/time/target, then regex-filter
     candidates <- setdiff(names(dfp), c(hybas_id, "YYYY", "Q"))
     predictors <- candidates[purrr::map_lgl(candidates, ~ stringr::str_detect(.x, pat))]
     if (length(predictors) < predictors_min) {
-      if (!quiet) message(glue::glue(
+      if (!verbose) message(glue::glue(
         "Skipping product '{p}' (basin {basin_id}): ",
         "only {length(predictors)} predictors matched pattern '{pat}'; ",
         "at least {predictors_min} required."
@@ -117,6 +124,9 @@ wass2s_cons_mods_ml <- function(
       pre_wf <- pretrained[[model]][[p]]
     }
 
+    if (verbose) message("[", model, "] ", p, " : ",
+                         length(predictors), " predictors using pattern '", pat, "'")
+
     # Train + predict with error handling
     out <- tryCatch({
       wass2s_tune_pred_ml(
@@ -129,7 +139,7 @@ wass2s_cons_mods_ml <- function(
         ...
       )
     }, error = function(e) {
-      if (!quiet) message(glue::glue("Error training product '{p}' for basin {basin_id}: {e$message}"))
+      if (!verbose) message(glue::glue("Error training product '{p}' for basin {basin_id}: {e$message}"))
       return(NULL)
     })
 
@@ -147,7 +157,7 @@ wass2s_cons_mods_ml <- function(
 
   # No usable result at all
   if (length(results) == 0) {
-    if (!quiet) message(glue::glue(
+    if (!verbose) message(glue::glue(
       "No valid models could be trained for basin {basin_id}: ",
       "all products were skipped or failed to meet requirements."
     ))
@@ -171,6 +181,7 @@ wass2s_cons_mods_ml <- function(
   kg <- purrr::map_dbl(results_top, "kge")
   kg[kg < 0] <- 0
 
+
   # Optional minimum KGE gate
   if (!is.infinite(min_kge_model)) {
     if (min_kge_model > 1) {
@@ -179,9 +190,15 @@ wass2s_cons_mods_ml <- function(
     kg[kg < min_kge_model] <- 0
   }
 
+  if(all(kg==0)){
+    results_top <- results_top[1]
+    kg <- 1
+    topK <- 1
+  }
+
   # If best KGE below threshold or all weights zero → no fusion
   if (!is.finite(results[[1]]$kge) || results[[1]]$kge < min_kge_model || max(kg) <= 0) {
-    if (!quiet) message(glue::glue(
+    if (!verbose) message(glue::glue(
       "Fusion aborted for basin {basin_id}: ",
       "no product reached the minimum KGE threshold ({min_kge_model})."
     ))
@@ -216,6 +233,221 @@ wass2s_cons_mods_ml <- function(
     all_results = results
   )
 }
+
+
+
+
+# wass2s_cons_mods_ml_old <- function(
+#     data_by_product,
+#     basin_id,
+#     hybas_id = "HYBAS_ID",
+#     target = "Q",
+#     date_col = "YYYY",
+#     pred_pattern_by_product = NULL,
+#     model = SUPPORTED_MODELS,
+#     topK = 3,
+#     min_kge_model = -Inf,
+#     pretrained = NULL,
+#     grid_levels = 5,
+#     min_data_required = 10,
+#     predictors_min = 3,
+#     quiet = TRUE,
+#     ...
+# ){
+#   model <- match.arg(model, SUPPORTED_MODELS)
+#   prods <- names(data_by_product)
+#
+#   # Validation supplémentaire des entrées
+#   if (length(prods) == 0) {
+#     stop("data_by_product must be a named list", call. = FALSE)
+#   }
+#
+#   if (topK < 1) {
+#     stop("topK must be at least 1", call. = FALSE)
+#   }
+#
+#   results <- purrr::map(prods, function(p) {
+#     dfp <- data_by_product[[p]] %>%
+#       dplyr::filter(.data[[hybas_id]] == basin_id) %>%
+#       dplyr::ungroup()
+#
+#     # Required columns present?
+#     missing_cols <- setdiff(c(target, date_col), names(dfp))
+#     if (length(missing_cols) > 0) {
+#       stop(glue::glue(
+#         "wass2s_cons_mods_ml(): missing required columns: {paste(missing_cols, collapse = ', ')}"
+#       ), call. = FALSE)
+#     }
+#
+#     # Minimum sample size
+#     if (nrow(dfp) < min_data_required) {
+#       if (!quiet) message(glue::glue(
+#         "Skipping product '{p}' (basin {basin_id}): ",
+#         "only {nrow(dfp)} rows available; at least {min_data_required} required."
+#       ))
+#       return(NULL)
+#     }
+#
+#     # Standardize names: create 'YYYY' and 'Q'
+#     dfp <- dfp %>%
+#       dplyr::rename(
+#         YYYY = !!rlang::sym(date_col),
+#         Q    = !!rlang::sym(target)
+#       )
+#
+#     # Product-specific predictor pattern (default '^pt_')
+#     pat <- if (!is.null(pred_pattern_by_product) && p %in% names(pred_pattern_by_product)) {
+#       pred_pattern_by_product[[p]]
+#     } else {
+#       "^pt_"
+#     }
+#
+#     # Select predictors: all columns except id/time/target, then regex-filter
+#     candidates <- setdiff(names(dfp), c(hybas_id, "YYYY", "Q"))
+#     predictors <- candidates[purrr::map_lgl(candidates, ~ stringr::str_detect(.x, pat))]
+#     if (length(predictors) < predictors_min) {
+#       if (!quiet) message(glue::glue(
+#         "Skipping product '{p}' (basin {basin_id}): ",
+#         "only {length(predictors)} predictors matched pattern '{pat}'; ",
+#         "at least {predictors_min} required."
+#       ))
+#       return(NULL)
+#     }
+#
+#     # Pre-trained model (if provided)
+#     pre_wf <- NULL
+#     if (!is.null(pretrained) &&
+#         !is.null(pretrained[[model]]) &&
+#         !is.null(pretrained[[model]][[p]])) {
+#       pre_wf <- pretrained[[model]][[p]]
+#     }
+#
+#     # Train + predict with error handling
+#     out <- tryCatch({
+#       wass2s_tune_pred_ml(
+#         df_basin_product = dfp %>% dplyr::select(YYYY, Q, dplyr::all_of(predictors)),
+#         predictors       = predictors,
+#         model            = model,
+#         grid_levels      = grid_levels,
+#         pretrained_wflow = pre_wf,
+#         quiet            = quiet,
+#         ...
+#       )
+#     }, error = function(e) {
+#       if (!quiet) message(glue::glue("Error training product '{p}' for basin {basin_id}: {e$message}"))
+#       return(NULL)
+#     })
+#
+#     if (is.null(out)) return(NULL)
+#
+#     list(
+#       product         = p,
+#       kge             = out$kge_cv_mean,
+#       preds           = out$preds,
+#       leaderboard_cfg = out$leaderboard_cfg,
+#       fitted_model    = out$fit
+#     )
+#
+#   }) %>% purrr::compact()
+#
+#   # No usable result at all
+#   if (length(results) == 0) {
+#     if (!quiet) message(glue::glue(
+#       "No valid models could be trained for basin {basin_id}: ",
+#       "all products were skipped or failed to meet requirements."
+#     ))
+#     return(list(
+#       fused = NULL,
+#       leaderboard_products = tibble::tibble(
+#         product = character(),
+#         kge     = numeric()
+#       ),
+#       all_results = list()
+#     ))
+#   }
+#
+#   # Sort by KGE (descending)
+#   ord <- order(purrr::map_dbl(results, "kge"), decreasing = TRUE)
+#   results <- results[ord]
+#
+#   # Keep top-K
+#   results_top <- utils::head(results, n = min(topK, length(results)))
+#
+#   kg <- purrr::map_dbl(results_top, "kge")
+#   kg[kg < 0] <- 0
+#
+#   # Optional minimum KGE gate
+#   if (!is.infinite(min_kge_model)) {
+#     if (min_kge_model > 1) {
+#       stop("min_kge_model cannot be greater than 1.", call. = FALSE)
+#     }
+#     kg[kg < min_kge_model] <- 0
+#   }
+#
+#   if(all(kg<=0)){
+#     kg <- rep(1,min(topK, length(results)))
+#   }
+#
+#   # If best KGE below threshold or all weights zero → no fusion
+#   if (!is.finite(results[[1]]$kge) || results[[1]]$kge < min_kge_model || max(kg) <= 0) {
+#     if (!quiet) message(glue::glue(
+#       "Fusion aborted for basin {basin_id}: ",
+#       "no product reached the minimum KGE threshold ({min_kge_model})."
+#     ))
+#     return(list(
+#       fused = NULL,
+#       leaderboard_products = tibble::tibble(
+#         product = purrr::map_chr(results, "product"),
+#         kge     = purrr::map_dbl(results, "kge")
+#       ),
+#       all_results = results
+#     ))
+#   }
+#
+#   # Weights = truncated KGE (>= 0)
+#   w <- kg
+#
+#   # Stack weighted predictions (each out$preds must include YYYY, pred)
+#   preds_long <- purrr::imap_dfr(
+#     results_top,
+#     ~ dplyr::mutate(.x$preds, product = .x$product, w = w[.y])
+#   )
+#
+#   # Actual fusion (should aggregate by YYYY using weights 'w')
+#   fused <- fuse_topk(preds_long)
+#
+#   list(
+#     fused = fused,
+#     leaderboard_products = tibble::tibble(
+#       product = purrr::map_chr(results, "product"),
+#       kge     = purrr::map_dbl(results, "kge")
+#     ),
+#     all_results = results
+#   )
+# }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

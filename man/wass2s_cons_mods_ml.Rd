@@ -19,6 +19,7 @@ wass2s_cons_mods_ml(
   min_data_required = 10,
   predictors_min = 3,
   quiet = TRUE,
+  verbose = TRUE,
   ...
 )
 }
@@ -50,6 +51,8 @@ wass2s_cons_mods_ml(
 \item{predictors_min}{Minimum number of predictors required.}
 
 \item{quiet}{Logical; if FALSE, emits informative messages (default: TRUE).}
+
+\item{verbose}{Logical, emit diagnostic messages.}
 
 \item{...}{Passed to the underlying tuner/predictor.}
 }

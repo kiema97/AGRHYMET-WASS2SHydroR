@@ -79,7 +79,7 @@ engine_pkg <- c(
 #' @seealso \code{\link{model_grid}}
 #' @keywords internal
 #' @noRd
-model_spec <- function(name, strict = TRUE) {
+model_spec <- function(name) {
   name <- match.arg(name, SUPPORTED_MODELS)
   pkg <- engine_pkg[[name]]
   .require_pkg(pkg)
@@ -350,7 +350,7 @@ make_recipe <- function(
     y_transform = c("none", "log1p", "yeo"),
     pca_num_comp = NULL,
     pca_var_threshold = NULL,
-    remove_linear_comb = TRUE,
+    remove_linear_comb = FALSE,
     auto_pca = TRUE,
     auto_pca_when_gt = 15,
     auto_pca_var_threshold = 0.80,
@@ -374,7 +374,7 @@ make_recipe <- function(
     stop("make_recipe(): no predictors found after intersection.", call. = FALSE)
 
   if (!is.numeric(corr_threshold) || corr_threshold <= 0 || corr_threshold >= 1)
-    stop("`corr_threshold` must be in (0,1), e.g. 0.90.", call. = FALSE)
+    stop("`corr_threshold` must be in (0,1), e.g. 0.80.", call. = FALSE)
   if (!is.null(pca_num_comp) && !is.null(pca_var_threshold))
     stop("Provide either `pca_num_comp` OR `pca_var_threshold`, not both.", call. = FALSE)
   if (!is.null(pca_num_comp) && (!is.numeric(pca_num_comp) || length(pca_num_comp) != 1L || pca_num_comp < 1))

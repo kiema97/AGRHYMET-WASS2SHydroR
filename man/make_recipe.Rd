@@ -15,7 +15,7 @@ make_recipe(
   y_transform = c("none", "log1p", "yeo"),
   pca_num_comp = NULL,
   pca_var_threshold = NULL,
-  remove_linear_comb = TRUE,
+  remove_linear_comb = FALSE,
   auto_pca = TRUE,
   auto_pca_when_gt = 15,
   auto_pca_var_threshold = 0.8,
