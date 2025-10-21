@@ -19,6 +19,9 @@ wass2s_run_bas_mod_ml(
   final_fuser = "rf",
   quiet = TRUE,
   verbose_tune = TRUE,
+  max_na_frac = 0.3,
+  impute = "median",
+  require_variance = TRUE,
   ...
 )
 }
@@ -51,6 +54,15 @@ start and end years for a holdout prediction period. These years}
 \item{quiet}{Logical; if \code{FALSE}, emits informative messages.}
 
 \item{verbose_tune}{A logical for logging results (other than warnings and errors, which are always shown) as they are generated during training in a single R process.}
+
+\item{max_na_frac}{Numeric in \eqn{[0, 1]}: maximum allowed fraction of missing
+values per column before stopping (default \code{0.20} = 20\%).}
+
+\item{impute}{Character, one of \code{"median"}, \code{"mean"}, or \code{"none"}.
+If \code{"none"}, no imputation is performed after the guard (default \code{"median"}).}
+
+\item{require_variance}{Logical; if \code{TRUE}, stop when a column has zero
+standard deviation after imputation (default \code{TRUE}).}
 
 \item{...}{Passed to \code{WASS2SHydroR::wass2s_cons_mods_ml}.}
 }

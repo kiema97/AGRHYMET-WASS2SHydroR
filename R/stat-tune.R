@@ -229,7 +229,7 @@ wass2s_tune_pred_stat<- function(df_basin_product, predictors,
         assess_frac = assess_frac,
         n_splits = n_splits,
         cumulative = cumulative,
-        quiet = quiet
+        quiet = TRUE
       )
     }, error = function(e) {
       if (!quiet) message("Error creating resamples: ", e$message)

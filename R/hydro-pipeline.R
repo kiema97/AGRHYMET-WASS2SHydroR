@@ -19,6 +19,12 @@
 #' @param grid_levels Grid density for tuning both base models and meta-learner.
 #' @param quiet Logical; if \code{FALSE}, emits informative messages.
 #' @param verbose_tune A logical for logging results (other than warnings and errors, which are always shown) as they are generated during training in a single R process.
+#' @param max_na_frac Numeric in \eqn{[0, 1]}: maximum allowed fraction of missing
+#'   values per column before stopping (default \code{0.20} = 20\%).
+#' @param impute Character, one of \code{"median"}, \code{"mean"}, or \code{"none"}.
+#'   If \code{"none"}, no imputation is performed after the guard (default \code{"median"}).
+#' @param require_variance Logical; if \code{TRUE}, stop when a column has zero
+#'   standard deviation after imputation (default \code{TRUE}).
 #' @param ... Passed to \code{WASS2SHydroR::wass2s_cons_mods_ml}.
 #' @return A list with:
 #' \itemize{
@@ -47,6 +53,9 @@ wass2s_run_bas_mod_ml <- function(
     final_fuser = "rf",
     quiet = TRUE,
     verbose_tune = TRUE,
+    max_na_frac =0.3,
+    impute = "median",
+    require_variance = TRUE,
     ...
 ) {
 
@@ -73,6 +82,9 @@ wass2s_run_bas_mod_ml <- function(
         min_kge_model = min_kge_model,
         grid_levels = grid_levels,
         quiet = quiet,
+        max_na_frac =max_na_frac,
+        impute = impute,
+        require_variance =require_variance,
         ...
       )
       list(
@@ -104,6 +116,14 @@ wass2s_run_bas_mod_ml <- function(
     if (!quiet) message("Error getting base data: ", e$message)
     tibble::tibble(YYYY = integer(), Q = numeric())
   })
+
+  any_df <- .sanitize_numeric_columns(
+    df   = any_df,
+    cols = target,
+    max_na_frac = max_na_frac,
+    impute = impute,
+    require_variance = require_variance
+  )
 
   # Case A: no retained model
   if (length(fused_list_compact) == 0L) {

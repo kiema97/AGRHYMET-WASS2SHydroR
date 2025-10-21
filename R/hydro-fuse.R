@@ -20,6 +20,12 @@
 #' @param predictors_min Minimum number of predictors required.
 #' @param quiet Logical; if FALSE, emits informative messages (default: TRUE).
 #' @param verbose Logical, emit diagnostic messages.
+#' @param max_na_frac Numeric in \eqn{[0, 1]}: maximum allowed fraction of missing
+#'   values per column before stopping (default \code{0.20} = 20\%).
+#' @param impute Character, one of \code{"median"}, \code{"mean"}, or \code{"none"}.
+#'   If \code{"none"}, no imputation is performed after the guard (default \code{"median"}).
+#' @param require_variance Logical; if \code{TRUE}, stop when a column has zero
+#'   standard deviation after imputation (default \code{TRUE}).
 #' @param ... Passed to the underlying tuner/predictor.
 #'
 #' @return A list with elements:
@@ -49,6 +55,9 @@ wass2s_cons_mods_ml <- function(
     predictors_min = 3,
     quiet = TRUE,
     verbose = TRUE,
+    max_na_frac =0.3,
+    impute = "median",
+    require_variance = TRUE,
     ...
 ){
   model <- match.arg(model, SUPPORTED_MODELS)
@@ -136,6 +145,9 @@ wass2s_cons_mods_ml <- function(
         grid_levels      = grid_levels,
         pretrained_wflow = pre_wf,
         quiet            = quiet,
+        max_na_frac =max_na_frac,
+        impute = impute,
+        require_variance =require_variance,
         ...
       )
     }, error = function(e) {

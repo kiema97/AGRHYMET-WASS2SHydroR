@@ -20,6 +20,12 @@
 #' @param quiet Logical; if \code{FALSE}, emits informative messages.
 #' @param verbose_tune A logical for logging results (other than warnings and errors, which are always shown) as they are generated during training in a single R process.
 #' @param target_positive Logical; if TRUE, force negative predictions to zero.
+#' @param max_na_frac Numeric in \eqn{[0, 1]}: maximum allowed fraction of missing
+#'   values per column before stopping (default \code{0.20} = 20\%).
+#' @param impute Character, one of \code{"median"}, \code{"mean"}, or \code{"none"}.
+#'   If \code{"none"}, no imputation is performed after the guard (default \code{"median"}).
+#' @param require_variance Logical; if \code{TRUE}, stop when a column has zero
+#'   standard deviation after imputation (default \code{TRUE}).
 #' @param ... Additional parameters passed to \code{wass2s_cons_mods_stat}.
 #'
 #' @return A list with:
@@ -45,6 +51,9 @@ wass2s_run_basin_mods_stat <- function(
     quiet = TRUE,
     verbose_tune = TRUE,
     target_positive = TRUE,
+    max_na_frac =0.3,
+    impute = "median",
+    require_variance = TRUE,
     ...
 ) {
   # Input validation
@@ -69,15 +78,18 @@ wass2s_run_basin_mods_stat <- function(
   models <- list(
     PCR = wass2s_cons_mods_stat(
       basin_id, data_by_product, hybas_id, pred_pattern_by_product, "pcr", topK,
-      quiet = quiet,target_positive = target_positive, ...
+      quiet = quiet,target_positive = target_positive,
+      require_variance=require_variance,impute=impute,max_na_frac=max_na_frac, ...
     ),
     RIDGE = wass2s_cons_mods_stat(
       basin_id, data_by_product, hybas_id, pred_pattern_by_product, "ridge", topK,
-      quiet = quiet,target_positive = target_positive, ...
+      quiet = quiet,target_positive = target_positive,
+      require_variance=require_variance,impute=impute,max_na_frac=max_na_frac,...
     ),
     LASSO = wass2s_cons_mods_stat(
       basin_id, data_by_product, hybas_id, pred_pattern_by_product, "lasso", topK,
-      quiet = quiet,target_positive = target_positive, ...
+      quiet = quiet,target_positive = target_positive,
+      require_variance=require_variance,impute=impute,max_na_frac=max_na_frac,...
     )
   )
 
@@ -88,6 +100,14 @@ wass2s_run_basin_mods_stat <- function(
     if (!quiet) message("Error getting base data: ", e$message)
     tibble::tibble(YYYY = integer(), Q = numeric())
   })
+
+  any_df <- .sanitize_numeric_columns(
+    df   = any_df,
+    cols = target,
+    max_na_frac = max_na_frac,
+    impute = impute,
+    require_variance = require_variance
+  )
 
   if (nrow(any_df) == 0L) {
     # If nothing found (very rare), synthesize a timeline from consolidated models
@@ -268,7 +288,7 @@ wass2s_run_basin_mods_stat <- function(
       init_frac = 0.7,
       assess_frac = 0.2,
       n_splits = min(3, nrow(df_tr) - 1),
-      quiet = quiet
+      quiet = TRUE
     )
   }, error = function(e) {
     if (!quiet) message("Error creating resamples: ", e$message)

@@ -24,6 +24,9 @@ wass2s_cons_mods_stat(
   cumulative = TRUE,
   quiet = TRUE,
   verbose = FALSE,
+  max_na_frac = 0.3,
+  impute = "median",
+  require_variance = TRUE,
   ...
 )
 }
@@ -71,6 +74,15 @@ is used instead of the default grid for the specified model.}
 \item{quiet}{Logical; if \code{FALSE}, emits informative messages.}
 
 \item{verbose}{Logical, emit diagnostic messages.}
+
+\item{max_na_frac}{Numeric in \eqn{[0, 1]}: maximum allowed fraction of missing
+values per column before stopping (default \code{0.20} = 20\%).}
+
+\item{impute}{Character, one of \code{"median"}, \code{"mean"}, or \code{"none"}.
+If \code{"none"}, no imputation is performed after the guard (default \code{"median"}).}
+
+\item{require_variance}{Logical; if \code{TRUE}, stop when a column has zero
+standard deviation after imputation (default \code{TRUE}).}
 
 \item{...}{Additional arguments passed to \code{wass2s_tune_pred_stat}.}
 }

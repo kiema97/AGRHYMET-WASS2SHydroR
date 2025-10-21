@@ -29,6 +29,12 @@
 #' @param cumulative Logical; passed to \code{rsample::rolling_origin()}.
 #' @param quiet Logical; if \code{FALSE}, emits informative messages.
 #' @param verbose Logical, emit diagnostic messages.
+#' @param max_na_frac Numeric in \eqn{[0, 1]}: maximum allowed fraction of missing
+#'   values per column before stopping (default \code{0.20} = 20\%).
+#' @param impute Character, one of \code{"median"}, \code{"mean"}, or \code{"none"}.
+#'   If \code{"none"}, no imputation is performed after the guard (default \code{"median"}).
+#' @param require_variance Logical; if \code{TRUE}, stop when a column has zero
+#'   standard deviation after imputation (default \code{TRUE}).
 #' @param ... Additional arguments passed to \code{wass2s_tune_pred_stat}.
 #'
 #' @return A list with:
@@ -62,6 +68,9 @@ wass2s_cons_mods_stat <- function(
     cumulative = TRUE,
     quiet = TRUE,
     verbose = FALSE,
+    max_na_frac =0.3,
+    impute = "median",
+    require_variance = TRUE,
     ...
 ) {
   model <- match.arg(model)
@@ -138,6 +147,9 @@ wass2s_cons_mods_stat <- function(
         n_splits = n_splits,
         cumulative = cumulative,
         quiet = quiet,
+        max_na_frac =max_na_frac,
+        impute = impute,
+        require_variance = require_variance,
         ...
       )
     }, error = function(e) {

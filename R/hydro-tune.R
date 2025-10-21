@@ -187,7 +187,7 @@ wass2s_tune_pred_ml <- function(
                                                     init_frac = init_frac,
                                                     assess_frac=assess_frac,
                                                     cumulative = cumulative,
-                                                    quiet = quiet)
+                                                    quiet = TRUE)
 
   # Check if we have enough splits
   if (length(resamples$splits) < 1 && is.null(pretrained_wflow)) {

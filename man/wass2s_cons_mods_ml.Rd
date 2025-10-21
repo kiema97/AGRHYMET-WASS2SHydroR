@@ -20,6 +20,9 @@ wass2s_cons_mods_ml(
   predictors_min = 3,
   quiet = TRUE,
   verbose = TRUE,
+  max_na_frac = 0.3,
+  impute = "median",
+  require_variance = TRUE,
   ...
 )
 }
@@ -53,6 +56,15 @@ wass2s_cons_mods_ml(
 \item{quiet}{Logical; if FALSE, emits informative messages (default: TRUE).}
 
 \item{verbose}{Logical, emit diagnostic messages.}
+
+\item{max_na_frac}{Numeric in \eqn{[0, 1]}: maximum allowed fraction of missing
+values per column before stopping (default \code{0.20} = 20\%).}
+
+\item{impute}{Character, one of \code{"median"}, \code{"mean"}, or \code{"none"}.
+If \code{"none"}, no imputation is performed after the guard (default \code{"median"}).}
+
+\item{require_variance}{Logical; if \code{TRUE}, stop when a column has zero
+standard deviation after imputation (default \code{TRUE}).}
 
 \item{...}{Passed to the underlying tuner/predictor.}
 }
