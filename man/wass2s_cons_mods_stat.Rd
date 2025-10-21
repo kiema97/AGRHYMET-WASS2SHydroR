@@ -23,7 +23,7 @@ wass2s_cons_mods_stat(
   n_splits = NULL,
   cumulative = TRUE,
   quiet = TRUE,
-  verbose = TRUE,
+  verbose = FALSE,
   ...
 )
 }

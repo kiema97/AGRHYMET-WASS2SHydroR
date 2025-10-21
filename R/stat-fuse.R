@@ -61,7 +61,7 @@ wass2s_cons_mods_stat <- function(
     n_splits = NULL,
     cumulative = TRUE,
     quiet = TRUE,
-    verbose = TRUE,
+    verbose = FALSE,
     ...
 ) {
   model <- match.arg(model)
@@ -98,7 +98,7 @@ wass2s_cons_mods_stat <- function(
       dplyr::ungroup()
 
     if (nrow(dfp) < 8) {
-      if (verbose) message("[", model, "] ", p, " : skipped (nrow < 8).")
+      if (!verbose) message("[", model, "] ", p, " : skipped (nrow < 8).")
       return(NULL)
     }
 
@@ -113,11 +113,11 @@ wass2s_cons_mods_stat <- function(
       exclude = c(basin_col, "YYYY", "Q")
     )
 
-    if (verbose) message("[", model, "] ", p, " : ",
+    if (!verbose) message("[", model, "] ", p, " : ",
                          length(predictors), " predictors using pattern '", pat, "'")
 
     if (length(predictors) < min_predictors) {
-      if (verbose) message("[", model, "] ", p, " : skipped (predictors < ", min_predictors, ").")
+      if (!verbose) message("[", model, "] ", p, " : skipped (predictors < ", min_predictors, ").")
       return(NULL)
     }
 
@@ -147,7 +147,7 @@ wass2s_cons_mods_stat <- function(
 
     # If tuner failed properly
     if (is.null(out) || !is.list(out) || !"preds" %in% names(out)) {
-      if (verbose) message("[", model, "] ", p, " : tuning/pred failed (NULL).")
+      if (!verbose) message("[", model, "] ", p, " : tuning/pred failed (NULL).")
       return(NULL)
     }
 
@@ -165,7 +165,7 @@ wass2s_cons_mods_stat <- function(
 
   # No valid product  return an "empty" fused (NA)
   if (length(results) == 0) {
-    if (verbose) message("[", model, "] No valid product for basin ", basin_id, ".")
+    if (!verbose) message("[", model, "] No valid product for basin ", basin_id, ".")
     fused_empty <- tibble::tibble(YYYY = years_all, pred_fused = NA_real_)
     return(list(
       fused = fused_empty,
