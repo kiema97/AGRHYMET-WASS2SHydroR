@@ -326,7 +326,7 @@ wass2s_tune_pred_stat<- function(df_basin_product, predictors,
       wf,
       resamples = rs,
       grid = grid,
-      metrics = yardstick::metric_set(yardstick::rmse, yardstick::mae, yardstick::rsq),
+      metrics = yardstick::metric_set(yardstick::rmse, yardstick::mae),
       control = ctrl
     )
   }, error = function(e) {
