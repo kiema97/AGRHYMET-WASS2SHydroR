@@ -122,22 +122,28 @@ wass2s_cons_mods_stat <- function(
     }
 
     # Call tuner + predictions with all additional parameters
-    out <- wass2s_tune_pred_stat(
-      df_basin_product = dplyr::select(dfp, YYYY, Q, tidyselect::all_of(predictors)),
-      predictors = predictors,
-      model = model,
-      prediction_years = prediction_years,
-      target_positive = target_positive,
-      resamples = resamples,
-      pretrained_wflow = pretrained_wflow,
-      grid = grid,
-      init_frac = init_frac,
-      assess_frac = assess_frac,
-      n_splits = n_splits,
-      cumulative = cumulative,
-      quiet = quiet,
-      ...
-    )
+    out <- tryCatch({
+      # Call tuner + predictions with all additional parameters
+     wass2s_tune_pred_stat(
+        df_basin_product = dplyr::select(dfp, YYYY, Q, tidyselect::all_of(predictors)),
+        predictors = predictors,
+        model = model,
+        prediction_years = prediction_years,
+        target_positive = target_positive,
+        resamples = resamples,
+        pretrained_wflow = pretrained_wflow,
+        grid = grid,
+        init_frac = init_frac,
+        assess_frac = assess_frac,
+        n_splits = n_splits,
+        cumulative = cumulative,
+        quiet = quiet,
+        ...
+      )
+    }, error = function(e) {
+      if (!verbose) message(glue::glue("Error training product '{p}' for basin {basin_id}: {e$message}"))
+      return(NULL)
+    })
 
     # If tuner failed properly
     if (is.null(out) || !is.list(out) || !"preds" %in% names(out)) {
