@@ -1,3 +1,308 @@
+#' Filter a grid by bbox with robust fallbacks
+#'
+#' - Understands bbox as named numeric c(xmin, ymin, xmax, ymax) OR
+#'   as unnamed numeric of length 4 in either (xmin, ymin, xmax, ymax)
+#'   or (S, W, N, E) order.
+#' - Auto-aligns bbox longitude convention to data convention
+#'   ([-180, 180] vs [0, 360]).
+#' - Adds a small tolerance proportional to grid resolution to avoid
+#'   "empty selection" on coarse grids.
+#' - If no cell intersects the bbox, falls back to:
+#'     (a) the cell that CONTAINS the bbox center, else
+#'     (b) the NEAREST grid cell to the bbox center,
+#'   or errors if fallback = "error".
+#'
+#' @param DT A data.table with at least longitude/latitude columns.
+#' @param bbox Numeric length-4; can be named (xmin,xmax,ymin,ymax) or
+#'   unnamed (interpreted as (xmin,ymin,xmax,ymax) or (S,W,N,E)).
+#' @param lon_col,lat_col Column names of longitude/latitude in DT.
+#' @param fallback Fallback strategy if no row intersects bbox:
+#'   one of c("contains_center","nearest_center","error").
+#' @param auto_align_lon If TRUE, align bbox longitudes to data convention.
+#' @param tol_frac Fraction of a grid step to expand bbox for tolerance.
+#' @return A data.table filtered to bbox, or the selected fallback cell.
+#' @keywords internal
+#' @noRd
+bbox_filter_or_fallback <- function(
+    DT, bbox,
+    lon_col = "lon", lat_col = "lat",
+    fallback = c("contains_center","nearest_center","error"),
+    auto_align_lon = TRUE,
+    tol_frac = 0.25
+) {
+  stopifnot(is.numeric(bbox), length(bbox) == 4)
+  fallback <- match.arg(fallback)
+
+  if (!data.table::is.data.table(DT)) {
+    DT <- data.table::as.data.table(DT)
+  }
+  stopifnot(lon_col %in% names(DT), lat_col %in% names(DT))
+
+  # --- helpers (local scope)
+  normalize_bbox <- function(b) {
+    nms <- tolower(names(b))
+    # Named bbox: expect xmin/xmax/ymin/ymax (in any order)
+    if (!is.null(nms) && all(c("xmin","xmax","ymin","ymax") %in% nms)) {
+      return(list(
+        xmin = as.numeric(b["xmin"]),
+        xmax = as.numeric(b["xmax"]),
+        ymin = as.numeric(b["ymin"]),
+        ymax = as.numeric(b["ymax"])
+      ))
+    }
+    # Unnamed numeric: try (xmin, ymin, xmax, ymax) first
+    if (b[1] <= b[3] && b[2] <= b[4]) {
+      return(list(xmin = b[1], ymin = b[2], xmax = b[3], ymax = b[4]))
+    }
+    # Else treat as (S, W, N, E)
+    list(xmin = b[2], ymin = b[1], xmax = b[4], ymax = b[3])
+  }
+
+  align_bbox_longitude <- function(bb, lon_vec) {
+    if (!auto_align_lon) return(bb)
+    rng <- range(lon_vec, na.rm = TRUE)
+    # Data in [-180,180] and bbox likely in [0,360] -> convert bbox to [-180,180]
+    if (rng[1] < 0 && rng[2] <= 180 && bb$xmin >= 0 && bb$xmax >= 0) {
+      bb$xmin <- ifelse(bb$xmin > 180, bb$xmin - 360, bb$xmin)
+      bb$xmax <- ifelse(bb$xmax > 180, bb$xmax - 360, bb$xmax)
+    }
+    # Data in [0,360] and bbox in [-180,180] -> convert bbox to [0,360]
+    if (rng[1] >= 0 && rng[2] > 180 && (bb$xmin < 0 || bb$xmax < 0)) {
+      conv <- function(x) ifelse(x < 0, x + 360, x)
+      bb$xmin <- conv(bb$xmin); bb$xmax <- conv(bb$xmax)
+    }
+    bb
+  }
+
+  grid_edges <- function(v) {
+    v <- sort(unique(as.numeric(v)))
+    if (length(v) == 1L) return(c(v[1] - 0.5, v[1] + 0.5))
+    dv <- diff(v)
+    c(v[1] - dv[1]/2, v[-length(v)] + dv/2, v[length(v)] + dv[length(dv)]/2)
+  }
+
+  # --- 1) Normalize bbox + align longitude
+  bb <- normalize_bbox(bbox)
+  bb <- align_bbox_longitude(bb, DT[[lon_col]])
+
+  # --- 2) Add tolerance based on grid spacing (helps coarse grids)
+  lon_step <- diff(sort(unique(DT[[lon_col]]))); lon_step <- lon_step[is.finite(lon_step)]
+  lat_step <- diff(sort(unique(DT[[lat_col]]))); lat_step <- lat_step[is.finite(lat_step)]
+  if (length(c(lon_step, lat_step))) {
+    tol <- suppressWarnings(tol_frac * min(c(lon_step, lat_step), na.rm = TRUE))
+    if (is.finite(tol) && tol > 0) {
+      bb$xmin <- bb$xmin - tol; bb$xmax <- bb$xmax + tol
+      bb$ymin <- bb$ymin - tol; bb$ymax <- bb$ymax + tol
+    }
+  }
+
+  # --- 3) Regular bbox filter
+  hits <- DT[get(lon_col) >= bb$xmin & get(lon_col) <= bb$xmax &
+               get(lat_col) >= bb$ymin & get(lat_col) <= bb$ymax]
+
+  # --- 4) Fallbacks
+  if (!nrow(hits)) {
+    if (fallback == "error") {
+      stop("Bbox does not intersect the grid (after normalization).")
+    }
+
+    # Center of bbox
+    cx <- (bb$xmin + bb$xmax) / 2
+    cy <- (bb$ymin + bb$ymax) / 2
+
+    vlon <- sort(unique(DT[[lon_col]]))
+    vlat <- sort(unique(DT[[lat_col]]))
+
+    if (fallback == "contains_center") {
+      # Choose the cell that CONTAINS (cx, cy) using reconstructed edges
+      e_lon <- grid_edges(vlon)
+      e_lat <- grid_edges(vlat)
+      i <- findInterval(cx, e_lon, left.open = FALSE, rightmost.closed = TRUE)
+      j <- findInterval(cy, e_lat, left.open = FALSE, rightmost.closed = TRUE)
+      i <- max(1, min(i, length(vlon)))
+      j <- max(1, min(j, length(vlat)))
+      sel_lon <- vlon[i]; sel_lat <- vlat[j]
+      hits <- DT[get(lon_col) == sel_lon & get(lat_col) == sel_lat]
+    } else if (fallback == "nearest_center") {
+      # Nearest grid center to (cx, cy)
+      grid <- unique(DT[, c(lon_col, lat_col), with = FALSE])
+      # Compute squared distance
+      grid[, `__dist2__` := (get(lon_col) - cx)^2 + (get(lat_col) - cy)^2]
+      data.table::setorder(grid, `__dist2__`)
+      sel_lon <- grid[[lon_col]][1]; sel_lat <- grid[[lat_col]][1]
+      hits <- DT[get(lon_col) == sel_lon & get(lat_col) == sel_lat]
+      grid[, `__dist2__` := NULL]
+    }
+  }
+
+  if (!nrow(hits)) {
+    stop("Bbox does not intersect the grid and no suitable fallback cell could be found.")
+  }
+  hits[]
+}
+
+#' Robust longitude/latitude detection for a NetCDF file (ncdf4)
+#'
+#' - Case-insensitive name matching (x/lon/longitude/long, y/lat/latitude, etc.)
+#' - Searches both dimensions and variables
+#' - Falls back to CF-style attributes: standard_name + units
+#' - Supports curvilinear grids (2D lon/lat)
+#'
+#' @param path Character, path to a NetCDF file.
+#' @return A list with:
+#'   - lon: numeric vector or matrix of longitudes
+#'   - lat: numeric vector or matrix of latitudes
+#'   - lon_name, lat_name: the detected variable/dimension names (original case)
+#'   - from: "dim" or "var" (where the coords were read from)
+#'   - curvilinear: TRUE if 2D lon/lat
+#' @keywords internal
+#' @noRd
+ncdf4_guess_lonlat <- function(path) {
+  stopifnot(file.exists(path))
+  nc <- ncdf4::nc_open(path)
+  on.exit(ncdf4::nc_close(nc), add = TRUE)
+
+  # Pools
+  dim_names <- names(nc$dim)
+  var_names <- names(nc$var)
+  dim_lc <- tolower(dim_names)
+  var_lc <- tolower(var_names)
+
+  # Candidate name dictionaries (ordered by preference)
+  lon_candidates <- c("lon","longitude","long","x","grid_longitude","nav_lon","rlon")
+  lat_candidates <- c("lat","latitude","y","grid_latitude","nav_lat","rlat")
+
+  # Map lower-case -> original case for later retrieval
+  restore_case <- function(name_lc, pool_names, pool_lc) {
+    if (is.na(name_lc)) return(NA_character_)
+    idx <- match(name_lc, pool_lc)
+    if (is.na(idx)) NA_character_ else pool_names[idx]
+  }
+
+  # Case-insensitive pick from a pool of names
+  pick_ci <- function(candidates, pool_lc) {
+    cand_lc <- tolower(candidates)
+    found <- cand_lc[cand_lc %in% pool_lc]
+    if (length(found)) found[[1]] else NA_character_
+  }
+
+  # Attribute-based CF detection from variables
+  # - standard_name = "longitude"/"latitude"
+  # - units include "degrees_east|degrees_west" or "degrees_north|degrees_south"
+  cf_find_by_attr <- function(target = c("lon","lat")) {
+    target <- match.arg(target)
+    hit <- NA_character_
+    for (vn in var_names) {
+      atts <- try(ncdf4::ncatt_get(nc, vn), silent = TRUE)
+      if (inherits(atts, "try-error")) next
+      std <- tolower(if (!is.null(atts$standard_name)) atts$standard_name else "")
+      unt <- tolower(if (!is.null(atts$units))         atts$units         else "")
+      if (target == "lon") {
+        if (std == "longitude" || grepl("degrees_east|degrees_west", unt)) {
+          hit <- vn; break
+        }
+      } else {
+        if (std == "latitude"  || grepl("degrees_north|degrees_south", unt)) {
+          hit <- vn; break
+        }
+      }
+    }
+    hit
+  }
+
+  # 1) Try to find longitude/latitude among DIMENSIONS first
+  lon_dim_lc <- pick_ci(lon_candidates, dim_lc)
+  lat_dim_lc <- pick_ci(lat_candidates, dim_lc)
+
+  lon_from <- lat_from <- NA_character_
+  lon_name <- lat_name <- NA_character_
+
+  if (!is.na(lon_dim_lc)) {
+    lon_name <- restore_case(lon_dim_lc, dim_names, dim_lc)
+    lon_vals <- nc$dim[[lon_name]]$vals
+    lon_from <- "dim"
+  }
+
+  if (!is.na(lat_dim_lc)) {
+    lat_name <- restore_case(lat_dim_lc, dim_names, dim_lc)
+    lat_vals <- nc$dim[[lat_name]]$vals
+    lat_from <- "dim"
+  }
+
+  # 2) If not found in dims, try VARIABLES by name
+  if (is.na(lon_name)) {
+    lon_var_lc <- pick_ci(lon_candidates, var_lc)
+    if (!is.na(lon_var_lc)) {
+      lon_name <- restore_case(lon_var_lc, var_names, var_lc)
+      lon_vals <- ncdf4::ncvar_get(nc, lon_name)
+      lon_from <- "var"
+    }
+  }
+  if (is.na(lat_name)) {
+    lat_var_lc <- pick_ci(lat_candidates, var_lc)
+    if (!is.na(lat_var_lc)) {
+      lat_name <- restore_case(lat_var_lc, var_names, var_lc)
+      lat_vals <- ncdf4::ncvar_get(nc, lat_name)
+      lat_from <- "var"
+    }
+  }
+
+  # 3) If still missing, try VARIABLES by CF attributes
+  if (is.na(lon_name)) {
+    cand <- cf_find_by_attr("lon")
+    if (!is.na(cand)) {
+      lon_name <- cand
+      lon_vals <- ncdf4::ncvar_get(nc, lon_name)
+      lon_from <- "var"
+    }
+  }
+  if (is.na(lat_name)) {
+    cand <- cf_find_by_attr("lat")
+    if (!is.na(cand)) {
+      lat_name <- cand
+      lat_vals <- ncdf4::ncvar_get(nc, lat_name)
+      lat_from <- "var"
+    }
+  }
+
+  # 4) Validate and report
+  if (is.na(lon_name) || is.na(lat_name)) {
+    stop(
+      "Could not detect longitude/latitude coordinates.\n",
+      "- Available dims: ", paste(dim_names, collapse = ", "), "\n",
+      "- Available vars: ", paste(var_names, collapse = ", "), "\n",
+      "Tried names: lon{", paste(lon_candidates, collapse=","), "}, ",
+      "lat{", paste(lat_candidates, collapse=","), "} and CF attrs."
+    )
+  }
+
+  # 5) Basic checks: numeric, curvilinear detection
+  if (!is.numeric(lon_vals)) stop("Longitude values are not numeric (name: ", lon_name, ").")
+  if (!is.numeric(lat_vals)) stop("Latitude values are not numeric (name: ", lat_name, ").")
+
+  curvilinear <- is.matrix(lon_vals) || is.matrix(lat_vals)
+
+  # 6) Optional sanity checks: monotonicity for rectilinear grids
+  if (!curvilinear) {
+    lon_monotone <- isTRUE(all(diff(as.numeric(lon_vals)) >= 0)) ||
+      isTRUE(all(diff(as.numeric(lon_vals)) <= 0))
+    lat_monotone <- isTRUE(all(diff(as.numeric(lat_vals)) >= 0)) ||
+      isTRUE(all(diff(as.numeric(lat_vals)) <= 0))
+    if (!lon_monotone || !lat_monotone) {
+      message("Warning: lon/lat are not strictly monotone. Grid may be irregular or wrapped.")
+    }
+  }
+
+  list(
+    lon = lon_vals,
+    lat = lat_vals,
+    lon_name = lon_name,
+    lat_name = lat_name,
+    from = ifelse(identical(lon_from, "var") || identical(lat_from, "var"), "var", "dim"),
+    curvilinear = curvilinear
+  )
+}
+
 #' Preprocess NetCDF/stars to tidy df (stars-first, multi-ref-time + temporal agg)
 #'
 #' This function keeps computations in `stars`/arrays as long as possible:
@@ -59,16 +364,17 @@ wass2s_prepare_data <- function(
     suppressWarnings(stars::read_stars(x, proxy = FALSE, quiet = TRUE))
   }
 
-  nc <- ncdf4::nc_open(x)
-  x_vals <- ncdf4::ncvar_get(nc, "X")
-  y_vals <- ncdf4::ncvar_get(nc, "Y")
-  ncdf4::nc_close(nc)
+
 
   # detect dimension columns present in df
   cn <- names(stars::st_dimensions(obj))
   # guess lon/lat cols from df colnames, then allow overrides
   guess_lon <- intersect(c("x","lon","longitude","long"), tolower(cn))
   guess_lat <- intersect(c("y","lat","latitude"), tolower(cn))
+
+  nc <- ncdf4_guess_lonlat(x)
+  x_vals <- nc$lon
+  y_vals <- nc$lat
   # map back to original case in df
   pick_name <- function(targets, cn) {
     if (!length(targets)) return(NULL)
@@ -79,6 +385,9 @@ wass2s_prepare_data <- function(
   lat_col <- dim_lat %||% pick_name(guess_lat, cn)
   stars::st_dimensions(obj)[[lon_col]]$values <- x_vals
   stars::st_dimensions(obj)[[lat_col]]$values <- y_vals
+
+  obj1 <- sf::st_crop(obj,bbox)
+
 
   # --- stars -> data.frame (long)
   df <- as.data.frame(obj)  # colonnes: dims + variable
@@ -200,13 +509,27 @@ wass2s_prepare_data <- function(
     stop("Could not find variable/value column in data.frame.")
   }
 
-  # --- bbox filter (via lon/lat)
+  # # --- bbox filter (via lon/lat)
+  # if (!is.null(bbox)) {
+  #   stopifnot(length(bbox) == 4)
+  #   N <- bbox[1]; W <- bbox[2]; S <- bbox[3]; E <- bbox[4]
+  #   dfDT <- dfDT[lon >= W & lon <= E & lat >= S & lat <= N]
+  #   if (!nrow(dfDT)) stop("Bbox does not intersect the grid (after normalization).")
+  # }
+
   if (!is.null(bbox)) {
-    stopifnot(length(bbox) == 4)
-    N <- bbox[1]; W <- bbox[2]; S <- bbox[3]; E <- bbox[4]
-    dfDT <- dfDT[lon >= W & lon <= E & lat >= S & lat <= N]
-    if (!nrow(dfDT)) stop("Bbox does not intersect the grid (after normalization).")
+    names(bbox) <- c("ymax","xmin", "ymin", "xmax")
+    dfDT <- bbox_filter_or_fallback(
+      DT = dfDT,
+      bbox = bbox,
+      lon_col = "lon",
+      lat_col = "lat",
+      fallback = "contains_center",   # ou "nearest_center" / "error"
+      auto_align_lon = TRUE,
+      tol_frac = 0.25
+    )
   }
+
 
   # --- ensemble aggregation
   if (!is.null(member_col) && member_col %in% names(dfDT) && ensemble_reduce != "none") {
