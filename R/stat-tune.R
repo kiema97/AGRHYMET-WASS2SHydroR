@@ -7,6 +7,8 @@
 #' @param df_basin_product Data frame for a single basin/product with columns
 #'   `YYYY`, `Q`, and predictor columns.
 #' @param predictors Character vector of predictor column names.
+#' @param target Name of the target column (default: `"Q"`).
+#' @param date_col Name of the date column (default: `"YYYY"`).
 #' @param model One of `"pcr"`, `"ridge"`, `"lasso"`.
 #' @param prediction_years Optional numeric vector of length 2 giving the
 #'   start and end years for a holdout prediction period. These years
@@ -49,7 +51,10 @@
 #' @seealso [make_recipe()], [make_rolling()], [wf_pcr()], [wf_ridge()], [wf_lasso()]
 #' @export
 #' @importFrom rlang .data
-wass2s_tune_pred_stat<- function(df_basin_product, predictors,
+wass2s_tune_pred_stat<- function(df_basin_product,
+                                 predictors,
+                                 target = "Q",
+                                 date_col = "YYYY",
                                  model = c("pcr", "ridge", "lasso"),
                                  prediction_years = NULL,
                                  target_positive = TRUE,
@@ -73,7 +78,7 @@ wass2s_tune_pred_stat<- function(df_basin_product, predictors,
 
   # Input validation
   model <- match.arg(model)
-  required_cols <- c("YYYY", "Q")
+  required_cols <- c(target, date_col)
   missing_cols <- setdiff(required_cols, names(df_basin_product))
 
   if (length(missing_cols) > 0) {
@@ -105,6 +110,7 @@ wass2s_tune_pred_stat<- function(df_basin_product, predictors,
     holdout_mask <- df_basin_product$YYYY >= prediction_years[1] &
       df_basin_product$YYYY <= prediction_years[2]
     holdout_data <- df_basin_product[holdout_mask, ]
+    holdout_data[[target]] <- NA_real_
     df_basin_product <- df_basin_product[!holdout_mask, ]
 
     if (!quiet) {

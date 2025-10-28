@@ -7,6 +7,8 @@
 wass2s_tune_pred_stat(
   df_basin_product,
   predictors,
+  target = "Q",
+  date_col = "YYYY",
   model = c("pcr", "ridge", "lasso"),
   prediction_years = NULL,
   target_positive = TRUE,
@@ -33,6 +35,10 @@ wass2s_tune_pred_stat(
 `YYYY`, `Q`, and predictor columns.}
 
 \item{predictors}{Character vector of predictor column names.}
+
+\item{target}{Name of the target column (default: `"Q"`).}
+
+\item{date_col}{Name of the date column (default: `"YYYY"`).}
 
 \item{model}{One of `"pcr"`, `"ridge"`, `"lasso"`.}
 

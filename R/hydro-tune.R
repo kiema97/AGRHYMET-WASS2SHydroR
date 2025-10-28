@@ -218,7 +218,7 @@ wass2s_tune_pred_ml <- function(
                 fit = fitted))
   }
   # In test
-  holdout_data[,target] <- NA
+  holdout_data[[target]] <- NA_real_
   # Tune model
   wflow <- workflows::workflow() |>
     workflows::add_model(spec) |>
