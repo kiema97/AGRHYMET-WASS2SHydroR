@@ -13,6 +13,8 @@ wass2s_tune_pred_stat(
   resamples = NULL,
   pretrained_wflow = NULL,
   grid = NULL,
+  min_predictors = 1,
+  min_data_required = 10,
   init_frac = 0.6,
   assess_frac = 0.2,
   n_splits = NULL,
@@ -49,6 +51,10 @@ If supplied, tuning is skipped and the workflow is fitted directly.}
 
 \item{grid}{Optional tibble of tuning parameters. If supplied, this grid
 is used instead of the default grid for the specified model.}
+
+\item{min_predictors}{Minimum number of predictors required to keep a product.}
+
+\item{min_data_required}{Minimum number of rows required to train.}
 
 \item{init_frac}{Fraction of rows used for the initial training window.}
 

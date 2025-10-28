@@ -12,7 +12,6 @@ wass2s_cons_mods_stat(
   model = c("pcr", "ridge", "lasso"),
   topK = 3,
   min_kge_model = 0.2,
-  min_predictors = 1,
   prediction_years = NULL,
   target_positive = FALSE,
   resamples = NULL,
@@ -44,8 +43,6 @@ wass2s_cons_mods_stat(
 \item{topK}{Integer, number of products to keep.}
 
 \item{min_kge_model}{Minimum KGE threshold to accept fusion (default: 0.2).}
-
-\item{min_predictors}{Minimum number of predictors required to keep a product.}
 
 \item{prediction_years}{Optional numeric vector of length 2 giving the
 start and end years for a holdout prediction period. These years

@@ -52,7 +52,7 @@ wass2s_cons_mods_ml <- function(
     pretrained = NULL,
     grid_levels = 5,
     min_data_required = 10,
-    predictors_min = 3,
+    predictors_min = 1,
     quiet = TRUE,
     verbose = TRUE,
     max_na_frac =0.3,

@@ -19,6 +19,8 @@
 #'   If supplied, tuning is skipped and the workflow is fitted directly.
 #' @param grid Optional tibble of tuning parameters. If supplied, this grid
 #'   is used instead of the default grid for the specified model.
+#' @param min_predictors Minimum number of predictors required to keep a product.
+#' @param min_data_required Minimum number of rows required to train.
 #' @param init_frac Fraction of rows used for the initial training window.
 #' @param assess_frac Fraction of rows used for the assessment window.
 #' @param n_splits Optional integer, desired number of resamples (splits).
@@ -54,6 +56,8 @@ wass2s_tune_pred_stat<- function(df_basin_product, predictors,
                                  resamples = NULL,
                                  pretrained_wflow = NULL,
                                  grid = NULL,
+                                 min_predictors = 1,
+                                 min_data_required = 10,
                                  init_frac = 0.60,
                                  assess_frac = 0.20,
                                  n_splits = NULL,
@@ -75,6 +79,11 @@ wass2s_tune_pred_stat<- function(df_basin_product, predictors,
   if (length(missing_cols) > 0) {
     stop("Missing required columns: ", paste(missing_cols, collapse = ", "),
          call. = FALSE)
+  }
+
+  if (length(predictors) < min_predictors) {
+    if (!quiet) message("[", model, "] ",  " : skipped (predictors < ", min_predictors, ").")
+    return(NULL)
   }
 
   df_basin_product <- .sanitize_numeric_columns(
@@ -162,7 +171,7 @@ wass2s_tune_pred_stat<- function(df_basin_product, predictors,
     ))
   }
 
-  if (nrow(df_basin_product) < 8) {
+  if (nrow(df_basin_product) < min_data_required) {
     if (!quiet) message("Not enough rows to tune model for this basin/product.")
     # Create empty predictions for all years (training + holdout)
     all_years <- unique(c(df_basin_product$YYYY, if (!is.null(holdout_data)) holdout_data$YYYY else NULL))
@@ -182,18 +191,18 @@ wass2s_tune_pred_stat<- function(df_basin_product, predictors,
 
   # Filter non-informative predictors
   predictors <- usable_predictors(df_basin_product, predictors)
-  if (length(predictors) < 2L) {
-    if (!quiet) message("Insufficient usable predictors after filtering.")
-    # Create empty predictions for all years (training + holdout)
-    all_years <- unique(c(df_basin_product$YYYY, if (!is.null(holdout_data)) holdout_data$YYYY else NULL))
-    preds_empty <- tibble::tibble(YYYY = all_years, pred = NA_real_)
-
-    return(list(
-      kge_cv_mean = NA_real_,
-      preds = preds_empty,
-      leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric())
-    ))
-  }
+  # if (length(predictors) < 2L) {
+  #   if (!quiet) message("Insufficient usable predictors after filtering.")
+  #   # Create empty predictions for all years (training + holdout)
+  #   all_years <- unique(c(df_basin_product$YYYY, if (!is.null(holdout_data)) holdout_data$YYYY else NULL))
+  #   preds_empty <- tibble::tibble(YYYY = all_years, pred = NA_real_)
+  #
+  #   return(list(
+  #     kge_cv_mean = NA_real_,
+  #     preds = preds_empty,
+  #     leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric())
+  #   ))
+  # }
 
   # Create recipe
   rec <- tryCatch({

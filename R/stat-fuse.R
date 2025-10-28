@@ -11,7 +11,6 @@
 #' @param model One of `"pcr"`, `"ridge"`, `"lasso"`.
 #' @param topK Integer, number of products to keep.
 #' @param min_kge_model Minimum KGE threshold to accept fusion (default: 0.2).
-#' @param min_predictors Minimum number of predictors required to keep a product.
 #' @param prediction_years Optional numeric vector of length 2 giving the
 #'   start and end years for a holdout prediction period. These years
 #'   are excluded from training and predictions are generated after fitting.
@@ -56,7 +55,6 @@ wass2s_cons_mods_stat <- function(
     model = c("pcr", "ridge", "lasso"),
     topK = 3,
     min_kge_model = 0.2,
-    min_predictors = 1,
     prediction_years = NULL,
     target_positive = FALSE,
     resamples = NULL,
@@ -124,11 +122,6 @@ wass2s_cons_mods_stat <- function(
 
     if (!verbose) message("[", model, "] ", p, " : ",
                          length(predictors), " predictors using pattern '", pat, "'")
-
-    if (length(predictors) < min_predictors) {
-      if (!verbose) message("[", model, "] ", p, " : skipped (predictors < ", min_predictors, ").")
-      return(NULL)
-    }
 
     # Call tuner + predictions with all additional parameters
     out <- tryCatch({
