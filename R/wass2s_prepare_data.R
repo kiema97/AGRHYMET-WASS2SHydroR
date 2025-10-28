@@ -326,12 +326,11 @@ ncdf4_guess_lonlat <- function(path) {
 #' @param verbose print progress. Default TRUE.
 #'
 #' @return data.frame with DATE and values (shape depends on args).
-#' @keywords internal
-#' @noRd
+#' @export
 #' @importFrom data.table as.data.table setDT setorder dcast
 #' @importFrom data.table :=
 #' @importFrom stats median
-wass2s_prepare_data_ <- function(
+wass2s_prepare_data <- function(
     x,
     bbox = NULL,
     spatial_reduce = c("none","mean","median","min","max"),
@@ -386,9 +385,6 @@ wass2s_prepare_data_ <- function(
   lat_col <- dim_lat %||% pick_name(guess_lat, cn)
   stars::st_dimensions(obj)[[lon_col]]$values <- x_vals
   stars::st_dimensions(obj)[[lat_col]]$values <- y_vals
-
-  obj1 <- sf::st_crop(obj,bbox)
-
 
   # --- stars -> data.frame (long)
   df <- as.data.frame(obj)  # colonnes: dims + variable
@@ -602,13 +598,13 @@ wass2s_prepare_data_ <- function(
 #' @param dim_member optional override for member/ensemble dim (e.g. "number").
 #' @param ensemble_reduce "mean","median","min","max","none". Default "mean".
 #' @param verbose print progress. Default TRUE.
-#'
 #' @return data.frame with DATE and values (shape depends on args).
-#' @export
+#' @keywords internal
+#' @noRd
 #' @importFrom data.table as.data.table setDT setorder dcast
 #' @importFrom data.table :=
 #' @importFrom stats median
-wass2s_prepare_data <- function(
+wass2s_prepare_data_old <- function(
     x,
     bbox = NULL,
     spatial_reduce = c("none","mean","median","min","max"),
