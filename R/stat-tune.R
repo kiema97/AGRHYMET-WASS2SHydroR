@@ -73,7 +73,6 @@ wass2s_tune_pred_stat<- function(df_basin_product,
                                  max_na_frac =0.3,
                                  impute = "median",
                                  require_variance = TRUE,
-
                                  ...) {
 
   # Input validation

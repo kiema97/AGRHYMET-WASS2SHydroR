@@ -17,6 +17,10 @@ Depends:
     R (>= 4.3)
 Imports:
     cli,
+	fs,
+	processx,
+	withr,
+	HYPEtools,
     data.table,
     dials,
     dplyr,

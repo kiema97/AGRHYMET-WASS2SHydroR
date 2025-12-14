@@ -22,6 +22,7 @@
 #' @importFrom glue glue
 #' @importFrom utils head tail
 #' @importFrom data.table setnames
+#' @importFrom utils read.csv read.table
 "_PACKAGE"
 
 

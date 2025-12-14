@@ -3,7 +3,7 @@
 .onLoad <- function(libname, pkgname) {
   # Enregistrements uniquement
   register_method("stat",  function() method_id("stat"))
-  #register_method("hydro", function() method_id("hydro"))
+  register_method("hydro", function() method_id("hydro"))
   register_method("ml",   function() method_id("ml"))
   # register_method("ai",   function() method_id("ai"))
 }
