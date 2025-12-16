@@ -35,8 +35,8 @@ wass2s_hype_run_one_model <- function(run_dir,
                                       clean_regex = c("^hyss_.*\\.log$"),
                                       log_prefix = NULL,
                                       log_regex = "^hyss_.*\\.log$",
-                                      check_interval = 5,
-                                      stable_duration = 15,
+                                      check_interval = 10,
+                                      stable_duration = 30,
                                       ...) {
   run_dir <- as.character(run_dir)
   forcing_dir <- as.character(forcing_dir)
