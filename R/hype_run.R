@@ -222,8 +222,8 @@ wass2s_hype_run_watchlog <- function(run_dir,
                                      clean_regex = c("^hyss_.*\\.log$"),
                                      log_prefix = NULL,
                                      log_regex = "^hyss_.*\\.log$",
-                                     check_interval = 10,
-                                     stable_duration = 30) {
+                                     check_interval = 5,
+                                     stable_duration = 20) {
 
   run_dir <- as.character(run_dir)
   exe_path <- wass2s__hype_find_exe(run_dir, exe_path = exe_path)
@@ -321,7 +321,7 @@ wass2s_hype_run_watchlog <- function(run_dir,
     (length(expected_files) == 0 || all(fs::file_exists(fs::path(run_dir, expected_files))))
 
   list(
-    success = success,
+    success = !success,
     exit_status = as.integer(exit_status),
     duration_sec = duration,
     run_dir = run_dir,
@@ -366,7 +366,7 @@ wass2s_hype_run_batch <- function(run_dirs, mode = c("watchlog", "run"), ...) {
 
     tibble::tibble(
       run_dir = rd,
-      success = !isTRUE(res$success),
+      success = isTRUE(res$success),
       exit_status = res$exit_status,
       duration_sec = res$duration_sec,
       stdout_log = res$stdout_log,
