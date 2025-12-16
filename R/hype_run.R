@@ -223,7 +223,7 @@ wass2s_hype_run_watchlog <- function(run_dir,
                                      log_prefix = NULL,
                                      log_regex = "^hyss_.*\\.log$",
                                      check_interval = 5,
-                                     stable_duration = 20) {
+                                     stable_duration = 15) {
 
   run_dir <- as.character(run_dir)
   exe_path <- wass2s__hype_find_exe(run_dir, exe_path = exe_path)
