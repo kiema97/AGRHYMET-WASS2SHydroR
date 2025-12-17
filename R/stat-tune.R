@@ -336,13 +336,15 @@ wass2s_tune_pred_stat<- function(df_basin_product,
                              ... )
 
   res <- tryCatch({
-    tune::tune_grid(
-      wf,
-      resamples = rs,
-      grid = grid,
-      metrics = yardstick::metric_set(yardstick::rmse, yardstick::mae),
-      control = ctrl
-    )
+ suppressWarnings(
+   tune::tune_grid(
+     wf,
+     resamples = rs,
+     grid = grid,
+     metrics = yardstick::metric_set(yardstick::rmse, yardstick::mae),
+     control = ctrl
+   )
+ )
   }, error = function(e) {
     if (!quiet) message("Error during tuning: ", e$message)
     return(NULL)
