@@ -34,11 +34,25 @@ wass2s_hype_get_model_ids <- function(forcing_dir) {
   forcing_dir <- as.character(forcing_dir)
   if (!fs::dir_exists(forcing_dir)) rlang::abort(glue::glue("forcing_dir not found: {forcing_dir}"))
 
-  files <- fs::dir_ls(forcing_dir, regexp = "_(PRCP|TMAX|TMIN|TMEAN)\\.txt$", type = "file", fail = FALSE)
+  re <- "(?i)_(PRCP|TMAX|TMIN|TMEAN)\\.txt$"
+
+  files <- fs::dir_ls(forcing_dir, regexp = re, type = "file", fail = FALSE)
   if (!length(files)) return(character())
 
-  unique(sub("_(PRCP|TMAX|TMIN|TMEAN)\\.txt$", "", basename(files)))
+  # Remove the suffix in a case-insensitive way
+  unique(gsub(re, "", basename(files), perl = TRUE))
 }
+
+
+# wass2s_hype_get_model_ids <- function(forcing_dir) {
+#   forcing_dir <- as.character(forcing_dir)
+#   if (!fs::dir_exists(forcing_dir)) rlang::abort(glue::glue("forcing_dir not found: {forcing_dir}"))
+#
+#   files <- fs::dir_ls(forcing_dir, regexp = "_(PRCP|TMAX|TMIN|TMEAN)\\.txt$", type = "file", fail = FALSE)
+#   if (!length(files)) return(character())
+#
+#   unique(sub("_(PRCP|TMAX|TMIN|TMEAN)\\.txt$", "", basename(files)))
+# }
 
 #' Write the four OBS files required by HYPE (Pobs/TMAXobs/TMINobs/Tobs)
 #'
