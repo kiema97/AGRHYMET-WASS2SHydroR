@@ -13,11 +13,19 @@ wass2s_hype_run_one_model(
   args = character(),
   env = character(),
   expected_files = character(),
-  clean_regex = c("^hyss_.*\\\\.log$"),
+  clean_regex = c("hyss_.*\\\\.log$"),
   log_prefix = NULL,
-  log_regex = "^hyss_.*\\\\.log$",
+  log_regex = "hyss_.*\\\\.log$",
   check_interval = 10,
   stable_duration = 30,
+  obsid = NULL,
+  prefix = NULL,
+  patterns = c("PRCP", "TMAX", "TMIN", "TMEAN"),
+  extension = ".txt",
+  date_from = NULL,
+  date_to = NULL,
+  write = TRUE,
+  round_digits = 2,
   ...
 )
 }
@@ -48,7 +56,23 @@ wass2s_hype_run_one_model(
 
 \item{stable_duration}{Seconds of unchanged log size (watchlog mode only).}
 
-\item{...}{Additional arguments forwarded to `wass2s_hype_prepare_obs()` (e.g., obsid, date_from/date_to, round_digits).}
+\item{obsid}{Optional station IDs to pass to `HYPEtools::WriteObs`. If NULL, derived from column names.}
+
+\item{prefix}{Optional prefix prepended to each pattern (e.g., `"ecmwf_"`).}
+
+\item{patterns}{Character vector of length 4. Default: c("PRCP","TMAX","TMIN","TMEAN").}
+
+\item{extension}{File extension (default ".txt").}
+
+\item{date_from}{Optional start date (inclusive) for filtering (Date or coercible).}
+
+\item{date_to}{Optional end date (inclusive) for filtering (Date or coercible).}
+
+\item{write}{Logical; if TRUE, writes obs files into `run_dir`.}
+
+\item{round_digits}{Digits for `WriteObs`.}
+
+\item{...}{Extra args forwarded to `HYPEtools::WriteObs`.}
 }
 \value{
 A one-row tibble with run metadata.

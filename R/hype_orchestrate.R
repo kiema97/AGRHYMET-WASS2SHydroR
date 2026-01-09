@@ -20,8 +20,15 @@
 #' @param log_regex REGEX for completion log detection (watchlog mode only).
 #' @param check_interval Seconds between watch checks (watchlog mode only).
 #' @param stable_duration Seconds of unchanged log size (watchlog mode only).
-#' @param ... Additional arguments forwarded to `wass2s_hype_prepare_obs()` (e.g., obsid, date_from/date_to, round_digits).
-#'
+#' @param obsid Optional station IDs to pass to `HYPEtools::WriteObs`. If NULL, derived from column names.
+#' @param prefix Optional prefix prepended to each pattern (e.g., `"ecmwf_"`).
+#' @param patterns Character vector of length 4. Default: c("PRCP","TMAX","TMIN","TMEAN").
+#' @param extension File extension (default ".txt").
+#' @param date_from Optional start date (inclusive) for filtering (Date or coercible).
+#' @param date_to Optional end date (inclusive) for filtering (Date or coercible).
+#' @param write Logical; if TRUE, writes obs files into `run_dir`.
+#' @param round_digits Digits for `WriteObs`.
+#' @param ... Extra args forwarded to `HYPEtools::WriteObs`.
 #' @return A one-row tibble with run metadata.
 #' @export
 wass2s_hype_run_one_model <- function(run_dir,
@@ -32,11 +39,19 @@ wass2s_hype_run_one_model <- function(run_dir,
                                       args = character(),
                                       env = character(),
                                       expected_files = character(),
-                                      clean_regex = c("^hyss_.*\\.log$"),
+                                      clean_regex = c("hyss_.*\\.log$"),
                                       log_prefix = NULL,
-                                      log_regex = "^hyss_.*\\.log$",
+                                      log_regex = "hyss_.*\\.log$",
                                       check_interval = 10,
                                       stable_duration = 30,
+                                      obsid = NULL,
+                                      prefix = NULL,
+                                      patterns = c("PRCP","TMAX","TMIN","TMEAN"),
+                                      extension = ".txt",
+                                      date_from = NULL,
+                                      date_to = NULL,
+                                      write = TRUE,
+                                      round_digits = 2,
                                       ...) {
   run_dir <- as.character(run_dir)
   forcing_dir <- as.character(forcing_dir)
@@ -46,9 +61,16 @@ wass2s_hype_run_one_model <- function(run_dir,
   wass2s_hype_prepare_obs(
     forcing_dir = forcing_dir,
     run_dir = run_dir,
+    obsid = obsid,
+    prefix = prefix,
+    patterns = patterns,
+    extension = extension,
+    date_from = date_from,
+    date_to = date_to,
+    write = write,
+    round_digits = round_digits,
     ...
   )
-
   # 2) Update info.txt to write outputs into ./<resultdir>/
   result_path <- wass2s_hype_update_resultdir(run_dir, resultdir)
 

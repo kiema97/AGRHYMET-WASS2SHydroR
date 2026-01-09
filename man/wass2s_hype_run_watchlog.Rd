@@ -11,9 +11,9 @@ wass2s_hype_run_watchlog(
   env = character(),
   timeout_sec = 150,
   expected_files = character(),
-  clean_regex = c("^hyss_.*\\\\.log$"),
+  clean_regex = c("hyss_.*\\\\.log$"),
   log_prefix = NULL,
-  log_regex = "^hyss_.*\\\\.log$",
+  log_regex = "hyss_.*\\\\.log$",
   check_interval = 10,
   stable_duration = 30
 )
