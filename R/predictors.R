@@ -39,7 +39,11 @@ usable_predictors <- function(df, predictors) {
 #' @param exclude Columns to always exclude (default: c("YYYY","Q")).
 #' @return Character vector of predictor names present in df.
 #' @keywords internal
-select_predictors <- function(df, pattern = "^pt_", exclude = c("YYYY","Q")) {
+select_predictors <- function(df, pattern = "^pt_", exclude = c("YYYY", "Q")) {
   nms <- setdiff(names(df), exclude)
+
+  if (is.null(pattern) || !nzchar(pattern)) return(character(0))
+
   nms[stringr::str_detect(nms, pattern)]
 }
+

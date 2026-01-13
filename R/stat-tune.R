@@ -51,45 +51,68 @@
 #' @seealso [make_recipe()], [make_rolling()], [wf_pcr()], [wf_ridge()], [wf_lasso()]
 #' @export
 #' @importFrom rlang .data
-wass2s_tune_pred_stat<- function(df_basin_product,
-                                 predictors,
-                                 target = "Q",
-                                 date_col = "YYYY",
-                                 model = c("pcr", "ridge", "lasso"),
-                                 prediction_years = NULL,
-                                 target_positive = TRUE,
-                                 resamples = NULL,
-                                 pretrained_wflow = NULL,
-                                 grid = NULL,
-                                 min_predictors = 1,
-                                 min_data_required = 10,
-                                 init_frac = 0.60,
-                                 assess_frac = 0.20,
-                                 n_splits = NULL,
-                                 cumulative = TRUE,
-                                 quiet = TRUE,
-                                 allow_par = TRUE,
-                                 verbose_tune = TRUE,
-                                 max_na_frac =0.3,
-                                 impute = "median",
-                                 require_variance = TRUE,
-                                 ...) {
+wass2s_tune_pred_stat <- function(
+    df_basin_product,
+    predictors,
+    target = "Q",
+    date_col = "YYYY",
+    model = c("pcr", "ridge", "lasso"),
+    prediction_years = NULL,          # still provided as years (YYYY)
+    target_positive = TRUE,
+    resamples = NULL,
+    pretrained_wflow = NULL,
+    grid = NULL,
+    min_predictors = 1,
+    min_data_required = 10,
+    init_frac = 0.60,
+    assess_frac = 0.20,
+    n_splits = NULL,
+    cumulative = TRUE,
+    quiet = TRUE,
+    allow_par = TRUE,
+    verbose_tune = TRUE,
+    max_na_frac = 0.3,
+    impute = "median",
+    require_variance = TRUE,
+    ...
+) {
 
-  # Input validation
+  # ---- helpers ----
+  .pred_years_to_bounds <- function(prediction_years) {
+    if (is.null(prediction_years)) return(NULL)
+    if (length(prediction_years) == 1 && prediction_years > 0) prediction_years <- rep(prediction_years, 2)
+    if (length(prediction_years) != 2) stop("prediction_years must be length 2 (start, end).", call. = FALSE)
+    if (prediction_years[1] > prediction_years[2]) stop("Starting point must be earlier than ending point.", call. = FALSE)
+    c(
+      as.integer(paste0(prediction_years[1], "0101")),
+      as.integer(paste0(prediction_years[2], "1231"))
+    )
+  }
+
+  # ---- Input validation ----
   model <- match.arg(model)
   required_cols <- c(target, date_col)
   missing_cols <- setdiff(required_cols, names(df_basin_product))
-
   if (length(missing_cols) > 0) {
-    stop("Missing required columns: ", paste(missing_cols, collapse = ", "),
-         call. = FALSE)
+    stop("Missing required columns: ", paste(missing_cols, collapse = ", "), call. = FALSE)
   }
 
   if (length(predictors) < min_predictors) {
-    if (!quiet) message("[", model, "] ",  " : skipped (predictors < ", min_predictors, ").")
+    if (!quiet) message("[", model, "] : skipped (predictors < ", min_predictors, ").")
     return(NULL)
   }
 
+  # ---- Standardize column names (YYYY, Q) ----
+  df_basin_product <- df_basin_product %>%
+    dplyr::rename(
+      YYYY = !!rlang::sym(date_col),
+      Q    = !!rlang::sym(target)
+    )
+
+  # ---- Enforce YYYYMMDD format (internal standard) ----
+  df_basin_product$YYYY <- .ensure_yyyymmdd(df_basin_product$YYYY)
+
+  # ---- Sanitize target ----
   df_basin_product <- .sanitize_numeric_columns(
     df   = df_basin_product,
     cols = "Q",
@@ -98,142 +121,104 @@ wass2s_tune_pred_stat<- function(df_basin_product,
     require_variance = require_variance
   )
 
-  # Handle prediction years
+  # ---- Handle prediction years (convert to YYYYMMDD bounds) ----
   holdout_data <- NULL
-  if (!is.null(prediction_years)) {
-    if (length(prediction_years) != 2) {
-      stop("prediction_years must be length 2 (start, end).", call. = FALSE)
-    }
-    prediction_years[2] <- min(prediction_years[2],max(df_basin_product$YYYY))
-    # Extract holdout data
-    holdout_mask <- df_basin_product$YYYY >= prediction_years[1] &
-      df_basin_product$YYYY <= prediction_years[2]
-    holdout_data <- df_basin_product[holdout_mask, ]
-    holdout_data[[target]] <- NA_real_
-    df_basin_product <- df_basin_product[!holdout_mask, ]
+  bounds <- .pred_years_to_bounds(prediction_years)
+
+  if (!is.null(bounds)) {
+    # clip upper bound to available max date
+    bounds[2] <- min(bounds[2], max(df_basin_product$YYYY, na.rm = TRUE))
+
+    holdout_mask <- df_basin_product$YYYY >= bounds[1] &
+      df_basin_product$YYYY <= bounds[2]
+
+    holdout_data <- df_basin_product[holdout_mask, , drop = FALSE]
+    holdout_data$Q <- NA_real_
+    df_basin_product <- df_basin_product[!holdout_mask, , drop = FALSE]
 
     if (!quiet) {
-      message("Using ", nrow(holdout_data), " years for holdout prediction: ",
-              prediction_years[1], " to ", prediction_years[2])
+      message("Using ", nrow(holdout_data), " rows for holdout prediction: ",
+              bounds[1], " to ", bounds[2], " (YYYYMMDD)")
     }
   }
 
-  # Handle pretrained workflow case
+  # ---- Pretrained workflow case ----
+  # IMPORTANT: if a workflow is already trained, do NOT re-fit it. Use predict().
   if (!is.null(pretrained_wflow)) {
     if (!quiet) message("Using pretrained workflow, skipping tuning.")
 
-    # Fit the pretrained workflow
-    fit_final <- tryCatch({
-      parsnip::fit(pretrained_wflow, df_basin_product)
-    }, error = function(e) {
-      if (!quiet) message("Error fitting pretrained workflow: ", e$message)
-      return(NULL)
-    })
-
-    if (is.null(fit_final)) {
-      # Create empty predictions for all years (training + holdout)
-      all_years <- unique(c(df_basin_product$YYYY, if (!is.null(holdout_data)) holdout_data$YYYY else NULL))
-      preds_empty <- tibble::tibble(YYYY = all_years, pred = NA_real_)
-
-      return(list(
-        kge_cv_mean = NA_real_,
-        preds = preds_empty,
-        leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric())
-      ))
-    }
-
-    # Generate predictions for all data (training + holdout)
-    all_data <- if (!is.null(holdout_data)) {
-      dplyr::bind_rows(df_basin_product, holdout_data)
-    } else {
-      df_basin_product
-    }
+    # Build all_data (training + holdout) for prediction
+    all_data <- if (!is.null(holdout_data)) dplyr::bind_rows(df_basin_product, holdout_data) else df_basin_product
 
     preds_final <- tryCatch({
-      pred_values <- stats::predict(fit_final, all_data) %>%
-        dplyr::pull(.pred)
-
-      # Apply target_positive if requested
-      if (target_positive) {
-        pred_values <- pmax(pred_values, 0)
-      }
+      pred_values <- predict(pretrained_wflow, new_data = all_data) %>% dplyr::pull(.pred)
+      if (target_positive) pred_values <- pmax(pred_values, 0)
 
       tibble::tibble(
         YYYY = all_data$YYYY,
         pred = pred_values
       )
     }, error = function(e) {
-      if (!quiet) message("Error generating final predictions: ", e$message)
-      # Create empty predictions for all years
-      all_years <- unique(c(df_basin_product$YYYY, if (!is.null(holdout_data)) holdout_data$YYYY else NULL))
-      tibble::tibble(YYYY = all_years, pred = NA_real_)
+      if (!quiet) message("Error predicting with pretrained workflow: ", e$message)
+      all_dates <- unique(c(df_basin_product$YYYY, if (!is.null(holdout_data)) holdout_data$YYYY else NULL))
+      tibble::tibble(YYYY = all_dates, pred = NA_real_)
     })
 
     return(list(
       kge_cv_mean = NA_real_,
+      rsq_cv_mean = NA_real_,
       preds = preds_final,
-      leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric())
+      leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric(), rsq_mean = numeric())
     ))
   }
 
+  # ---- Minimum data check ----
   if (nrow(df_basin_product) < min_data_required) {
     if (!quiet) message("Not enough rows to tune model for this basin/product.")
-    # Create empty predictions for all years (training + holdout)
-    all_years <- unique(c(df_basin_product$YYYY, if (!is.null(holdout_data)) holdout_data$YYYY else NULL))
-    preds_empty <- tibble::tibble(YYYY = all_years, pred = NA_real_)
+    all_dates <- unique(c(df_basin_product$YYYY, if (!is.null(holdout_data)) holdout_data$YYYY else NULL))
+    preds_empty <- tibble::tibble(YYYY = all_dates, pred = NA_real_)
 
     return(list(
       kge_cv_mean = NA_real_,
+      rsq_cv_mean = NA_real_,
       preds = preds_empty,
-      leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric())
+      leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric(), rsq_mean = numeric())
     ))
   }
 
-  # Order and remove any grouping
+  # ---- Order & ungroup ----
   df_basin_product <- df_basin_product %>%
     dplyr::ungroup() %>%
     dplyr::arrange(YYYY)
 
-  # Filter non-informative predictors
+  # ---- Filter non-informative predictors ----
   predictors <- usable_predictors(df_basin_product, predictors)
-  # if (length(predictors) < 2L) {
-  #   if (!quiet) message("Insufficient usable predictors after filtering.")
-  #   # Create empty predictions for all years (training + holdout)
-  #   all_years <- unique(c(df_basin_product$YYYY, if (!is.null(holdout_data)) holdout_data$YYYY else NULL))
-  #   preds_empty <- tibble::tibble(YYYY = all_years, pred = NA_real_)
-  #
-  #   return(list(
-  #     kge_cv_mean = NA_real_,
-  #     preds = preds_empty,
-  #     leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric())
-  #   ))
-  # }
 
-  # Create recipe
+  # ---- Create recipe ----
   rec <- tryCatch({
-    if(model == "pcr"){
-      make_recipe(df_basin_product, predictors,auto_pca = FALSE)
-    }else{
-      make_recipe(df_basin_product, predictors,auto_pca = TRUE)
+    if (model == "pcr") {
+      make_recipe(df_basin_product, predictors, target = "Q", auto_pca = FALSE)
+    } else {
+      make_recipe(df_basin_product, predictors, target = "Q", auto_pca = TRUE)
     }
   }, error = function(e) {
     if (!quiet) message("Error creating recipe: ", e$message)
-    return(NULL)
+    NULL
   })
 
   if (is.null(rec)) {
-    # Create empty predictions for all years (training + holdout)
-    all_years <- unique(c(df_basin_product$YYYY, if (!is.null(holdout_data)) holdout_data$YYYY else NULL))
-    preds_empty <- tibble::tibble(YYYY = all_years, pred = NA_real_)
-
+    all_dates <- unique(c(df_basin_product$YYYY, if (!is.null(holdout_data)) holdout_data$YYYY else NULL))
+    preds_empty <- tibble::tibble(YYYY = all_dates, pred = NA_real_)
     return(list(
       kge_cv_mean = NA_real_,
+      rsq_cv_mean = NA_real_,
       preds = preds_empty,
-      leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric())
+      leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric(), rsq_mean = numeric())
     ))
   }
 
-  # Create or use provided resamples
+  # ---- Create or use provided resamples ----
+  rs <- NULL
   if (is.null(resamples)) {
     rs <- tryCatch({
       make_rolling(
@@ -247,7 +232,7 @@ wass2s_tune_pred_stat<- function(df_basin_product,
       )
     }, error = function(e) {
       if (!quiet) message("Error creating resamples: ", e$message)
-      return(NULL)
+      NULL
     })
   } else {
     rs <- resamples
@@ -255,28 +240,28 @@ wass2s_tune_pred_stat<- function(df_basin_product,
       if (!quiet) message("Provided resamples is not a valid rset object.")
       return(list(
         kge_cv_mean = NA_real_,
+        rsq_cv_mean = NA_real_,
         preds = tibble::tibble(YYYY = df_basin_product$YYYY, pred = NA_real_),
-        leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric())
+        leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric(), rsq_mean = numeric())
       ))
     }
   }
 
   if (is.null(rs) || length(rs$splits) < 1) {
     if (!quiet) message("Insufficient resamples created.")
-    # Create empty predictions for all years (training + holdout)
-    all_years <- unique(c(df_basin_product$YYYY, if (!is.null(holdout_data)) holdout_data$YYYY else NULL))
-    preds_empty <- tibble::tibble(YYYY = all_years, pred = NA_real_)
-
+    all_dates <- unique(c(df_basin_product$YYYY, if (!is.null(holdout_data)) holdout_data$YYYY else NULL))
+    preds_empty <- tibble::tibble(YYYY = all_dates, pred = NA_real_)
     return(list(
       kge_cv_mean = NA_real_,
+      rsq_cv_mean = NA_real_,
       preds = preds_empty,
-      leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric())
+      leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric(), rsq_mean = numeric())
     ))
   }
 
-  # Create workflow based on model type
+  # ---- Create workflow based on model type ----
   model_functions <- list(
-    pcr = list(wf = wf_pcr),
+    pcr   = list(wf = wf_pcr),
     ridge = list(wf = wf_ridge),
     lasso = list(wf = wf_lasso)
   )
@@ -285,130 +270,127 @@ wass2s_tune_pred_stat<- function(df_basin_product,
     model_functions[[model]]$wf(rec)
   }, error = function(e) {
     if (!quiet) message("Error creating workflow: ", e$message)
-    return(NULL)
+    NULL
   })
 
   if (is.null(wf)) {
-    # Create empty predictions for all years (training + holdout)
-    all_years <- unique(c(df_basin_product$YYYY, if (!is.null(holdout_data)) holdout_data$YYYY else NULL))
-    preds_empty <- tibble::tibble(YYYY = all_years, pred = NA_real_)
-
+    all_dates <- unique(c(df_basin_product$YYYY, if (!is.null(holdout_data)) holdout_data$YYYY else NULL))
+    preds_empty <- tibble::tibble(YYYY = all_dates, pred = NA_real_)
     return(list(
       kge_cv_mean = NA_real_,
+      rsq_cv_mean = NA_real_,
       preds = preds_empty,
-      leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric())
+      leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric(), rsq_mean = numeric())
     ))
   }
 
-  # Use provided grid or create default grid
+  # ---- Grid ----
   if (is.null(grid)) {
     grid_functions <- list(
-      pcr = grid_pcr,
+      pcr   = grid_pcr,
       ridge = grid_glm,
       lasso = grid_glm
     )
-
     grid <- tryCatch({
       grid_functions[[model]]()
     }, error = function(e) {
       if (!quiet) message("Error creating grid: ", e$message)
-      return(NULL)
+      NULL
     })
   }
 
   if (is.null(grid)) {
-    # Create empty predictions for all years (training + holdout)
-    all_years <- unique(c(df_basin_product$YYYY, if (!is.null(holdout_data)) holdout_data$YYYY else NULL))
-    preds_empty <- tibble::tibble(YYYY = all_years, pred = NA_real_)
-
+    all_dates <- unique(c(df_basin_product$YYYY, if (!is.null(holdout_data)) holdout_data$YYYY else NULL))
+    preds_empty <- tibble::tibble(YYYY = all_dates, pred = NA_real_)
     return(list(
       kge_cv_mean = NA_real_,
+      rsq_cv_mean = NA_real_,
       preds = preds_empty,
-      leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric())
+      leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric(), rsq_mean = numeric())
     ))
   }
 
-  # Tune model
-  ctrl <- tune::control_grid(save_pred = TRUE,
-                             verbose = !verbose_tune,
-                             allow_par=allow_par,
-                             parallel_over = "resamples",
-                             ... )
+  # ---- Tune model ----
+  ctrl <- tune::control_grid(
+    save_pred = TRUE,
+    verbose = !verbose_tune,
+    allow_par = allow_par,
+    parallel_over = "resamples",
+    ...
+  )
 
   res <- tryCatch({
- suppressWarnings(
-   tune::tune_grid(
-     wf,
-     resamples = rs,
-     grid = grid,
-     metrics = yardstick::metric_set(yardstick::rmse, yardstick::mae),
-     control = ctrl
-   )
- )
+    suppressWarnings(
+      tune::tune_grid(
+        wf,
+        resamples = rs,
+        grid = grid,
+        metrics = yardstick::metric_set(yardstick::rmse, yardstick::mae),
+        control = ctrl
+      )
+    )
   }, error = function(e) {
     if (!quiet) message("Error during tuning: ", e$message)
-    return(NULL)
+    NULL
   })
 
   if (is.null(res)) {
-    # Create empty predictions for all years (training + holdout)
-    all_years <- unique(c(df_basin_product$YYYY, if (!is.null(holdout_data)) holdout_data$YYYY else NULL))
-    preds_empty <- tibble::tibble(YYYY = all_years, pred = NA_real_)
-
+    all_dates <- unique(c(df_basin_product$YYYY, if (!is.null(holdout_data)) holdout_data$YYYY else NULL))
+    preds_empty <- tibble::tibble(YYYY = all_dates, pred = NA_real_)
     return(list(
       kge_cv_mean = NA_real_,
+      rsq_cv_mean = NA_real_,
       preds = preds_empty,
-      leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric())
+      leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric(), rsq_mean = numeric())
     ))
   }
 
-  # Collect predictions
-  preds <- tryCatch({
-    tune::collect_predictions(res)
-  }, error = function(e) {
+  preds <- tryCatch(tune::collect_predictions(res), error = function(e) {
     if (!quiet) message("Error collecting predictions: ", e$message)
     tibble::tibble()
   })
 
   if (nrow(preds) == 0L) {
-    # Create empty predictions for all years (training + holdout)
-    all_years <- unique(c(df_basin_product$YYYY, if (!is.null(holdout_data)) holdout_data$YYYY else NULL))
-    preds_empty <- tibble::tibble(YYYY = all_years, pred = NA_real_)
-
+    all_dates <- unique(c(df_basin_product$YYYY, if (!is.null(holdout_data)) holdout_data$YYYY else NULL))
+    preds_empty <- tibble::tibble(YYYY = all_dates, pred = NA_real_)
     return(list(
       kge_cv_mean = NA_real_,
+      rsq_cv_mean = NA_real_,
       preds = preds_empty,
-      leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric())
+      leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric(), rsq_mean = numeric())
     ))
   }
 
-  # Calculate KGE by split and configuration
+  # ---- KGE by split/config ----
   kge_by_split <- tryCatch({
     preds %>%
       dplyr::filter(!is.na(Q)) %>%
       dplyr::group_by(id, .config) %>%
-      dplyr::summarise(kge_split = kge_vec(Q, .pred),
-                       rsq_split = wass2s_corr(truth = .data$Q, estimate = .data$.pred),
-                       .groups = "drop")
-
-
+      dplyr::summarise(
+        kge_split = kge_vec(Q, .pred),
+        rsq_split = wass2s_corr(truth = .data$Q, estimate = .data$.pred),
+        .groups = "drop"
+      )
   }, error = function(e) {
     if (!quiet) message("Error calculating KGE by split: ", e$message)
-    tibble::tibble(id = character(), .config = character(), kge_split = numeric())
+    tibble::tibble(id = character(), .config = character(), kge_split = numeric(), rsq_split = numeric())
   })
 
   kge_by_cfg <- tryCatch({
     kge_by_split %>%
       dplyr::group_by(.config) %>%
-      dplyr::summarise(kge_mean = mean(kge_split, na.rm = TRUE),
-                       rsq_mean = mean(rsq_split,na.rm = TRUE),.groups = "drop") %>%
+      dplyr::summarise(
+        kge_mean = mean(kge_split, na.rm = TRUE),
+        rsq_mean = mean(rsq_split, na.rm = TRUE),
+        .groups = "drop"
+      ) %>%
       dplyr::arrange(dplyr::desc(kge_mean))
   }, error = function(e) {
     if (!quiet) message("Error calculating KGE by config: ", e$message)
-    tibble::tibble(.config = character(), kge_mean = numeric())
+    tibble::tibble(.config = character(), kge_mean = numeric(), rsq_mean = numeric())
   })
 
-  # Select best configuration
+  # ---- Select best configuration ----
   best_params <- tryCatch({
     if (nrow(kge_by_cfg) == 0L || all(is.na(kge_by_cfg$kge_mean))) {
       tune::select_best(res, metric = "rmse")
@@ -416,11 +398,7 @@ wass2s_tune_pred_stat<- function(df_basin_product,
       best_cfg <- kge_by_cfg$.config[1]
       cand <- tune::show_best(res, metric = "rmse", n = Inf)
       best_row <- cand %>% dplyr::filter(.config == best_cfg)
-      if (nrow(best_row) == 0L) {
-        tune::select_best(res, metric = "rmse")
-      } else {
-        best_row %>% dplyr::slice(1)
-      }
+      if (nrow(best_row) == 0L) tune::select_best(res, metric = "rmse") else best_row %>% dplyr::slice(1)
     }
   }, error = function(e) {
     if (!quiet) message("Error selecting best parameters: ", e$message)
@@ -428,31 +406,8 @@ wass2s_tune_pred_stat<- function(df_basin_product,
   })
 
   if (is.null(best_params)) {
-    # Create empty predictions for all years (training + holdout)
-    all_years <- unique(c(df_basin_product$YYYY, if (!is.null(holdout_data)) holdout_data$YYYY else NULL))
-    preds_empty <- tibble::tibble(YYYY = all_years, pred = NA_real_)
-
-    return(list(
-      kge_cv_mean = if (nrow(kge_by_cfg) > 0) kge_by_cfg$kge_mean[1] else NA_real_,
-      preds = preds_empty,
-      leaderboard_cfg = kge_by_cfg
-    ))
-  }
-
-  # Final refit and predictions
-  fit_final <- tryCatch({
-    tune::finalize_workflow(wf, best_params) %>%
-      parsnip::fit(df_basin_product)
-  }, error = function(e) {
-    if (!quiet) message("Error in final fitting: ", e$message)
-    return(NULL)
-  })
-
-  if (is.null(fit_final)) {
-    # Create empty predictions for all years (training + holdout)
-    all_years <- unique(c(df_basin_product$YYYY, if (!is.null(holdout_data)) holdout_data$YYYY else NULL))
-    preds_empty <- tibble::tibble(YYYY = all_years, pred = NA_real_)
-
+    all_dates <- unique(c(df_basin_product$YYYY, if (!is.null(holdout_data)) holdout_data$YYYY else NULL))
+    preds_empty <- tibble::tibble(YYYY = all_dates, pred = NA_real_)
     return(list(
       kge_cv_mean = if (nrow(kge_by_cfg) > 0) kge_by_cfg$kge_mean[1] else NA_real_,
       rsq_cv_mean = if (nrow(kge_by_cfg) > 0) kge_by_cfg$rsq_mean[1] else NA_real_,
@@ -461,21 +416,32 @@ wass2s_tune_pred_stat<- function(df_basin_product,
     ))
   }
 
-  # Generate predictions for all data (training + holdout)
-  all_data <- if (!is.null(holdout_data)) {
-    dplyr::bind_rows(df_basin_product, holdout_data)
-  } else {
-    df_basin_product
+  # ---- Final refit ----
+  fit_final <- tryCatch({
+    tune::finalize_workflow(wf, best_params) %>%
+      parsnip::fit(df_basin_product)
+  }, error = function(e) {
+    if (!quiet) message("Error in final fitting: ", e$message)
+    NULL
+  })
+
+  if (is.null(fit_final)) {
+    all_dates <- unique(c(df_basin_product$YYYY, if (!is.null(holdout_data)) holdout_data$YYYY else NULL))
+    preds_empty <- tibble::tibble(YYYY = all_dates, pred = NA_real_)
+    return(list(
+      kge_cv_mean = if (nrow(kge_by_cfg) > 0) kge_by_cfg$kge_mean[1] else NA_real_,
+      rsq_cv_mean = if (nrow(kge_by_cfg) > 0) kge_by_cfg$rsq_mean[1] else NA_real_,
+      preds = preds_empty,
+      leaderboard_cfg = kge_by_cfg
+    ))
   }
 
-  preds_final <- tryCatch({
-    pred_values <- stats::predict(fit_final, all_data) %>%
-      dplyr::pull(.pred)
+  # ---- Predict on training + holdout ----
+  all_data <- if (!is.null(holdout_data)) dplyr::bind_rows(df_basin_product, holdout_data) else df_basin_product
 
-    # Apply target_positive if requested
-    if (target_positive) {
-      pred_values <- pmax(pred_values, 0)
-    }
+  preds_final <- tryCatch({
+    pred_values <- predict(fit_final, new_data = all_data) %>% dplyr::pull(.pred)
+    if (target_positive) pred_values <- pmax(pred_values, 0)
 
     tibble::tibble(
       YYYY = all_data$YYYY,
@@ -483,12 +449,10 @@ wass2s_tune_pred_stat<- function(df_basin_product,
     )
   }, error = function(e) {
     if (!quiet) message("Error generating final predictions: ", e$message)
-    # Create empty predictions for all years
-    all_years <- unique(c(df_basin_product$YYYY, if (!is.null(holdout_data)) holdout_data$YYYY else NULL))
-    tibble::tibble(YYYY = all_years, pred = NA_real_)
+    all_dates <- unique(c(df_basin_product$YYYY, if (!is.null(holdout_data)) holdout_data$YYYY else NULL))
+    tibble::tibble(YYYY = all_dates, pred = NA_real_)
   })
 
-  # Return results
   list(
     kge_cv_mean = if (nrow(kge_by_cfg) > 0) kge_by_cfg$kge_mean[1] else NA_real_,
     rsq_cv_mean = if (nrow(kge_by_cfg) > 0) kge_by_cfg$rsq_mean[1] else NA_real_,
@@ -496,6 +460,440 @@ wass2s_tune_pred_stat<- function(df_basin_product,
     leaderboard_cfg = kge_by_cfg
   )
 }
+
+# wass2s_tune_pred_stat<- function(df_basin_product,
+#                                  predictors,
+#                                  target = "Q",
+#                                  date_col = "YYYY",
+#                                  model = c("pcr", "ridge", "lasso"),
+#                                  prediction_years = NULL,
+#                                  target_positive = TRUE,
+#                                  resamples = NULL,
+#                                  pretrained_wflow = NULL,
+#                                  grid = NULL,
+#                                  min_predictors = 1,
+#                                  min_data_required = 10,
+#                                  init_frac = 0.60,
+#                                  assess_frac = 0.20,
+#                                  n_splits = NULL,
+#                                  cumulative = TRUE,
+#                                  quiet = TRUE,
+#                                  allow_par = TRUE,
+#                                  verbose_tune = TRUE,
+#                                  max_na_frac =0.3,
+#                                  impute = "median",
+#                                  require_variance = TRUE,
+#                                  ...) {
+#
+#   # Input validation
+#   model <- match.arg(model)
+#   required_cols <- c(target, date_col)
+#   missing_cols <- setdiff(required_cols, names(df_basin_product))
+#
+#   if (length(missing_cols) > 0) {
+#     stop("Missing required columns: ", paste(missing_cols, collapse = ", "),
+#          call. = FALSE)
+#   }
+#
+#   if (length(predictors) < min_predictors) {
+#     if (!quiet) message("[", model, "] ",  " : skipped (predictors < ", min_predictors, ").")
+#     return(NULL)
+#   }
+#
+#   df_basin_product <- .sanitize_numeric_columns(
+#     df   = df_basin_product,
+#     cols = "Q",
+#     max_na_frac = max_na_frac,
+#     impute = impute,
+#     require_variance = require_variance
+#   )
+#
+#   # Handle prediction years
+#   holdout_data <- NULL
+#   if (!is.null(prediction_years)) {
+#     if (length(prediction_years) != 2) {
+#       stop("prediction_years must be length 2 (start, end).", call. = FALSE)
+#     }
+#     prediction_years[2] <- min(prediction_years[2],max(df_basin_product$YYYY))
+#     # Extract holdout data
+#     holdout_mask <- df_basin_product$YYYY >= prediction_years[1] &
+#       df_basin_product$YYYY <= prediction_years[2]
+#     holdout_data <- df_basin_product[holdout_mask, ]
+#     holdout_data[[target]] <- NA_real_
+#     df_basin_product <- df_basin_product[!holdout_mask, ]
+#
+#     if (!quiet) {
+#       message("Using ", nrow(holdout_data), " years for holdout prediction: ",
+#               prediction_years[1], " to ", prediction_years[2])
+#     }
+#   }
+#
+#   # Handle pretrained workflow case
+#   if (!is.null(pretrained_wflow)) {
+#     if (!quiet) message("Using pretrained workflow, skipping tuning.")
+#
+#     # Fit the pretrained workflow
+#     fit_final <- tryCatch({
+#       parsnip::fit(pretrained_wflow, df_basin_product)
+#     }, error = function(e) {
+#       if (!quiet) message("Error fitting pretrained workflow: ", e$message)
+#       return(NULL)
+#     })
+#
+#     if (is.null(fit_final)) {
+#       # Create empty predictions for all years (training + holdout)
+#       all_years <- unique(c(df_basin_product$YYYY, if (!is.null(holdout_data)) holdout_data$YYYY else NULL))
+#       preds_empty <- tibble::tibble(YYYY = all_years, pred = NA_real_)
+#
+#       return(list(
+#         kge_cv_mean = NA_real_,
+#         preds = preds_empty,
+#         leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric())
+#       ))
+#     }
+#
+#     # Generate predictions for all data (training + holdout)
+#     all_data <- if (!is.null(holdout_data)) {
+#       dplyr::bind_rows(df_basin_product, holdout_data)
+#     } else {
+#       df_basin_product
+#     }
+#
+#     preds_final <- tryCatch({
+#       pred_values <- stats::predict(fit_final, all_data) %>%
+#         dplyr::pull(.pred)
+#
+#       # Apply target_positive if requested
+#       if (target_positive) {
+#         pred_values <- pmax(pred_values, 0)
+#       }
+#
+#       tibble::tibble(
+#         YYYY = all_data$YYYY,
+#         pred = pred_values
+#       )
+#     }, error = function(e) {
+#       if (!quiet) message("Error generating final predictions: ", e$message)
+#       # Create empty predictions for all years
+#       all_years <- unique(c(df_basin_product$YYYY, if (!is.null(holdout_data)) holdout_data$YYYY else NULL))
+#       tibble::tibble(YYYY = all_years, pred = NA_real_)
+#     })
+#
+#     return(list(
+#       kge_cv_mean = NA_real_,
+#       preds = preds_final,
+#       leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric())
+#     ))
+#   }
+#
+#   if (nrow(df_basin_product) < min_data_required) {
+#     if (!quiet) message("Not enough rows to tune model for this basin/product.")
+#     # Create empty predictions for all years (training + holdout)
+#     all_years <- unique(c(df_basin_product$YYYY, if (!is.null(holdout_data)) holdout_data$YYYY else NULL))
+#     preds_empty <- tibble::tibble(YYYY = all_years, pred = NA_real_)
+#
+#     return(list(
+#       kge_cv_mean = NA_real_,
+#       preds = preds_empty,
+#       leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric())
+#     ))
+#   }
+#
+#   # Order and remove any grouping
+#   df_basin_product <- df_basin_product %>%
+#     dplyr::ungroup() %>%
+#     dplyr::arrange(YYYY)
+#
+#   # Filter non-informative predictors
+#   predictors <- usable_predictors(df_basin_product, predictors)
+#
+#   # Create recipe
+#   rec <- tryCatch({
+#     if(model == "pcr"){
+#       make_recipe(df_basin_product, predictors,auto_pca = FALSE)
+#     }else{
+#       make_recipe(df_basin_product, predictors,auto_pca = TRUE)
+#     }
+#   }, error = function(e) {
+#     if (!quiet) message("Error creating recipe: ", e$message)
+#     return(NULL)
+#   })
+#
+#   if (is.null(rec)) {
+#     # Create empty predictions for all years (training + holdout)
+#     all_years <- unique(c(df_basin_product$YYYY, if (!is.null(holdout_data)) holdout_data$YYYY else NULL))
+#     preds_empty <- tibble::tibble(YYYY = all_years, pred = NA_real_)
+#
+#     return(list(
+#       kge_cv_mean = NA_real_,
+#       preds = preds_empty,
+#       leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric())
+#     ))
+#   }
+#
+#   # Create or use provided resamples
+#   if (is.null(resamples)) {
+#     rs <- tryCatch({
+#       make_rolling(
+#         df_basin_product,
+#         year_col = "YYYY",
+#         init_frac = init_frac,
+#         assess_frac = assess_frac,
+#         n_splits = n_splits,
+#         cumulative = cumulative,
+#         quiet = TRUE
+#       )
+#     }, error = function(e) {
+#       if (!quiet) message("Error creating resamples: ", e$message)
+#       return(NULL)
+#     })
+#   } else {
+#     rs <- resamples
+#     if (!inherits(rs, "rset")) {
+#       if (!quiet) message("Provided resamples is not a valid rset object.")
+#       return(list(
+#         kge_cv_mean = NA_real_,
+#         preds = tibble::tibble(YYYY = df_basin_product$YYYY, pred = NA_real_),
+#         leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric())
+#       ))
+#     }
+#   }
+#
+#   if (is.null(rs) || length(rs$splits) < 1) {
+#     if (!quiet) message("Insufficient resamples created.")
+#     # Create empty predictions for all years (training + holdout)
+#     all_years <- unique(c(df_basin_product$YYYY, if (!is.null(holdout_data)) holdout_data$YYYY else NULL))
+#     preds_empty <- tibble::tibble(YYYY = all_years, pred = NA_real_)
+#
+#     return(list(
+#       kge_cv_mean = NA_real_,
+#       preds = preds_empty,
+#       leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric())
+#     ))
+#   }
+#
+#   # Create workflow based on model type
+#   model_functions <- list(
+#     pcr = list(wf = wf_pcr),
+#     ridge = list(wf = wf_ridge),
+#     lasso = list(wf = wf_lasso)
+#   )
+#
+#   wf <- tryCatch({
+#     model_functions[[model]]$wf(rec)
+#   }, error = function(e) {
+#     if (!quiet) message("Error creating workflow: ", e$message)
+#     return(NULL)
+#   })
+#
+#   if (is.null(wf)) {
+#     # Create empty predictions for all years (training + holdout)
+#     all_years <- unique(c(df_basin_product$YYYY, if (!is.null(holdout_data)) holdout_data$YYYY else NULL))
+#     preds_empty <- tibble::tibble(YYYY = all_years, pred = NA_real_)
+#
+#     return(list(
+#       kge_cv_mean = NA_real_,
+#       preds = preds_empty,
+#       leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric())
+#     ))
+#   }
+#
+#   # Use provided grid or create default grid
+#   if (is.null(grid)) {
+#     grid_functions <- list(
+#       pcr = grid_pcr,
+#       ridge = grid_glm,
+#       lasso = grid_glm
+#     )
+#
+#     grid <- tryCatch({
+#       grid_functions[[model]]()
+#     }, error = function(e) {
+#       if (!quiet) message("Error creating grid: ", e$message)
+#       return(NULL)
+#     })
+#   }
+#
+#   if (is.null(grid)) {
+#     # Create empty predictions for all years (training + holdout)
+#     all_years <- unique(c(df_basin_product$YYYY, if (!is.null(holdout_data)) holdout_data$YYYY else NULL))
+#     preds_empty <- tibble::tibble(YYYY = all_years, pred = NA_real_)
+#
+#     return(list(
+#       kge_cv_mean = NA_real_,
+#       preds = preds_empty,
+#       leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric())
+#     ))
+#   }
+#
+#   # Tune model
+#   ctrl <- tune::control_grid(save_pred = TRUE,
+#                              verbose = !verbose_tune,
+#                              allow_par=allow_par,
+#                              parallel_over = "resamples",
+#                              ... )
+#
+#   res <- tryCatch({
+#  suppressWarnings(
+#    tune::tune_grid(
+#      wf,
+#      resamples = rs,
+#      grid = grid,
+#      metrics = yardstick::metric_set(yardstick::rmse, yardstick::mae),
+#      control = ctrl
+#    )
+#  )
+#   }, error = function(e) {
+#     if (!quiet) message("Error during tuning: ", e$message)
+#     return(NULL)
+#   })
+#
+#   if (is.null(res)) {
+#     # Create empty predictions for all years (training + holdout)
+#     all_years <- unique(c(df_basin_product$YYYY, if (!is.null(holdout_data)) holdout_data$YYYY else NULL))
+#     preds_empty <- tibble::tibble(YYYY = all_years, pred = NA_real_)
+#
+#     return(list(
+#       kge_cv_mean = NA_real_,
+#       preds = preds_empty,
+#       leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric())
+#     ))
+#   }
+#
+#   # Collect predictions
+#   preds <- tryCatch({
+#     tune::collect_predictions(res)
+#   }, error = function(e) {
+#     if (!quiet) message("Error collecting predictions: ", e$message)
+#     tibble::tibble()
+#   })
+#
+#   if (nrow(preds) == 0L) {
+#     # Create empty predictions for all years (training + holdout)
+#     all_years <- unique(c(df_basin_product$YYYY, if (!is.null(holdout_data)) holdout_data$YYYY else NULL))
+#     preds_empty <- tibble::tibble(YYYY = all_years, pred = NA_real_)
+#
+#     return(list(
+#       kge_cv_mean = NA_real_,
+#       preds = preds_empty,
+#       leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric())
+#     ))
+#   }
+#
+#   # Calculate KGE by split and configuration
+#   kge_by_split <- tryCatch({
+#     preds %>%
+#       dplyr::filter(!is.na(Q)) %>%
+#       dplyr::group_by(id, .config) %>%
+#       dplyr::summarise(kge_split = kge_vec(Q, .pred),
+#                        rsq_split = wass2s_corr(truth = .data$Q, estimate = .data$.pred),
+#                        .groups = "drop")
+#
+#
+#   }, error = function(e) {
+#     if (!quiet) message("Error calculating KGE by split: ", e$message)
+#     tibble::tibble(id = character(), .config = character(), kge_split = numeric())
+#   })
+#
+#   kge_by_cfg <- tryCatch({
+#     kge_by_split %>%
+#       dplyr::group_by(.config) %>%
+#       dplyr::summarise(kge_mean = mean(kge_split, na.rm = TRUE),
+#                        rsq_mean = mean(rsq_split,na.rm = TRUE),.groups = "drop") %>%
+#       dplyr::arrange(dplyr::desc(kge_mean))
+#   }, error = function(e) {
+#     if (!quiet) message("Error calculating KGE by config: ", e$message)
+#     tibble::tibble(.config = character(), kge_mean = numeric())
+#   })
+#
+#   # Select best configuration
+#   best_params <- tryCatch({
+#     if (nrow(kge_by_cfg) == 0L || all(is.na(kge_by_cfg$kge_mean))) {
+#       tune::select_best(res, metric = "rmse")
+#     } else {
+#       best_cfg <- kge_by_cfg$.config[1]
+#       cand <- tune::show_best(res, metric = "rmse", n = Inf)
+#       best_row <- cand %>% dplyr::filter(.config == best_cfg)
+#       if (nrow(best_row) == 0L) {
+#         tune::select_best(res, metric = "rmse")
+#       } else {
+#         best_row %>% dplyr::slice(1)
+#       }
+#     }
+#   }, error = function(e) {
+#     if (!quiet) message("Error selecting best parameters: ", e$message)
+#     NULL
+#   })
+#
+#   if (is.null(best_params)) {
+#     # Create empty predictions for all years (training + holdout)
+#     all_years <- unique(c(df_basin_product$YYYY, if (!is.null(holdout_data)) holdout_data$YYYY else NULL))
+#     preds_empty <- tibble::tibble(YYYY = all_years, pred = NA_real_)
+#
+#     return(list(
+#       kge_cv_mean = if (nrow(kge_by_cfg) > 0) kge_by_cfg$kge_mean[1] else NA_real_,
+#       preds = preds_empty,
+#       leaderboard_cfg = kge_by_cfg
+#     ))
+#   }
+#
+#   # Final refit and predictions
+#   fit_final <- tryCatch({
+#     tune::finalize_workflow(wf, best_params) %>%
+#       parsnip::fit(df_basin_product)
+#   }, error = function(e) {
+#     if (!quiet) message("Error in final fitting: ", e$message)
+#     return(NULL)
+#   })
+#
+#   if (is.null(fit_final)) {
+#     # Create empty predictions for all years (training + holdout)
+#     all_years <- unique(c(df_basin_product$YYYY, if (!is.null(holdout_data)) holdout_data$YYYY else NULL))
+#     preds_empty <- tibble::tibble(YYYY = all_years, pred = NA_real_)
+#
+#     return(list(
+#       kge_cv_mean = if (nrow(kge_by_cfg) > 0) kge_by_cfg$kge_mean[1] else NA_real_,
+#       rsq_cv_mean = if (nrow(kge_by_cfg) > 0) kge_by_cfg$rsq_mean[1] else NA_real_,
+#       preds = preds_empty,
+#       leaderboard_cfg = kge_by_cfg
+#     ))
+#   }
+#
+#   # Generate predictions for all data (training + holdout)
+#   all_data <- if (!is.null(holdout_data)) {
+#     dplyr::bind_rows(df_basin_product, holdout_data)
+#   } else {
+#     df_basin_product
+#   }
+#
+#   preds_final <- tryCatch({
+#     pred_values <- stats::predict(fit_final, all_data) %>%
+#       dplyr::pull(.pred)
+#
+#     # Apply target_positive if requested
+#     if (target_positive) {
+#       pred_values <- pmax(pred_values, 0)
+#     }
+#
+#     tibble::tibble(
+#       YYYY = all_data$YYYY,
+#       pred = pred_values
+#     )
+#   }, error = function(e) {
+#     if (!quiet) message("Error generating final predictions: ", e$message)
+#     # Create empty predictions for all years
+#     all_years <- unique(c(df_basin_product$YYYY, if (!is.null(holdout_data)) holdout_data$YYYY else NULL))
+#     tibble::tibble(YYYY = all_years, pred = NA_real_)
+#   })
+#
+#   # Return results
+#   list(
+#     kge_cv_mean = if (nrow(kge_by_cfg) > 0) kge_by_cfg$kge_mean[1] else NA_real_,
+#     rsq_cv_mean = if (nrow(kge_by_cfg) > 0) kge_by_cfg$rsq_mean[1] else NA_real_,
+#     preds = preds_final,
+#     leaderboard_cfg = kge_by_cfg
+#   )
+# }
 
 # wass2s_tune_pred_stat_ <- function(df_basin_product, predictors,
 #                                   model = c("pcr", "ridge", "lasso"),

@@ -66,7 +66,7 @@ wass2s_cons_mods_stat <- function(
     cumulative = TRUE,
     quiet = TRUE,
     verbose = FALSE,
-    max_na_frac =0.3,
+    max_na_frac = 0.3,
     impute = "median",
     require_variance = TRUE,
     ...
@@ -75,44 +75,48 @@ wass2s_cons_mods_stat <- function(
   prods <- names(data_by_product)
 
   # Input validation
-  if (length(prods) == 0) {
-    stop("data_by_product must be a named list", call. = FALSE)
-  }
-
-  if (topK < 1) {
-    stop("topK must be at least 1", call. = FALSE)
-  }
-
-  if (!is.null(prediction_years) && length(prediction_years) != 2) {
+  if (length(prods) == 0) stop("data_by_product must be a named list", call. = FALSE)
+  if (topK < 1) stop("topK must be at least 1", call. = FALSE)
+  if (!is.null(prediction_years) && length(prediction_years) != 2)
     stop("prediction_years must be length 2 (start, end).", call. = FALSE)
-  }
+  if (min_kge_model > 1) stop("min_kge_model cannot be greater than 1.", call. = FALSE)
 
-  if (min_kge_model > 1) {
-    stop("min_kge_model cannot be greater than 1.", call. = FALSE)
-  }
-
-  # Collect all years present (to create a "fused" even if no product is valid)
-  years_all <- sort(unique(unlist(lapply(prods, function(p){
+  # Collect all YYYYMMDD present (for an "empty" fused if needed)
+  years_all <- sort(unique(unlist(lapply(prods, function(p) {
     dfp <- data_by_product[[p]]
-    dfp <- dplyr::filter(dfp, .data[[basin_col]] == basin_id)
-    dfp$YYYY
+    dfp <- dplyr::filter(dfp, .data[[basin_col]] == basin_id) %>% dplyr::ungroup()
+
+    if (!"YYYY" %in% names(dfp)) return(integer(0))
+    .ensure_yyyymmdd(dfp$YYYY)
   }))))
 
   # Product loop
-  results <- purrr::map(prods, function(p){
+  results <- purrr::map(prods, function(p) {
+
     dfp <- data_by_product[[p]] %>%
       dplyr::filter(.data[[basin_col]] == basin_id) %>%
       dplyr::ungroup()
+
+    # Required cols (because you later select YYYY and Q)
+    missing_cols <- setdiff(c("YYYY", "Q"), names(dfp))
+    if (length(missing_cols) > 0) {
+      if (!verbose) message("[", model, "] ", p, " : skipped (missing: ", paste(missing_cols, collapse = ","), ").")
+      return(NULL)
+    }
+
+    # Standardize date format early
+    dfp$YYYY <- .ensure_yyyymmdd(dfp$YYYY)
 
     if (nrow(dfp) < 8) {
       if (!verbose) message("[", model, "] ", p, " : skipped (nrow < 8).")
       return(NULL)
     }
 
-    # Predictor pattern (via core::select_predictors)
     pat <- if (!is.null(pred_pattern_by_product) && p %in% names(pred_pattern_by_product)) {
       pred_pattern_by_product[[p]]
-    } else if(!is.null(pred_pattern_by_product) && length(pred_pattern_by_product) ==1) pred_pattern_by_product else "^pt_"
+    } else if (!is.null(pred_pattern_by_product) && length(pred_pattern_by_product) == 1) {
+      pred_pattern_by_product
+    } else "^pt_"
 
     predictors <- select_predictors(
       dfp,
@@ -121,12 +125,10 @@ wass2s_cons_mods_stat <- function(
     )
 
     if (!verbose) message("[", model, "] ", p, " : ",
-                         length(predictors), " predictors using pattern '", pat, "'")
+                          length(predictors), " predictors using pattern '", pat, "'")
 
-    # Call tuner + predictions with all additional parameters
     out <- tryCatch({
-      # Call tuner + predictions with all additional parameters
-     wass2s_tune_pred_stat(
+      wass2s_tune_pred_stat(
         df_basin_product = dplyr::select(dfp, YYYY, Q, tidyselect::all_of(predictors)),
         predictors = predictors,
         model = model,
@@ -140,21 +142,23 @@ wass2s_cons_mods_stat <- function(
         n_splits = n_splits,
         cumulative = cumulative,
         quiet = quiet,
-        max_na_frac =max_na_frac,
+        max_na_frac = max_na_frac,
         impute = impute,
         require_variance = require_variance,
         ...
       )
     }, error = function(e) {
       if (!verbose) message(glue::glue("Error training product '{p}' for basin {basin_id}: {e$message}"))
-      return(NULL)
+      NULL
     })
 
-    # If tuner failed properly
     if (is.null(out) || !is.list(out) || !"preds" %in% names(out)) {
       if (!verbose) message("[", model, "] ", p, " : tuning/pred failed (NULL).")
       return(NULL)
     }
+
+    # Ensure preds YYYY is YYYYMMDD (defensive)
+    if ("YYYY" %in% names(out$preds)) out$preds$YYYY <- .ensure_yyyymmdd(out$preds$YYYY)
 
     sd_pred <- stats::sd(out$preds$pred, na.rm = TRUE)
 
@@ -168,7 +172,7 @@ wass2s_cons_mods_stat <- function(
     )
   }) %>% purrr::compact()
 
-  # No valid product  return an "empty" fused (NA)
+  # No valid product
   if (length(results) == 0) {
     if (!verbose) message("[", model, "] No valid product for basin ", basin_id, ".")
     fused_empty <- tibble::tibble(YYYY = years_all, pred_fused = NA_real_)
@@ -181,7 +185,6 @@ wass2s_cons_mods_stat <- function(
     ))
   }
 
-  # Product leaderboard (may contain NA)
   lb <- tibble::tibble(
     product = purrr::map_chr(results, "product"),
     kge     = purrr::map_dbl(results, "kge"),
@@ -190,7 +193,6 @@ wass2s_cons_mods_stat <- function(
     sd_pred = purrr::map_dbl(results, "sd_pred")
   )
 
-  # Isolate those with defined KGE
   lb_kge_ok <- dplyr::filter(lb, is.finite(kge))
 
   if (nrow(lb_kge_ok) > 0) {
@@ -198,18 +200,12 @@ wass2s_cons_mods_stat <- function(
     keep_names <- head(lb_kge_ok$product, n = min(topK, nrow(lb_kge_ok)))
     results_top <- results[match(keep_names, purrr::map_chr(results, "product"))]
 
-    #kg <- lb_kge_ok$kge[match(keep_names, lb_kge_ok$product)]
-    kg <- wass2s_minmax(lb_kge_ok$rsq[match(keep_names, lb_kge_ok$product)])
-
-    # Alternative
+    # You currently override weights to 1 anyway
     kg <- base::rep(1, min(topK, nrow(lb_kge_ok)))
-    # Apply KGE thresholds
     kg[kg < 0] <- 0
     kg[kg < min_kge_model] <- 0
 
-    # If all weights become zero after thresholding
     if (all(kg == 0)) {
-      if (verbose) message("[", model, "] All KGE values below threshold (", min_kge_model, ") for basin ", basin_id, ".")
       fused_empty <- tibble::tibble(YYYY = years_all, pred_fused = NA_real_)
       return(list(
         fused = fused_empty,
@@ -219,13 +215,10 @@ wass2s_cons_mods_stat <- function(
     }
 
     w <- kg
-
   } else {
-    # Fallback: no valid KGE  keep products with non-constant predictions
     if (verbose) message("[", model, "] All KGEs NA  fallback: equal weights for non-constant products.")
     non_const <- dplyr::filter(lb, is.finite(sd_pred) & sd_pred > 0)
     if (nrow(non_const) == 0) {
-      # nothing usable
       fused_empty <- tibble::tibble(YYYY = years_all, pred_fused = NA_real_)
       return(list(
         fused = fused_empty,
@@ -235,24 +228,21 @@ wass2s_cons_mods_stat <- function(
     }
     keep_names <- head(non_const$product, n = min(topK, nrow(non_const)))
     results_top <- results[match(keep_names, purrr::map_chr(results, "product"))]
-    w <- rep(1 / length(keep_names), length(keep_names))  # equal weights
+    w <- rep(1 / length(keep_names), length(keep_names))
   }
 
-  # Fusion construction (via core::fuse_topk)
-  preds_long <- purrr::imap_dfr(results_top, ~ dplyr::mutate(.x$preds,
-                                                             product = .x$product,
-                                                             w = w[.y]))
+  preds_long <- purrr::imap_dfr(
+    results_top,
+    ~ dplyr::mutate(.x$preds, product = .x$product, w = w[.y])
+  )
+
   fused <- fuse_topk(preds_long)
 
-  # Complete with all years if needed
   if (length(years_all) > 0) {
-    fused <- dplyr::full_join(
-      tibble::tibble(YYYY = years_all),
-      fused, by = "YYYY"
-    ) %>% dplyr::arrange(YYYY)
+    fused <- dplyr::full_join(tibble::tibble(YYYY = years_all), fused, by = "YYYY") %>%
+      dplyr::arrange(YYYY)
   }
 
-  # Leaderboard enriched with weights
   lb$weight <- 0
   lb$weight[match(keep_names, lb$product)] <- w
 
@@ -262,6 +252,222 @@ wass2s_cons_mods_stat <- function(
     all_results = results
   )
 }
+
+# wass2s_cons_mods_stat <- function(
+#     basin_id,
+#     data_by_product,
+#     basin_col = "HYBAS_ID",
+#     pred_pattern_by_product = NULL,
+#     model = c("pcr", "ridge", "lasso"),
+#     topK = 3,
+#     min_kge_model = 0.2,
+#     prediction_years = NULL,
+#     target_positive = FALSE,
+#     resamples = NULL,
+#     pretrained_wflow = NULL,
+#     grid = NULL,
+#     init_frac = 0.60,
+#     assess_frac = 0.20,
+#     n_splits = NULL,
+#     cumulative = TRUE,
+#     quiet = TRUE,
+#     verbose = FALSE,
+#     max_na_frac =0.3,
+#     impute = "median",
+#     require_variance = TRUE,
+#     ...
+# ) {
+#   model <- match.arg(model)
+#   prods <- names(data_by_product)
+#
+#   # Input validation
+#   if (length(prods) == 0) {
+#     stop("data_by_product must be a named list", call. = FALSE)
+#   }
+#
+#   if (topK < 1) {
+#     stop("topK must be at least 1", call. = FALSE)
+#   }
+#
+#   if (!is.null(prediction_years) && length(prediction_years) != 2) {
+#     stop("prediction_years must be length 2 (start, end).", call. = FALSE)
+#   }
+#
+#   if (min_kge_model > 1) {
+#     stop("min_kge_model cannot be greater than 1.", call. = FALSE)
+#   }
+#
+#   # Collect all years present (to create a "fused" even if no product is valid)
+#   years_all <- sort(unique(unlist(lapply(prods, function(p){
+#     dfp <- data_by_product[[p]]
+#     dfp <- dplyr::filter(dfp, .data[[basin_col]] == basin_id)
+#     dfp$YYYY
+#   }))))
+#
+#   # Product loop
+#   results <- purrr::map(prods, function(p){
+#     dfp <- data_by_product[[p]] %>%
+#       dplyr::filter(.data[[basin_col]] == basin_id) %>%
+#       dplyr::ungroup()
+#
+#     if (nrow(dfp) < 8) {
+#       if (!verbose) message("[", model, "] ", p, " : skipped (nrow < 8).")
+#       return(NULL)
+#     }
+#
+#     # Predictor pattern (via core::select_predictors)
+#     pat <- if (!is.null(pred_pattern_by_product) && p %in% names(pred_pattern_by_product)) {
+#       pred_pattern_by_product[[p]]
+#     } else if(!is.null(pred_pattern_by_product) && length(pred_pattern_by_product) ==1) pred_pattern_by_product else "^pt_"
+#
+#     predictors <- select_predictors(
+#       dfp,
+#       pattern = pat,
+#       exclude = c(basin_col, "YYYY", "Q")
+#     )
+#
+#     if (!verbose) message("[", model, "] ", p, " : ",
+#                          length(predictors), " predictors using pattern '", pat, "'")
+#
+#     # Call tuner + predictions with all additional parameters
+#     out <- tryCatch({
+#       # Call tuner + predictions with all additional parameters
+#      wass2s_tune_pred_stat(
+#         df_basin_product = dplyr::select(dfp, YYYY, Q, tidyselect::all_of(predictors)),
+#         predictors = predictors,
+#         model = model,
+#         prediction_years = prediction_years,
+#         target_positive = target_positive,
+#         resamples = resamples,
+#         pretrained_wflow = pretrained_wflow,
+#         grid = grid,
+#         init_frac = init_frac,
+#         assess_frac = assess_frac,
+#         n_splits = n_splits,
+#         cumulative = cumulative,
+#         quiet = quiet,
+#         max_na_frac =max_na_frac,
+#         impute = impute,
+#         require_variance = require_variance,
+#         ...
+#       )
+#     }, error = function(e) {
+#       if (!verbose) message(glue::glue("Error training product '{p}' for basin {basin_id}: {e$message}"))
+#       return(NULL)
+#     })
+#
+#     # If tuner failed properly
+#     if (is.null(out) || !is.list(out) || !"preds" %in% names(out)) {
+#       if (!verbose) message("[", model, "] ", p, " : tuning/pred failed (NULL).")
+#       return(NULL)
+#     }
+#
+#     sd_pred <- stats::sd(out$preds$pred, na.rm = TRUE)
+#
+#     list(
+#       product = p,
+#       kge     = out$kge_cv_mean,
+#       rsq     = out$rsq_cv_mean,
+#       preds   = out$preds,
+#       n_pred  = length(predictors),
+#       sd_pred = sd_pred
+#     )
+#   }) %>% purrr::compact()
+#
+#   # No valid product  return an "empty" fused (NA)
+#   if (length(results) == 0) {
+#     if (!verbose) message("[", model, "] No valid product for basin ", basin_id, ".")
+#     fused_empty <- tibble::tibble(YYYY = years_all, pred_fused = NA_real_)
+#     return(list(
+#       fused = fused_empty,
+#       leaderboard_products = tibble::tibble(
+#         product = character(), kge = numeric(),
+#         n_pred = integer(), sd_pred = numeric(), weight = numeric()
+#       )
+#     ))
+#   }
+#
+#   # Product leaderboard (may contain NA)
+#   lb <- tibble::tibble(
+#     product = purrr::map_chr(results, "product"),
+#     kge     = purrr::map_dbl(results, "kge"),
+#     rsq     = purrr::map_dbl(results, "rsq"),
+#     n_pred  = purrr::map_int(results, "n_pred"),
+#     sd_pred = purrr::map_dbl(results, "sd_pred")
+#   )
+#
+#   # Isolate those with defined KGE
+#   lb_kge_ok <- dplyr::filter(lb, is.finite(kge))
+#
+#   if (nrow(lb_kge_ok) > 0) {
+#     lb_kge_ok <- dplyr::arrange(lb_kge_ok, dplyr::desc(kge))
+#     keep_names <- head(lb_kge_ok$product, n = min(topK, nrow(lb_kge_ok)))
+#     results_top <- results[match(keep_names, purrr::map_chr(results, "product"))]
+#
+#     #kg <- lb_kge_ok$kge[match(keep_names, lb_kge_ok$product)]
+#     kg <- wass2s_minmax(lb_kge_ok$rsq[match(keep_names, lb_kge_ok$product)])
+#
+#     # Alternative
+#     kg <- base::rep(1, min(topK, nrow(lb_kge_ok)))
+#     # Apply KGE thresholds
+#     kg[kg < 0] <- 0
+#     kg[kg < min_kge_model] <- 0
+#
+#     # If all weights become zero after thresholding
+#     if (all(kg == 0)) {
+#       if (verbose) message("[", model, "] All KGE values below threshold (", min_kge_model, ") for basin ", basin_id, ".")
+#       fused_empty <- tibble::tibble(YYYY = years_all, pred_fused = NA_real_)
+#       return(list(
+#         fused = fused_empty,
+#         leaderboard_products = dplyr::mutate(lb, weight = 0),
+#         all_results = results
+#       ))
+#     }
+#
+#     w <- kg
+#
+#   } else {
+#     # Fallback: no valid KGE  keep products with non-constant predictions
+#     if (verbose) message("[", model, "] All KGEs NA  fallback: equal weights for non-constant products.")
+#     non_const <- dplyr::filter(lb, is.finite(sd_pred) & sd_pred > 0)
+#     if (nrow(non_const) == 0) {
+#       # nothing usable
+#       fused_empty <- tibble::tibble(YYYY = years_all, pred_fused = NA_real_)
+#       return(list(
+#         fused = fused_empty,
+#         leaderboard_products = dplyr::mutate(lb, weight = 0),
+#         all_results = results
+#       ))
+#     }
+#     keep_names <- head(non_const$product, n = min(topK, nrow(non_const)))
+#     results_top <- results[match(keep_names, purrr::map_chr(results, "product"))]
+#     w <- rep(1 / length(keep_names), length(keep_names))  # equal weights
+#   }
+#
+#   # Fusion construction (via core::fuse_topk)
+#   preds_long <- purrr::imap_dfr(results_top, ~ dplyr::mutate(.x$preds,
+#                                                              product = .x$product,
+#                                                              w = w[.y]))
+#   fused <- fuse_topk(preds_long)
+#
+#   # Complete with all years if needed
+#   if (length(years_all) > 0) {
+#     fused <- dplyr::full_join(
+#       tibble::tibble(YYYY = years_all),
+#       fused, by = "YYYY"
+#     ) %>% dplyr::arrange(YYYY)
+#   }
+#
+#   # Leaderboard enriched with weights
+#   lb$weight <- 0
+#   lb$weight[match(keep_names, lb$product)] <- w
+#
+#   list(
+#     fused = fused,
+#     leaderboard_products = lb %>% dplyr::arrange(dplyr::desc(weight), dplyr::desc(kge)),
+#     all_results = results
+#   )
+# }
 
 
 

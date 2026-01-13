@@ -387,10 +387,12 @@ make_recipe <- function(
     if (length(na_cols)) message("Imputation will be applied; NA columns: ", paste(na_cols, collapse = ", "))
   }
 
-  # ---- recipe skeleton ----
-  rec <- recipes::recipe(df) |>
-    recipes::update_role(!!rlang::sym(target), new_role = "outcome") |>
-    recipes::update_role(dplyr::all_of(predictors), new_role = "predictor") |>
+  # ---- recipe skeleton (FORMULA-BASED) ----
+  # This prevents accidental inclusion of non-predictor columns like YYYY.
+  rec <- recipes::recipe(
+    stats::as.formula(paste(target, "~", paste(predictors, collapse = " + "))),
+    data = df
+  ) |>
     recipes::step_zv(recipes::all_predictors(), id = "zv") |>
     recipes::step_nzv(recipes::all_predictors(), id = "nzv") |>
     recipes::step_impute_median(recipes::all_numeric_predictors(), id = "imp_num")
@@ -402,13 +404,17 @@ make_recipe <- function(
     rec <- rec |> recipes::step_lincomb(recipes::all_numeric_predictors(), id = "lincomb")
   }
   if (isTRUE(include_dummy)) {
-    rec <- rec |> recipes::step_dummy(recipes::all_nominal_predictors(),
-                                      one_hot = TRUE, keep_original_cols = FALSE, id = "dummy")
+    rec <- rec |> recipes::step_dummy(
+      recipes::all_nominal_predictors(),
+      one_hot = TRUE, keep_original_cols = FALSE, id = "dummy"
+    )
   }
 
   rec <- rec |>
-    recipes::step_corr(recipes::all_numeric_predictors(),
-                       threshold = corr_threshold, method = corr_method, id = "corr") |>
+    recipes::step_corr(
+      recipes::all_numeric_predictors(),
+      threshold = corr_threshold, method = corr_method, id = "corr"
+    ) |>
     recipes::step_normalize(recipes::all_numeric_predictors(), id = "norm")
 
   # outcome transform (optional)
@@ -419,27 +425,133 @@ make_recipe <- function(
   }
 
   # ---- PCA logic ----
-  # If user explicitly set pca_ respect that.
-  # Else, auto-enable PCA when number of predictors > auto_pca_when_gt.
   do_auto_pca <- is.null(pca_num_comp) && is.null(pca_var_threshold) &&
     length(predictors) > auto_pca_when_gt && auto_pca
 
   if (do_auto_pca) {
     if (isTRUE(verbose)) message("Auto PCA enabled (predictors > ", auto_pca_when_gt, ").")
-    rec <- rec |> recipes::step_pca(recipes::all_numeric_predictors(),
-                                    num_comp = as.integer(auto_pca_when_gt), id = "pca")
+    rec <- rec |> recipes::step_pca(
+      recipes::all_numeric_predictors(),
+      num_comp = as.integer(auto_pca_when_gt), id = "pca"
+    )
   } else {
     if (!is.null(pca_num_comp)) {
-      rec <- rec |> recipes::step_pca(recipes::all_numeric_predictors(),
-                                      num_comp = as.integer(pca_num_comp), id = "pca")
+      rec <- rec |> recipes::step_pca(
+        recipes::all_numeric_predictors(),
+        num_comp = as.integer(pca_num_comp), id = "pca"
+      )
     } else if (!is.null(pca_var_threshold)) {
-      rec <- rec |> recipes::step_pca(recipes::all_numeric_predictors(),
-                                      threshold = pca_var_threshold, id = "pca")
+      rec <- rec |> recipes::step_pca(
+        recipes::all_numeric_predictors(),
+        threshold = pca_var_threshold, id = "pca"
+      )
     }
   }
 
   rec
 }
+
+# make_recipe <- function(
+#     df,
+#     predictors,
+#     target = "Q",
+#     corr_threshold = 0.99,
+#     corr_method = "pearson",
+#     impute_nominal = TRUE,
+#     include_dummy  = FALSE,
+#     y_transform = c("none", "log1p", "yeo"),
+#     pca_num_comp = NULL,
+#     pca_var_threshold = NULL,
+#     remove_linear_comb = FALSE,
+#     auto_pca = TRUE,
+#     auto_pca_when_gt = 15,
+#     auto_pca_var_threshold = 0.80,
+#     verbose = FALSE
+# ) {
+#   y_transform <- match.arg(y_transform)
+#
+#   # ---- validation ----
+#   if (!is.data.frame(df)) stop("`df` must be a data.frame or tibble.", call. = FALSE)
+#   if (!is.character(target) || length(target) != 1L || !nzchar(target))
+#     stop("`target` must be a non-empty character scalar.", call. = FALSE)
+#   if (!target %in% names(df))
+#     stop(sprintf("make_recipe(): target '%s' not found in `df`.", target), call. = FALSE)
+#   if (!is.numeric(df[[target]]))
+#     stop(sprintf("make_recipe(): target '%s' must be numeric.", target), call. = FALSE)
+#   if (!is.character(predictors) || length(predictors) < 1L)
+#     stop("`predictors` must be a non-empty character vector.", call. = FALSE)
+#
+#   predictors <- intersect(predictors, setdiff(names(df), target))
+#   if (length(predictors) == 0L)
+#     stop("make_recipe(): no predictors found after intersection.", call. = FALSE)
+#
+#   if (!is.numeric(corr_threshold) || corr_threshold <= 0 || corr_threshold >= 1)
+#     stop("`corr_threshold` must be in (0,1), e.g. 0.80.", call. = FALSE)
+#   if (!is.null(pca_num_comp) && !is.null(pca_var_threshold))
+#     stop("Provide either `pca_num_comp` OR `pca_var_threshold`, not both.", call. = FALSE)
+#   if (!is.null(pca_num_comp) && (!is.numeric(pca_num_comp) || length(pca_num_comp) != 1L || pca_num_comp < 1))
+#     stop("`pca_num_comp` must be a single positive integer.", call. = FALSE)
+#   if (!is.null(pca_var_threshold) && (!is.numeric(pca_var_threshold) || pca_var_threshold <= 0 || pca_var_threshold >= 1))
+#     stop("`pca_var_threshold` must be in (0,1), e.g. 0.95.", call. = FALSE)
+#
+#   if (isTRUE(verbose)) {
+#     na_cols <- names(which(colSums(is.na(df[predictors])) > 0))
+#     if (length(na_cols)) message("Imputation will be applied; NA columns: ", paste(na_cols, collapse = ", "))
+#   }
+#
+#   # ---- recipe skeleton ----
+#   rec <- recipes::recipe(df) |>
+#     recipes::update_role(!!rlang::sym(target), new_role = "outcome") |>
+#     recipes::update_role(dplyr::all_of(predictors), new_role = "predictor") |>
+#     recipes::step_zv(recipes::all_predictors(), id = "zv") |>
+#     recipes::step_nzv(recipes::all_predictors(), id = "nzv") |>
+#     recipes::step_impute_median(recipes::all_numeric_predictors(), id = "imp_num")
+#
+#   if (isTRUE(impute_nominal)) {
+#     rec <- rec |> recipes::step_impute_mode(recipes::all_nominal_predictors(), id = "imp_nom")
+#   }
+#   if (isTRUE(remove_linear_comb)) {
+#     rec <- rec |> recipes::step_lincomb(recipes::all_numeric_predictors(), id = "lincomb")
+#   }
+#   if (isTRUE(include_dummy)) {
+#     rec <- rec |> recipes::step_dummy(recipes::all_nominal_predictors(),
+#                                       one_hot = TRUE, keep_original_cols = FALSE, id = "dummy")
+#   }
+#
+#   rec <- rec |>
+#     recipes::step_corr(recipes::all_numeric_predictors(),
+#                        threshold = corr_threshold, method = corr_method, id = "corr") |>
+#     recipes::step_normalize(recipes::all_numeric_predictors(), id = "norm")
+#
+#   # outcome transform (optional)
+#   if (y_transform == "log1p") {
+#     rec <- rec |> recipes::step_log(recipes::all_outcomes(), offset = 1, id = "y_log1p")
+#   } else if (y_transform == "yeo") {
+#     rec <- rec |> recipes::step_YeoJohnson(recipes::all_outcomes(), id = "y_yeo")
+#   }
+#
+#   # ---- PCA logic ----
+#   # If user explicitly set pca_ respect that.
+#   # Else, auto-enable PCA when number of predictors > auto_pca_when_gt.
+#   do_auto_pca <- is.null(pca_num_comp) && is.null(pca_var_threshold) &&
+#     length(predictors) > auto_pca_when_gt && auto_pca
+#
+#   if (do_auto_pca) {
+#     if (isTRUE(verbose)) message("Auto PCA enabled (predictors > ", auto_pca_when_gt, ").")
+#     rec <- rec |> recipes::step_pca(recipes::all_numeric_predictors(),
+#                                     num_comp = as.integer(auto_pca_when_gt), id = "pca")
+#   } else {
+#     if (!is.null(pca_num_comp)) {
+#       rec <- rec |> recipes::step_pca(recipes::all_numeric_predictors(),
+#                                       num_comp = as.integer(pca_num_comp), id = "pca")
+#     } else if (!is.null(pca_var_threshold)) {
+#       rec <- rec |> recipes::step_pca(recipes::all_numeric_predictors(),
+#                                       threshold = pca_var_threshold, id = "pca")
+#     }
+#   }
+#
+#   rec
+# }
 
 
 
