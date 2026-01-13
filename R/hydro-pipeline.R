@@ -785,8 +785,8 @@ wass2s_run_basins_ml <- function(
     quiet = TRUE,
     ...
 ) {
-  # Input validation
-  .require_pkg(engine_pkg[c(final_fuser,models)])
+
+  .require_pkg(engine_pkg[c(final_fuser, models)])
 
   if (length(data_by_product) == 0) {
     stop("data_by_product cannot be empty", call. = FALSE)
@@ -803,7 +803,6 @@ wass2s_run_basins_ml <- function(
     }, error = function(e) {
       stop("Error extracting basin IDs: ", e$message, call. = FALSE)
     })
-
     basins <- sort(basins[!is.na(basins)])
   }
 
@@ -811,11 +810,10 @@ wass2s_run_basins_ml <- function(
     stop("No basins found in the data", call. = FALSE)
   }
 
-  if (TRUE) message("Processing ", length(basins), " basins")
+  if (!quiet) message("Processing ", length(basins), " basins")
 
-  # Define the runner function with error handling
   runner <- function(bid) {
-    if (TRUE) message("Processing basin: ", bid)
+    if (!quiet) message("Processing basin: ", bid)
 
     tryCatch({
       result <- wass2s_run_bas_mod_ml(
@@ -831,19 +829,16 @@ wass2s_run_basins_ml <- function(
         quiet = quiet,
         ...
       )
-
-      # Add basin ID to the result for easier identification
       result$basin_id <- bid
       result
     }, error = function(e) {
-      if (TRUE) warning("Error processing basin ", bid, ": ", e$message)
+      if (!quiet) warning("Error processing basin ", bid, ": ", e$message)
 
-      # Return a structured error result
       list(
         basin_id = bid,
         error = e$message,
-        fused_by_model = NULL,
-        final_test = NULL,
+        fused_by_model = tibble::tibble(),   # safer than NULL
+        final_test = tibble::tibble(),       # safer than NULL
         scores = tibble::tibble(
           HYBAS_ID = bid,
           kge_final = NA_real_,
@@ -855,39 +850,162 @@ wass2s_run_basins_ml <- function(
     })
   }
 
-  # Process basins
   if (parallel) {
     if (!requireNamespace("future", quietly = TRUE)) {
-      stop("Package 'future' is required for parallel execution. Please install it.")
+      stop("Package 'future' is required for parallel execution. Please install it.", call. = FALSE)
     }
     if (!requireNamespace("furrr", quietly = TRUE)) {
-      stop("Package 'furrr' is required for parallel execution. Please install it.")
+      stop("Package 'furrr' is required for parallel execution. Please install it.", call. = FALSE)
     }
-    # Set up parallel processing
+
     old_plan <- future::plan(future::multisession, workers = workers)
     on.exit(future::plan(old_plan), add = TRUE)
 
-    if (TRUE) message("Running in parallel with ", workers, " workers")
+    if (!quiet) message("Running in parallel with ", workers, " workers")
 
     res <- furrr::future_map(
       basins,
       runner,
       .progress = !quiet,
-      .options = furrr::furrr_options(seed = TRUE)
+      .options = furrr::furrr_options(
+        seed = TRUE,
+        packages = c("dplyr", "recipes", "workflows", "parsnip", "tune", "yardstick", "purrr", "tibble")
+      )
     )
   } else {
-    if (TRUE) message("Running sequentially")
+    if (!quiet) message("Running sequentially")
     res <- purrr::map(basins, runner)
   }
 
-  # Name the results
   names(res) <- as.character(basins)
 
-  # Summarize results
   success_count <- sum(sapply(res, function(x) is.null(x$error)))
-  if (TRUE) message("Completed: ", success_count, " successful, ",
-                      length(basins) - success_count, " failed")
+  if (!quiet) {
+    message("Completed: ", success_count, " successful, ",
+            length(basins) - success_count, " failed")
+  }
 
-  # Return results
   res
 }
+
+# wass2s_run_basins_ml <- function(
+#     data_by_product,
+#     hybas_id = "HYBAS_ID",
+#     pred_pattern_by_product = NULL,
+#     models = SUPPORTED_MODELS,
+#     topK = 3,
+#     min_kge_model = -Inf,
+#     basins = NULL,
+#     parallel = FALSE,
+#     workers = 4,
+#     grid_levels = 5,
+#     final_fuser = "rf",
+#     quiet = TRUE,
+#     ...
+# ) {
+#   # Input validation
+#   .require_pkg(engine_pkg[c(final_fuser,models)])
+#
+#   if (length(data_by_product) == 0) {
+#     stop("data_by_product cannot be empty", call. = FALSE)
+#   }
+#
+#   if (!hybas_id %in% names(data_by_product[[1]])) {
+#     stop("hybas_id column not found in data", call. = FALSE)
+#   }
+#
+#   # Get all basins if not specified
+#   if (is.null(basins)) {
+#     basins <- tryCatch({
+#       unique(unlist(lapply(data_by_product, function(df) unique(df[[hybas_id]]))))
+#     }, error = function(e) {
+#       stop("Error extracting basin IDs: ", e$message, call. = FALSE)
+#     })
+#
+#     basins <- sort(basins[!is.na(basins)])
+#   }
+#
+#   if (length(basins) == 0) {
+#     stop("No basins found in the data", call. = FALSE)
+#   }
+#
+#   if (TRUE) message("Processing ", length(basins), " basins")
+#
+#   # Define the runner function with error handling
+#   runner <- function(bid) {
+#     if (TRUE) message("Processing basin: ", bid)
+#
+#     tryCatch({
+#       result <- wass2s_run_bas_mod_ml(
+#         basin_id = bid,
+#         data_by_product = data_by_product,
+#         hybas_id = hybas_id,
+#         pred_pattern_by_product = pred_pattern_by_product,
+#         models = models,
+#         topK = topK,
+#         min_kge_model = min_kge_model,
+#         grid_levels = grid_levels,
+#         final_fuser = final_fuser,
+#         quiet = quiet,
+#         ...
+#       )
+#
+#       # Add basin ID to the result for easier identification
+#       result$basin_id <- bid
+#       result
+#     }, error = function(e) {
+#       if (TRUE) warning("Error processing basin ", bid, ": ", e$message)
+#
+#       # Return a structured error result
+#       list(
+#         basin_id = bid,
+#         error = e$message,
+#         fused_by_model = NULL,
+#         final_test = NULL,
+#         scores = tibble::tibble(
+#           HYBAS_ID = bid,
+#           kge_final = NA_real_,
+#           rmse_final = NA_real_
+#         ),
+#         leaderboards = list(),
+#         cv_rs = NULL
+#       )
+#     })
+#   }
+#
+#   # Process basins
+#   if (parallel) {
+#     if (!requireNamespace("future", quietly = TRUE)) {
+#       stop("Package 'future' is required for parallel execution. Please install it.")
+#     }
+#     if (!requireNamespace("furrr", quietly = TRUE)) {
+#       stop("Package 'furrr' is required for parallel execution. Please install it.")
+#     }
+#     # Set up parallel processing
+#     old_plan <- future::plan(future::multisession, workers = workers)
+#     on.exit(future::plan(old_plan), add = TRUE)
+#
+#     if (TRUE) message("Running in parallel with ", workers, " workers")
+#
+#     res <- furrr::future_map(
+#       basins,
+#       runner,
+#       .progress = !quiet,
+#       .options = furrr::furrr_options(seed = TRUE)
+#     )
+#   } else {
+#     if (TRUE) message("Running sequentially")
+#     res <- purrr::map(basins, runner)
+#   }
+#
+#   # Name the results
+#   names(res) <- as.character(basins)
+#
+#   # Summarize results
+#   success_count <- sum(sapply(res, function(x) is.null(x$error)))
+#   if (TRUE) message("Completed: ", success_count, " successful, ",
+#                       length(basins) - success_count, " failed")
+#
+#   # Return results
+#   res
+# }
