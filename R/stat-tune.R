@@ -443,10 +443,13 @@ wass2s_tune_pred_stat <- function(
     pred_values <- predict(fit_final, new_data = all_data) %>% dplyr::pull(.pred)
     if (target_positive) pred_values <- pmax(pred_values, 0)
 
-    tibble::tibble(
-      YYYY = all_data$YYYY,
-      pred = pred_values
-    )
+    if (length(pred_values) != nrow(all_data)) {
+      stop("predict() returned ", length(pred_values),
+           " values but all_data has ", nrow(all_data), " rows.")
+    }
+
+    dplyr::mutate(all_data, pred = pred_values)
+
   }, error = function(e) {
     if (!quiet) message("Error generating final predictions: ", e$message)
     all_dates <- unique(c(df_basin_product$YYYY, if (!is.null(holdout_data)) holdout_data$YYYY else NULL))

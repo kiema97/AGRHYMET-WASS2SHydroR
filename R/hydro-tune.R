@@ -282,11 +282,14 @@ wass2s_tune_pred_ml <- function(
 
   # Generate predictions (train + holdout if any)
   all_data <- dplyr::bind_rows(df_basin_product, holdout_data)
+  pred_vec <- predict(fitted, all_data)$.pred
+  preds <- dplyr::mutate(all_data, pred = pred_vec)
 
-  preds <- tibble::tibble(
-    YYYY = all_data$YYYY,
-    pred = predict(fitted, all_data)$.pred
-  )
+
+  # preds <- tibble::tibble(
+  #   YYYY = all_data$YYYY,
+  #   pred = predict(fitted, all_data)$.pred
+  # )
 
   if (target_positive) preds$pred <- pmax(preds$pred, 0)
 
