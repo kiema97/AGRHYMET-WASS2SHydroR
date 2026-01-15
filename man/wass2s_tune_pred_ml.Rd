@@ -9,6 +9,7 @@ wass2s_tune_pred_ml(
   predictors,
   target = "Q",
   date_col = "YYYY",
+  id_col = NULL,
   prediction_years = NULL,
   model = SUPPORTED_MODELS,
   resamples = NULL,
@@ -39,6 +40,15 @@ wass2s_tune_pred_ml(
 \item{target}{Name of the target column (default: `"Q"`).}
 
 \item{date_col}{Name of the date column (default: `"YYYY"`).}
+
+\item{id_col}{Optional. Name of an identifier column (e.g. basin, station, or subbasin ID).
+  If provided, this column is used together with \code{date_col} to uniquely identify
+  each time series and to guarantee correct alignment of predictions with the input data.
+  This is strongly recommended when \code{df_basin_product} contains stacked data from
+  multiple basins or stations.
+
+  If \code{NULL} (default), the function assumes that \code{df_basin_product} contains
+  a single time series and only uses \code{date_col} for temporal ordering.}
 
 \item{prediction_years}{Optional numeric vector of length 2 giving the
 start and end years for a holdout prediction period. These years
