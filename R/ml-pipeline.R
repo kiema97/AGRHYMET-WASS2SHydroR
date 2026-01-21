@@ -58,22 +58,6 @@ wass2s_run_bas_mod_ml <- function(
     require_variance = TRUE,
     ...
 ) {
-
-  # ----------------------------
-  # Helpers
-  # ----------------------------
-  .pred_years_to_bounds <- function(prediction_years) {
-    if (is.null(prediction_years)) return(NULL)
-    if (length(prediction_years) == 1 && prediction_years > 0) prediction_years <- rep(prediction_years, 2)
-    if (length(prediction_years) != 2) stop("prediction_years must be length 2 (start, end).", call. = FALSE)
-    if (prediction_years[1] > prediction_years[2]) stop("Starting point must be earlier than ending point.", call. = FALSE)
-
-    c(
-      as.integer(paste0(prediction_years[1], "0101")),
-      as.integer(paste0(prediction_years[2], "1231"))
-    )
-  }
-
   # ----------------------------
   # Validate models & packages
   # ----------------------------
