@@ -6,7 +6,7 @@
 #' @format Character vector.
 #' @keywords internal
 
-SUPPORTED_FUSERS <- c("rf","xgb","glmnet","kknn","svmLinear","mars","cubist")
+SUPPORTED_FUSERS <- c("rf","xgb","glmnet","kknn","svmlinear","mars","cubist")
 
 
 #' Supported ML models
@@ -16,7 +16,7 @@ SUPPORTED_FUSERS <- c("rf","xgb","glmnet","kknn","svmLinear","mars","cubist")
 #' @format Character vector.
 #' @keywords internal
 
-SUPPORTED_MODELS <- c("rf","xgb","mlp","kknn","svmLinear","mars","cubist")
+SUPPORTED_MODELS <- c("rf","xgb","mlp","kknn","svmlinear","mars","cubist")
 
 #' Mapping of ML engines to required R packages
 #' @format A named character vector:
@@ -31,7 +31,7 @@ engine_pkg <- c(
   xgb       = "xgboost",
   glmnet    = "glmnet",
   kknn      = "kknn",
-  svmLinear = "kernlab",
+  svmlinear = "kernlab",
   mars      = "earth",
   cubist    = "Cubist",
   mlp       = "nnet"
@@ -74,7 +74,7 @@ engine_pkg <- c(
 #' CPU-friendly algorithm.
 #'
 #' @param name One of \code{SUPPORTED_MODELS}, e.g. \code{"rf"}, \code{"xgb"},
-#'   \code{"lgbm"}, \code{"mlp"}, \code{"kknn"}, \code{"svmLinear"}, \code{"mars"}, \code{"cubist"}.
+#'   \code{"lgbm"}, \code{"mlp"}, \code{"kknn"}, \code{"svmlinear"}, \code{"mars"}, \code{"cubist"}.
 #' @return A \pkg{parsnip} model specification (mode = regression).
 #' @seealso \code{\link{model_grid}}
 #' @keywords internal
@@ -148,7 +148,7 @@ model_spec <- function(name) {
            parsnip::set_engine("kknn") |>
            parsnip::set_mode("regression"),
 
-         svmLinear = parsnip::svm_linear(cost = tune()) |>
+         svmlinear = parsnip::svm_linear(cost = tune()) |>
            parsnip::set_engine("kernlab") |>
            parsnip::set_mode("regression"),
 
@@ -235,7 +235,7 @@ model_grid <- function(name, p, levels = 5, n_min = Inf) {
            levels = levels
          ),
 
-         svmLinear = dials::grid_regular(
+         svmlinear = dials::grid_regular(
            dials::cost(range = c(-6, 4)),
            levels = levels
          ),
