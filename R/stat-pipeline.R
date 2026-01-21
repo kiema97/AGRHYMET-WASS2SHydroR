@@ -98,21 +98,52 @@ wass2s_run_basin_mods_stat <- function(
   # 1) Consolidate by model (now expects YYYYMMDD inside)
   models <- list(
     PCR = wass2s_cons_mods_stat(
-      basin_id, data_by_product, hybas_id, pred_pattern_by_product, "pcr", topK,
-      quiet = quiet, target_positive = target_positive,
-      require_variance=require_variance, impute=impute, max_na_frac=max_na_frac, ...
+      basin_id = basin_id,
+      data_by_product = data_by_product,
+      basin_col = hybas_id,
+      pred_pattern_by_product = pred_pattern_by_product,
+      model = "pcr",
+      topK = topK,
+      prediction_years = prediction_years,
+      quiet = quiet,
+      target_positive = target_positive,
+      require_variance = require_variance,
+      impute = impute,
+      max_na_frac = max_na_frac,
+      ...
     ),
     RIDGE = wass2s_cons_mods_stat(
-      basin_id, data_by_product, hybas_id, pred_pattern_by_product, "ridge", topK,
-      quiet = quiet, target_positive = target_positive,
-      require_variance=require_variance, impute=impute, max_na_frac=max_na_frac, ...
+      basin_id = basin_id,
+      data_by_product = data_by_product,
+      basin_col = hybas_id,
+      pred_pattern_by_product = pred_pattern_by_product,
+      model = "ridge",
+      topK = topK,
+      prediction_years = prediction_years,
+      quiet = quiet,
+      target_positive = target_positive,
+      require_variance = require_variance,
+      impute = impute,
+      max_na_frac = max_na_frac,
+      ...
     ),
     LASSO = wass2s_cons_mods_stat(
-      basin_id, data_by_product, hybas_id, pred_pattern_by_product, "lasso", topK,
-      quiet = quiet, target_positive = target_positive,
-      require_variance=require_variance, impute=impute, max_na_frac=max_na_frac, ...
+      basin_id = basin_id,
+      data_by_product = data_by_product,
+      basin_col = hybas_id,
+      pred_pattern_by_product = pred_pattern_by_product,
+      model = "lasso",
+      topK = topK,
+      prediction_years = prediction_years,
+      quiet = quiet,
+      target_positive = target_positive,
+      require_variance = require_variance,
+      impute = impute,
+      max_na_frac = max_na_frac,
+      ...
     )
   )
+
 
   # 2) Get (YYYY, Q) from any product and standardize YYYYMMDD
   any_df <- tryCatch({

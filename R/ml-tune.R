@@ -140,6 +140,20 @@ wass2s_tune_pred_ml <- function(
   if (length(predictors) < 1L) {
     stop("wass2s_tune_pred_ml(): predictors empty after intersection.", call. = FALSE)
   }
+  if (!is.null(prediction_years)) {
+
+    if (!is.numeric(prediction_years) ||
+        length(prediction_years) != 2 ||
+        anyNA(prediction_years)) {
+
+      stop(
+        "prediction_years must be a numeric vector of length 2 ",
+        "(format YYYY or YYYYMMDD).",
+        call. = FALSE
+      )
+    }
+  }
+
 
   # ---- standardize names (keep ID if provided) ----
   if (!is.null(id_col)) {
@@ -168,14 +182,12 @@ wass2s_tune_pred_ml <- function(
 
   # ---- holdout slicing (by YYYYMMDD bounds) ----
   holdout_data <- NULL
-  if (!is.null(prediction_years)) {
-    if (length(prediction_years) == 1 && prediction_years > 0) prediction_years <- rep(prediction_years, 2)
-    if (length(prediction_years) != 2) stop("prediction_years must be length 2 (start, end).", call. = FALSE)
+  bounds <- .pred_years_to_bounds(prediction_years)|> unlist()
+  if (!is.null(bounds)) {
+    bounds[2] <- min(bounds[2], max(df_basin_product$YYYY, na.rm = TRUE))
 
-    start_bound <- as.integer(paste0(prediction_years[1], "0101"))
-    end_bound   <- as.integer(paste0(prediction_years[2], "1231"))
-
-    holdout_mask <- df_basin_product$YYYY >= start_bound & df_basin_product$YYYY <= end_bound
+    holdout_mask <- df_basin_product$YYYY >= bounds[1] &
+      df_basin_product$YYYY <= bounds[2]
     holdout_data <- df_basin_product[holdout_mask, , drop = FALSE]
     df_basin_product <- df_basin_product[!holdout_mask, , drop = FALSE]
   }
@@ -220,7 +232,7 @@ wass2s_tune_pred_ml <- function(
     preds <- dplyr::mutate(all_data, pred = pred_values)
 
     # Return only stable key + pred (plus optionally Q if you want)
-    keep_cols <- c(if (!is.null(id_col)) "ID", "YYYY", "pred")
+    keep_cols <- c(if (!is.null(id_col)) "ID", "YYYY","Q", "pred")
     return(list(
       kge_cv_mean = NA_real_,
       preds = dplyr::select(preds, dplyr::all_of(keep_cols)),
@@ -256,15 +268,19 @@ wass2s_tune_pred_ml <- function(
   best_config <- tune::select_best(rs, metric = "rmse")
   best_wf <- tune::finalize_workflow(wflow, best_config)
   fitted  <- parsnip::fit(best_wf, df_basin_product)
-
   all_data <- dplyr::bind_rows(df_basin_product, holdout_data)
+  if (!is.null(id_col)) {
+    all_data <- dplyr::arrange(all_data, ID, YYYY)
+  } else {
+    all_data <- dplyr::arrange(all_data, YYYY)
+  }
 
   pred_values <- predict(fitted, new_data = all_data)$.pred
   if (target_positive) pred_values <- pmax(pred_values, 0)
 
   preds <- dplyr::mutate(all_data, pred = pred_values)
 
-  keep_cols <- c(if (!is.null(id_col)) "ID", "YYYY", "pred")
+  keep_cols <- c(if (!is.null(id_col)) "ID", "YYYY","Q", "pred")
   list(
     kge_cv_mean     = kge_mean,
     preds           = dplyr::select(preds, dplyr::all_of(keep_cols)),

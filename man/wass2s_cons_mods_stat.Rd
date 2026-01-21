@@ -2,7 +2,7 @@
 % Please edit documentation in R/stat-fuse.R
 \name{wass2s_cons_mods_stat}
 \alias{wass2s_cons_mods_stat}
-\title{Consolidate predictions across products for one model}
+\title{Consolidate predictions across products for one statistical model}
 \usage{
 wass2s_cons_mods_stat(
   basin_id,
@@ -10,19 +10,25 @@ wass2s_cons_mods_stat(
   basin_col = "HYBAS_ID",
   pred_pattern_by_product = NULL,
   model = c("pcr", "ridge", "lasso"),
+  grid = NULL,
+  use_sub_fuser = TRUE,
+  sub_fuser = "rf",
+  sub_grid_levels = 10,
   topK = 3,
   min_kge_model = 0.2,
+  min_predictors = 1,
+  min_data_required = 10,
   prediction_years = NULL,
-  target_positive = FALSE,
+  target_positive = TRUE,
   resamples = NULL,
   pretrained_wflow = NULL,
-  grid = NULL,
-  init_frac = 0.6,
+  init_frac = 0.8,
   assess_frac = 0.2,
   n_splits = NULL,
   cumulative = TRUE,
   quiet = TRUE,
-  verbose = FALSE,
+  verbose = TRUE,
+  seed = 123,
   max_na_frac = 0.3,
   impute = "median",
   require_variance = TRUE,
@@ -32,72 +38,151 @@ wass2s_cons_mods_stat(
 \arguments{
 \item{basin_id}{Basin identifier.}
 
-\item{data_by_product}{Named list of data frames (one per product).}
+\item{data_by_product}{Named list of data frames (one per product). Each data
+frame must contain at least \code{basin_col}, \code{YYYY} (dates), \code{Q}
+(target), and predictor columns (typically prefixed, e.g. \code{pt_*}).}
 
-\item{basin_col}{Column name for basin IDs (default: `"HYBAS_ID"`).}
+\item{basin_col}{Column name for basin IDs (default: \code{"HYBAS_ID"}).}
 
-\item{pred_pattern_by_product}{Named character vector: product -> regex for predictors.}
+\item{pred_pattern_by_product}{Optional. Either:
+\itemize{
+  \item a named character vector/list mapping \code{product -> regex} used to
+    select predictors, or
+  \item a single regex applied to all products.
+}
+If \code{NULL}, defaults to \code{"^pt_"}.}
 
-\item{model}{One of `"pcr"`, `"ridge"`, `"lasso"`.}
+\item{model}{One of \code{"pcr"}, \code{"ridge"}, \code{"lasso"}.}
 
-\item{topK}{Integer, number of products to keep.}
+\item{grid}{Optional tibble of tuning parameters passed to
+\code{wass2s_tune_pred_stat()}. If \code{NULL}, defaults are used.}
 
-\item{min_kge_model}{Minimum KGE threshold to accept fusion (default: 0.2).}
+\item{use_sub_fuser}{Logical; if \code{TRUE}, attempts a meta-learner fusion on
+product predictions (requires observed \code{Q} in the merged data).
+If \code{FALSE} (or if prerequisites are not met), uses weighted fusion.}
 
-\item{prediction_years}{Optional numeric vector of length 2 giving the
-start and end years for a holdout prediction period. These years
-are excluded from training and predictions are generated after fitting.}
+\item{sub_fuser}{Character; meta-learner model name passed to
+\code{model_spec()} (e.g. \code{"rf"}). Only used when
+\code{use_sub_fuser = TRUE}.}
 
-\item{target_positive}{Logical; if TRUE, force negative predictions to zero.}
+\item{sub_grid_levels}{Integer; tuning grid "levels" for the sub-fuser, passed
+to \code{model_grid()}.}
 
-\item{resamples}{Optional \code{rsample::rset} object for resampling.
-If \code{NULL}, a rolling-origin resampling is created via
-\code{make_rolling()}.}
+\item{topK}{Integer, number of products to keep for fusion (default: 3).}
 
-\item{pretrained_wflow}{Optional \code{workflows::workflow} object.
-If supplied, tuning is skipped and the workflow is fitted directly.}
+\item{min_kge_model}{Numeric; minimum KGE threshold for products to receive
+non-zero fusion weight (default: 0.2).}
 
-\item{grid}{Optional tibble of tuning parameters. If supplied, this grid
-is used instead of the default grid for the specified model.}
+\item{min_predictors}{Integer; minimum number of predictors required to fit a
+product model (default: 1).}
 
-\item{init_frac}{Fraction of rows used for the initial training window.}
+\item{min_data_required}{Integer; minimum number of rows required to train a
+product model and (when enabled) the sub-fuser (default: 10).}
 
-\item{assess_frac}{Fraction of rows used for the assessment window.}
+\item{prediction_years}{Optional numeric vector of length 2 giving the start
+and end years for a holdout prediction period. These years are excluded
+from training inside \code{wass2s_tune_pred_stat()} and predictions are
+generated on the concatenated (train + holdout) timeline after fitting.}
 
-\item{n_splits}{Optional integer, desired number of resamples (splits).}
+\item{target_positive}{Logical; if \code{TRUE}, force negative fused
+predictions to zero.}
 
-\item{cumulative}{Logical; passed to \code{rsample::rolling_origin()}.}
+\item{resamples}{Optional \code{rsample::rset} object for resampling passed to
+\code{wass2s_tune_pred_stat()}. If \code{NULL}, rolling-origin resampling is
+created via \code{make_rolling()} inside \code{wass2s_tune_pred_stat()}.}
 
-\item{quiet}{Logical; if \code{FALSE}, emits informative messages.}
+\item{pretrained_wflow}{Optional \code{workflows::workflow} object passed to
+\code{wass2s_tune_pred_stat()}. If supplied, tuning is skipped and the
+workflow is used for prediction directly.}
 
-\item{verbose}{Logical, emit diagnostic messages.}
+\item{init_frac}{Fraction of rows used for the initial training window passed
+to \code{wass2s_tune_pred_stat()}.}
 
-\item{max_na_frac}{Numeric in \eqn{[0, 1]}: maximum allowed fraction of missing
-values per column before stopping (default \code{0.20} = 20\%).}
+\item{assess_frac}{Fraction of rows used for the assessment window passed to
+\code{wass2s_tune_pred_stat()}.}
 
-\item{impute}{Character, one of \code{"median"}, \code{"mean"}, or \code{"none"}.
-If \code{"none"}, no imputation is performed after the guard (default \code{"median"}).}
+\item{n_splits}{Optional integer, desired number of resamples (splits) passed
+to \code{wass2s_tune_pred_stat()}.}
 
-\item{require_variance}{Logical; if \code{TRUE}, stop when a column has zero
-standard deviation after imputation (default \code{TRUE}).}
+\item{cumulative}{Logical; passed to \code{make_rolling()} (rolling-origin
+resampling).}
 
-\item{...}{Additional arguments passed to \code{wass2s_tune_pred_stat}.}
+\item{quiet}{Logical; if \code{FALSE}, emits informative messages (passed to
+underlying tuning/prediction calls).}
+
+\item{verbose}{Logical; if \code{TRUE}, emits diagnostic messages for product
+processing and failures (default: \code{TRUE}).}
+
+\item{seed}{Integer; random seed for reproducibility.}
+
+\item{max_na_frac}{Numeric in \eqn{[0, 1]}; maximum allowed fraction of
+missing values per guarded column before stopping (default: 0.3).}
+
+\item{impute}{Character; one of \code{"median"}, \code{"mean"}, or
+\code{"none"}. If \code{"none"}, no imputation is performed after the
+missingness guard (default: \code{"median"}).}
+
+\item{require_variance}{Logical; if \code{TRUE}, stop when a guarded column has
+zero standard deviation after imputation (default: \code{TRUE}).}
+
+\item{...}{Additional arguments forwarded to \code{wass2s_tune_pred_stat()} and
+(when enabled) to tuning controls used internally.}
 }
 \value{
 A list with:
-  \itemize{
-    \item `fused` (tibble): columns `YYYY`, `pred_fused`.
-    \item `leaderboard_products` (tibble): product, KGE, counts, weights.
-    \item `all_results` : list of all individual product results.
-  }
+\itemize{
+  \item \code{fused} (tibble): at minimum \code{YYYY} and \code{pred_fused}.
+    If observed \code{Q} is available on the fused timeline, it may also be
+    present (depending on upstream outputs).
+  \item \code{leaderboard_products} (tibble): per-product diagnostics including
+    \code{product}, \code{kge}, \code{rsq}, \code{n_pred}, \code{sd_pred}, and
+    \code{weight} (final fusion weight; sums to 1 over selected products).
+  \item \code{all_results} (list): all individual per-product results as returned
+    by \code{wass2s_tune_pred_stat()} (or \code{NULL}/empty entries for skipped
+    products are omitted).
+}
 }
 \description{
-For a given basin and a fixed statistical model (PCR/Ridge/Lasso), tunes and
-predicts for each product, ranks products by KGE, keeps the top-K, and fuses
-them using normalized KGE-based weights (with safeguards and fallbacks).
+For a given basin and a fixed statistical model (PCR/Ridge/Lasso), this
+function:
+\enumerate{
+  \item fits/tunes one model per product using \code{wass2s_tune_pred_stat()},
+  \item ranks products by cross-validated KGE,
+  \item keeps the top-\code{K} products,
+  \item fuses their predictions either by a robust KGE-weighted mean
+        (default) or by an optional meta-learner ("sub-fuser") trained on the
+        product predictions (when observations are available).
+}
+}
+\details{
+Fusion weights are derived from KGE (negative KGE truncated to 0) and
+normalized to sum to 1. Products with \code{kge < min_kge_model} receive a
+weight of 0 (and fusion falls back gracefully if all weights become 0).
+
+The function is defensive: it contains multiple safeguards and fallbacks
+(e.g., missing predictors, insufficient data, failed tuning), and will return
+a well-formed output with \code{NA} predictions rather than failing silently.
 }
 \examples{
 \dontrun{
-cns <- wass2s_cons_mods_stat(1040021500, data_by_product, model = "pcr", topK = 3)
+# Simple weighted fusion (recommended baseline)
+cns <- wass2s_cons_mods_stat(
+  basin_id = 1040021500,
+  data_by_product = data_by_product,
+  model = "pcr",
+  topK = 3,
+  use_sub_fuser = FALSE
+)
+
+# Meta-learner fusion (requires Q available in the merged timeline)
+cns2 <- wass2s_cons_mods_stat(
+  basin_id = 1040021500,
+  data_by_product = data_by_product,
+  model = "ridge",
+  topK = 5,
+  use_sub_fuser = TRUE,
+  sub_fuser = "rf",
+  sub_grid_levels = 10
+)
 }
 }

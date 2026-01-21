@@ -9,6 +9,7 @@ wass2s_tune_pred_stat(
   predictors,
   target = "Q",
   date_col = "YYYY",
+  id_col = NULL,
   model = c("pcr", "ridge", "lasso"),
   prediction_years = NULL,
   target_positive = TRUE,
@@ -39,6 +40,12 @@ wass2s_tune_pred_stat(
 \item{target}{Name of the target column (default: `"Q"`).}
 
 \item{date_col}{Name of the date column (default: `"YYYY"`).}
+
+\item{id_col}{Optional. Name of an identifier column (e.g. basin, station, or subbasin ID).
+If provided, this column is used together with \code{date_col} to uniquely identify
+each time series and to guarantee correct alignment of predictions with the input data.
+This is strongly recommended when \code{df_basin_product} contains stacked data from
+multiple basins or stations.}
 
 \item{model}{One of `"pcr"`, `"ridge"`, `"lasso"`.}
 
