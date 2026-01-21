@@ -122,59 +122,63 @@ wass2s_tune_pred_ml <- function(
     ...
 ){
   set.seed(seed)
+
   model <- match.arg(model, SUPPORTED_MODELS)
   spec  <- model_spec(model)
 
   # ---- validation ----
+  if (!is.data.frame(df_basin_product)) {
+    stop("wass2s_tune_pred_ml(): df_basin_product must be a data.frame.", call. = FALSE)
+  }
   if (!target %in% names(df_basin_product)) {
-    stop(glue::glue("wass2s_tune_pred_ml(): column {target} not found."), call. = FALSE)
+    stop(glue::glue("wass2s_tune_pred_ml(): column '{target}' not found."), call. = FALSE)
   }
   if (!date_col %in% names(df_basin_product)) {
-    stop(glue::glue("wass2s_tune_pred_ml(): column {date_col} not found."), call. = FALSE)
+    stop(glue::glue("wass2s_tune_pred_ml(): column '{date_col}' not found."), call. = FALSE)
   }
   if (!is.null(id_col) && !id_col %in% names(df_basin_product)) {
-    stop(glue::glue("wass2s_tune_pred_ml(): id_col {id_col} not found."), call. = FALSE)
+    stop(glue::glue("wass2s_tune_pred_ml(): id_col '{id_col}' not found."), call. = FALSE)
   }
 
-  predictors <- intersect(predictors, setdiff(names(df_basin_product), c(date_col, target, id_col)))
+  # Keep only predictors that exist and are not special columns
+  predictors <- intersect(
+    predictors,
+    setdiff(names(df_basin_product), c(date_col, target, id_col))
+  )
   if (length(predictors) < 1L) {
     stop("wass2s_tune_pred_ml(): predictors empty after intersection.", call. = FALSE)
   }
+
+  # ---- validate prediction_years (YYYY or YYYYMMDD) ----
   if (!is.null(prediction_years)) {
-
-    if (!is.numeric(prediction_years) ||
-        length(prediction_years) != 2 ||
-        anyNA(prediction_years)) {
-
+    if (!is.numeric(prediction_years) || length(prediction_years) != 2 || anyNA(prediction_years)) {
       stop(
-        "prediction_years must be a numeric vector of length 2 ",
-        "(format YYYY or YYYYMMDD).",
+        "prediction_years must be a numeric vector of length 2 (format YYYY or YYYYMMDD).",
         call. = FALSE
       )
     }
   }
 
-
   # ---- standardize names (keep ID if provided) ----
   if (!is.null(id_col)) {
-    df_basin_product <- dplyr::rename(df_basin_product, ID = !!id_col)
+    df_basin_product <- dplyr::rename(df_basin_product, ID = !!rlang::sym(id_col))
   }
-  df_basin_product <- dplyr::rename(df_basin_product, YYYY = !!date_col, Q = !!target)
+  df_basin_product <- dplyr::rename(df_basin_product, YYYY = !!rlang::sym(date_col), Q = !!rlang::sym(target))
 
   # Ensure YYYY is YYYYMMDD integer (or Date -> yyyymmdd)
   df_basin_product$YYYY <- .ensure_yyyymmdd(df_basin_product$YYYY)
 
   # Stable ordering to avoid positional mismatch
   if (!is.null(id_col)) {
-    df_basin_product <- dplyr::arrange(df_basin_product, ID, YYYY)
+    df_basin_product <- dplyr::arrange(df_basin_product, .data$ID, .data$YYYY)
   } else {
-    df_basin_product <- dplyr::arrange(df_basin_product, YYYY)
+    df_basin_product <- dplyr::arrange(df_basin_product, .data$YYYY)
   }
 
-  # Sanitize target column
+  # ---- sanitize target AND predictors ----
   df_basin_product <- .sanitize_numeric_columns(
     df   = df_basin_product,
-    cols = "Q",
+    cols = c("Q", predictors),
     max_na_frac = max_na_frac,
     impute = impute,
     require_variance = require_variance
@@ -182,12 +186,14 @@ wass2s_tune_pred_ml <- function(
 
   # ---- holdout slicing (by YYYYMMDD bounds) ----
   holdout_data <- NULL
-  bounds <- .pred_years_to_bounds(prediction_years)|> unlist()
+  bounds <- .pred_years_to_bounds(prediction_years)  # should return NULL or integer(2)
   if (!is.null(bounds)) {
+    bounds <- sort(bounds)
     bounds[2] <- min(bounds[2], max(df_basin_product$YYYY, na.rm = TRUE))
 
     holdout_mask <- df_basin_product$YYYY >= bounds[1] &
       df_basin_product$YYYY <= bounds[2]
+
     holdout_data <- df_basin_product[holdout_mask, , drop = FALSE]
     df_basin_product <- df_basin_product[!holdout_mask, , drop = FALSE]
   }
@@ -196,10 +202,16 @@ wass2s_tune_pred_ml <- function(
     stop("Insufficient training data after removing prediction years.", call. = FALSE)
   }
 
-  # Recipe (IMPORTANT: do NOT require ID as predictor)
+  # Guard: predictors must be usable on training set
+  if (!has_valid_predictors(df_basin_product, predictors, require_variance = require_variance)) {
+    stop("No valid predictors available after sanitization (all NA/constant).", call. = FALSE)
+  }
+
+  # ---- recipe ----
+  # IMPORTANT: ID must NOT be a predictor
   rec <- make_recipe(df_basin_product, predictors, target = "Q")
 
-  # Resamples
+  # ---- resamples ----
   if (is.null(resamples)) {
     resamples <- make_rolling(
       df_basin_product,
@@ -212,6 +224,60 @@ wass2s_tune_pred_ml <- function(
     )
   }
 
+  # ---- filter out degenerate splits (prevents "No covariates found") ----
+  .filter_valid_splits <- function(rset, predictors, require_variance) {
+    if (is.null(rset) || length(rset$splits) == 0) return(rset)
+
+    ok <- vapply(rset$splits, function(spl) {
+      ana <- rsample::analysis(spl)
+
+      # If recipe later drops everything, this is almost always caused by
+      # all predictors being constant/NA within the analysis window.
+      has_valid_predictors(ana, predictors, require_variance = require_variance)
+    }, logical(1))
+
+    rset$splits <- rset$splits[ok]
+    rset$id     <- rset$id[ok]
+
+    rset
+  }
+
+  resamples <- .filter_valid_splits(resamples, predictors, require_variance)
+
+  # If no valid splits remain -> fallback to direct fit (no tuning)
+  if (is.null(resamples) || length(resamples$splits) == 0) {
+
+    fitted <- parsnip::fit(
+      workflows::workflow() |>
+        workflows::add_model(spec) |>
+        workflows::add_recipe(rec),
+      df_basin_product
+    )
+
+    all_data <- dplyr::bind_rows(df_basin_product, holdout_data)
+
+    if (!is.null(id_col)) {
+      all_data <- dplyr::arrange(all_data, .data$ID, .data$YYYY)
+    } else {
+      all_data <- dplyr::arrange(all_data, .data$YYYY)
+    }
+
+    pred_values <- predict(fitted, new_data = all_data)$.pred
+    if (target_positive) pred_values <- pmax(pred_values, 0)
+
+    preds <- dplyr::mutate(all_data, pred = pred_values)
+    keep_cols <- c(if (!is.null(id_col)) "ID", "YYYY", "Q", "pred")
+
+    return(list(
+      kge_cv_mean     = NA_real_,
+      preds           = dplyr::select(preds, dplyr::all_of(keep_cols)),
+      fit             = fitted,
+      leaderboard_cfg = tibble::tibble(),
+      param_grid      = tibble::tibble()
+    ))
+  }
+
+  # ---- grid ----
   n_min <- min_analysis_n(resamples)
   grid  <- model_grid(
     model,
@@ -225,14 +291,12 @@ wass2s_tune_pred_ml <- function(
     fitted <- parsnip::fit(pretrained_wflow, df_basin_product)
 
     all_data <- dplyr::bind_rows(df_basin_product, holdout_data)
-
     pred_values <- predict(fitted, new_data = all_data)$.pred
     if (target_positive) pred_values <- pmax(pred_values, 0)
 
     preds <- dplyr::mutate(all_data, pred = pred_values)
-
-    # Return only stable key + pred (plus optionally Q if you want)
     keep_cols <- c(if (!is.null(id_col)) "ID", "YYYY","Q", "pred")
+
     return(list(
       kge_cv_mean = NA_real_,
       preds = dplyr::select(preds, dplyr::all_of(keep_cols)),
@@ -249,7 +313,7 @@ wass2s_tune_pred_ml <- function(
 
   ctrl <- tune::control_grid(
     save_pred = TRUE,
-    verbose = !verbose_tune,
+    verbose   = !verbose_tune,
     allow_par = allow_par,
     ...
   )
@@ -268,19 +332,20 @@ wass2s_tune_pred_ml <- function(
   best_config <- tune::select_best(rs, metric = "rmse")
   best_wf <- tune::finalize_workflow(wflow, best_config)
   fitted  <- parsnip::fit(best_wf, df_basin_product)
+
   all_data <- dplyr::bind_rows(df_basin_product, holdout_data)
   if (!is.null(id_col)) {
-    all_data <- dplyr::arrange(all_data, ID, YYYY)
+    all_data <- dplyr::arrange(all_data, .data$ID, .data$YYYY)
   } else {
-    all_data <- dplyr::arrange(all_data, YYYY)
+    all_data <- dplyr::arrange(all_data, .data$YYYY)
   }
 
   pred_values <- predict(fitted, new_data = all_data)$.pred
   if (target_positive) pred_values <- pmax(pred_values, 0)
 
   preds <- dplyr::mutate(all_data, pred = pred_values)
-
   keep_cols <- c(if (!is.null(id_col)) "ID", "YYYY","Q", "pred")
+
   list(
     kge_cv_mean     = kge_mean,
     preds           = dplyr::select(preds, dplyr::all_of(keep_cols)),
@@ -289,6 +354,201 @@ wass2s_tune_pred_ml <- function(
     param_grid      = grid
   )
 }
+
+# wass2s_tune_pred_ml <- function(
+#     df_basin_product,
+#     predictors,
+#     target = "Q",
+#     date_col = "YYYY",
+#     id_col = NULL,
+#     prediction_years = NULL,
+#     model = SUPPORTED_MODELS,
+#     resamples = NULL,
+#     grid_levels = 5,
+#     seed = 123,
+#     pretrained_wflow = NULL,
+#     init_frac   = 0.80,
+#     assess_frac = 0.20,
+#     n_splits    = 3,
+#     cumulative  = TRUE,
+#     quiet       = TRUE,
+#     target_positive = TRUE,
+#     allow_par = TRUE,
+#     verbose_tune = TRUE,
+#     max_na_frac = 0.3,
+#     impute = "median",
+#     require_variance = TRUE,
+#     min_data_required = 10,
+#     ...
+# ){
+#   set.seed(seed)
+#   model <- match.arg(model, SUPPORTED_MODELS)
+#   spec  <- model_spec(model)
+#
+#   # ---- validation ----
+#   if (!target %in% names(df_basin_product)) {
+#     stop(glue::glue("wass2s_tune_pred_ml(): column {target} not found."), call. = FALSE)
+#   }
+#   if (!date_col %in% names(df_basin_product)) {
+#     stop(glue::glue("wass2s_tune_pred_ml(): column {date_col} not found."), call. = FALSE)
+#   }
+#   if (!is.null(id_col) && !id_col %in% names(df_basin_product)) {
+#     stop(glue::glue("wass2s_tune_pred_ml(): id_col {id_col} not found."), call. = FALSE)
+#   }
+#
+#   predictors <- intersect(predictors, setdiff(names(df_basin_product), c(date_col, target, id_col)))
+#   if (length(predictors) < 1L) {
+#     stop("wass2s_tune_pred_ml(): predictors empty after intersection.", call. = FALSE)
+#   }
+#   if (!is.null(prediction_years)) {
+#
+#     if (!is.numeric(prediction_years) ||
+#         length(prediction_years) != 2 ||
+#         anyNA(prediction_years)) {
+#
+#       stop(
+#         "prediction_years must be a numeric vector of length 2 ",
+#         "(format YYYY or YYYYMMDD).",
+#         call. = FALSE
+#       )
+#     }
+#   }
+#
+#
+#   # ---- standardize names (keep ID if provided) ----
+#   if (!is.null(id_col)) {
+#     df_basin_product <- dplyr::rename(df_basin_product, ID = !!id_col)
+#   }
+#   df_basin_product <- dplyr::rename(df_basin_product, YYYY = !!date_col, Q = !!target)
+#
+#   # Ensure YYYY is YYYYMMDD integer (or Date -> yyyymmdd)
+#   df_basin_product$YYYY <- .ensure_yyyymmdd(df_basin_product$YYYY)
+#
+#   # Stable ordering to avoid positional mismatch
+#   if (!is.null(id_col)) {
+#     df_basin_product <- dplyr::arrange(df_basin_product, ID, YYYY)
+#   } else {
+#     df_basin_product <- dplyr::arrange(df_basin_product, YYYY)
+#   }
+#
+#   # Sanitize target column
+#   df_basin_product <- .sanitize_numeric_columns(
+#     df   = df_basin_product,
+#     cols = "Q",
+#     max_na_frac = max_na_frac,
+#     impute = impute,
+#     require_variance = require_variance
+#   )
+#
+#   # ---- holdout slicing (by YYYYMMDD bounds) ----
+#   holdout_data <- NULL
+#   bounds <- .pred_years_to_bounds(prediction_years)|> unlist()
+#   if (!is.null(bounds)) {
+#     bounds[2] <- min(bounds[2], max(df_basin_product$YYYY, na.rm = TRUE))
+#
+#     holdout_mask <- df_basin_product$YYYY >= bounds[1] &
+#       df_basin_product$YYYY <= bounds[2]
+#     holdout_data <- df_basin_product[holdout_mask, , drop = FALSE]
+#     df_basin_product <- df_basin_product[!holdout_mask, , drop = FALSE]
+#   }
+#
+#   if (nrow(df_basin_product) < min_data_required) {
+#     stop("Insufficient training data after removing prediction years.", call. = FALSE)
+#   }
+#
+#   # Recipe (IMPORTANT: do NOT require ID as predictor)
+#   rec <- make_recipe(df_basin_product, predictors, target = "Q")
+#
+#   # Resamples
+#   if (is.null(resamples)) {
+#     resamples <- make_rolling(
+#       df_basin_product,
+#       year_col = "YYYY",
+#       n_splits = n_splits,
+#       init_frac = init_frac,
+#       assess_frac = assess_frac,
+#       cumulative = cumulative,
+#       quiet = TRUE
+#     )
+#   }
+#
+#   n_min <- min_analysis_n(resamples)
+#   grid  <- model_grid(
+#     model,
+#     p = min(15, length(predictors)),
+#     levels = grid_levels,
+#     n_min = n_min
+#   )
+#
+#   # ---- pretrained path ----
+#   if (!is.null(pretrained_wflow)) {
+#     fitted <- parsnip::fit(pretrained_wflow, df_basin_product)
+#
+#     all_data <- dplyr::bind_rows(df_basin_product, holdout_data)
+#
+#     pred_values <- predict(fitted, new_data = all_data)$.pred
+#     if (target_positive) pred_values <- pmax(pred_values, 0)
+#
+#     preds <- dplyr::mutate(all_data, pred = pred_values)
+#
+#     # Return only stable key + pred (plus optionally Q if you want)
+#     keep_cols <- c(if (!is.null(id_col)) "ID", "YYYY","Q", "pred")
+#     return(list(
+#       kge_cv_mean = NA_real_,
+#       preds = dplyr::select(preds, dplyr::all_of(keep_cols)),
+#       fit = fitted
+#     ))
+#   }
+#
+#   # ---- tune path ----
+#   if (!is.null(holdout_data) && nrow(holdout_data) > 0) holdout_data$Q <- NA_real_
+#
+#   wflow <- workflows::workflow() |>
+#     workflows::add_model(spec) |>
+#     workflows::add_recipe(rec)
+#
+#   ctrl <- tune::control_grid(
+#     save_pred = TRUE,
+#     verbose = !verbose_tune,
+#     allow_par = allow_par,
+#     ...
+#   )
+#
+#   rs <- tune::tune_grid(
+#     object    = wflow,
+#     resamples = resamples,
+#     grid      = grid,
+#     metrics   = yardstick::metric_set(yardstick::rmse),
+#     control   = ctrl
+#   )
+#
+#   pred_cv  <- compute_leaderboard_cv(rs, truth_col = "Q")
+#   kge_mean <- if (nrow(pred_cv) == 0) NA_real_ else pred_cv$kge_mean[[1]]
+#
+#   best_config <- tune::select_best(rs, metric = "rmse")
+#   best_wf <- tune::finalize_workflow(wflow, best_config)
+#   fitted  <- parsnip::fit(best_wf, df_basin_product)
+#   all_data <- dplyr::bind_rows(df_basin_product, holdout_data)
+#   if (!is.null(id_col)) {
+#     all_data <- dplyr::arrange(all_data, ID, YYYY)
+#   } else {
+#     all_data <- dplyr::arrange(all_data, YYYY)
+#   }
+#
+#   pred_values <- predict(fitted, new_data = all_data)$.pred
+#   if (target_positive) pred_values <- pmax(pred_values, 0)
+#
+#   preds <- dplyr::mutate(all_data, pred = pred_values)
+#
+#   keep_cols <- c(if (!is.null(id_col)) "ID", "YYYY","Q", "pred")
+#   list(
+#     kge_cv_mean     = kge_mean,
+#     preds           = dplyr::select(preds, dplyr::all_of(keep_cols)),
+#     fit             = fitted,
+#     leaderboard_cfg = pred_cv,
+#     param_grid      = grid
+#   )
+# }
 
 # wass2s_tune_pred_ml <- function(
 #     df_basin_product,

@@ -1,3 +1,24 @@
+.finalize_stat_wf_no_tune <- function(wf, model) {
+  if (model == "pcr") {
+    tune::finalize_workflow(wf, tibble::tibble(num_comp = min(2, length(wf$pre$predictors))))
+  } else {
+    tune::finalize_workflow(wf, tibble::tibble(penalty = 0.01))
+  }
+}
+.filter_valid_splits <- function(rset, predictors, require_variance) {
+  if (is.null(rset) || length(rset$splits) == 0) return(rset)
+
+  ok <- vapply(rset$splits, function(spl) {
+    ana <- rsample::analysis(spl)
+    has_valid_predictors(ana, predictors, require_variance = require_variance)
+  }, logical(1))
+
+  rset$splits <- rset$splits[ok]
+  rset$id     <- rset$id[ok]
+  rset
+}
+
+
 #' Tune and refit a single product/model, select configuration by KGE
 #'
 #' Performs rolling-origin resampling, tunes hyperparameters (PCR threshold
@@ -296,25 +317,8 @@ wass2s_tune_pred_stat <- function(
     }
   }
 
-  if (is.null(rs) || length(rs$splits) < 1) {
-    if (!quiet) message("Insufficient resamples created.")
-
-    all_data <- if (!is.null(holdout_data)) dplyr::bind_rows(df_basin_product, holdout_data) else df_basin_product
-    all_data <- if (!is.null(id_col)) dplyr::arrange(all_data, ID, YYYY) else dplyr::arrange(all_data, YYYY)
-
-    preds_empty <- if (!is.null(id_col)) {
-      dplyr::distinct(all_data, ID, YYYY) %>% dplyr::mutate(pred = NA_real_)
-    } else {
-      tibble::tibble(YYYY = unique(all_data$YYYY), pred = NA_real_)
-    }
-
-    return(list(
-      kge_cv_mean = NA_real_,
-      rsq_cv_mean = NA_real_,
-      preds = preds_empty,
-      leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric(), rsq_mean = numeric())
-    ))
-  }
+  # ---- Filter out degenerate splits (prevents "No covariates found") ----
+  rs <- .filter_valid_splits(rs, predictors, require_variance)
 
   # ---- Create workflow based on model type ----
   model_functions <- list(
@@ -348,6 +352,37 @@ wass2s_tune_pred_stat <- function(
     ))
   }
 
+  if (is.null(rs) || length(rs$splits) < 1) {
+    # Fallback: fit once without tuning, but still return predictions.
+    if (!quiet) message("No valid resample split left after filtering; fitting without tuning.")
+
+    # Fit a default workflow (no tuning)
+    fit_final <- tryCatch({
+      wf_nt <- .finalize_stat_wf_no_tune(wf, model)
+      parsnip::fit(wf_nt, df_basin_product)
+    }, error = function(e) NULL)
+
+    all_data <- if (!is.null(holdout_data)) dplyr::bind_rows(df_basin_product, holdout_data) else df_basin_product
+    all_data <- if (!is.null(id_col)) dplyr::arrange(all_data, ID, YYYY) else dplyr::arrange(all_data, YYYY)
+
+    preds_final <- if (is.null(fit_final)) {
+      if (!is.null(id_col)) dplyr::distinct(all_data, ID, YYYY) %>% dplyr::mutate(pred = NA_real_) else
+        tibble::tibble(YYYY = unique(all_data$YYYY), pred = NA_real_)
+    } else {
+      pred_values <- predict(fit_final, new_data = all_data) %>% dplyr::pull(.pred)
+      if (target_positive) pred_values <- pmax(pred_values, 0)
+      out <- dplyr::mutate(all_data, pred = pred_values)
+      keep_cols <- c(if (!is.null(id_col)) "ID", "YYYY","Q", "pred")
+      dplyr::select(out, dplyr::all_of(keep_cols))
+    }
+
+    return(list(
+      kge_cv_mean = NA_real_,
+      rsq_cv_mean = NA_real_,
+      preds = preds_final,
+      leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric(), rsq_mean = numeric())
+    ))
+  }
   # ---- Grid ----
   if (is.null(grid)) {
     grid_functions <- list(
