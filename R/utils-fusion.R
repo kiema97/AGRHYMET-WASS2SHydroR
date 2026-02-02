@@ -51,8 +51,8 @@ fuse_products_predictions <- function(
   results_top <- results[match(keep_names, purrr::map_chr(results, "product"))]
 
   scores_keep <- lb_ok$score[match(keep_names, lb_ok$product)]
-  #w <- pmax(scores_keep, 0)
-  w[scores_keep < min_score] <- 0
+  w <- pmax(scores_keep, min_score)
+  #w[scores_keep < min_score] <- 0
 
   if (all(w == 0)) {
     return(list(
@@ -195,16 +195,6 @@ fuse_products_predictions <- function(
 #' @return Tibble (YYYY, pred_fused).
 #' @keywords internal
 fuse_topk <- function(preds_long) {
-  stopifnot(all(c("YYYY","pred","w") %in% names(preds_long)))
-  preds_long |>
-    dplyr::group_by(YYYY) |>
-    dplyr::summarise(
-      pred_fused = mean(pred, na.rm = TRUE) ,
-      .groups = "drop"
-    )
-}
-
-fuse_topk_ <- function(preds_long) {
   stopifnot(all(c("YYYY", "pred", "w") %in% names(preds_long)))
 
   preds_long |>
@@ -232,7 +222,15 @@ fuse_topk_ <- function(preds_long) {
 
 
 
-
+# fuse_topk <- function(preds_long) {
+#   stopifnot(all(c("YYYY","pred","w") %in% names(preds_long)))
+#   preds_long |>
+#     dplyr::group_by(YYYY) |>
+#     dplyr::summarise(
+#       pred_fused = mean(pred, na.rm = TRUE) ,
+#       .groups = "drop"
+#     )
+# }
 #' Full-join a list of (YYYY, pred) tibbles with renaming
 #'
 #' @param lst Named list of tibbles. Each must have columns YYYY, pred.
