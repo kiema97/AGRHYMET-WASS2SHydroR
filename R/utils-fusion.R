@@ -195,6 +195,16 @@ fuse_products_predictions <- function(
 #' @return Tibble (YYYY, pred_fused).
 #' @keywords internal
 fuse_topk <- function(preds_long) {
+  stopifnot(all(c("YYYY","pred","w") %in% names(preds_long)))
+  preds_long |>
+    dplyr::group_by(YYYY) |>
+    dplyr::summarise(
+      pred_fused = mean(pred, na.rm = TRUE) ,
+      .groups = "drop"
+    )
+}
+
+fuse_topk_ <- function(preds_long) {
   stopifnot(all(c("YYYY", "pred", "w") %in% names(preds_long)))
 
   preds_long |>
@@ -220,15 +230,7 @@ fuse_topk <- function(preds_long) {
     )
 }
 
-# fuse_topk <- function(preds_long) {
-#   stopifnot(all(c("YYYY","pred","w") %in% names(preds_long)))
-#   preds_long |>
-#     dplyr::group_by(YYYY) |>
-#     dplyr::summarise(
-#       pred_fused = mean(w * pred, na.rm = TRUE) ,
-#       .groups = "drop"
-#     )
-# }
+
 
 
 #' Full-join a list of (YYYY, pred) tibbles with renaming
