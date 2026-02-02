@@ -51,7 +51,7 @@ fuse_products_predictions <- function(
   results_top <- results[match(keep_names, purrr::map_chr(results, "product"))]
 
   scores_keep <- lb_ok$score[match(keep_names, lb_ok$product)]
-  w <- pmax(scores_keep, 0)
+  #w <- pmax(scores_keep, 0)
   w[scores_keep < min_score] <- 0
 
   if (all(w == 0)) {
@@ -129,7 +129,8 @@ fuse_products_predictions <- function(
           recipes::update_role(YYYY, new_role = "id") |>
           recipes::step_rm(YYYY) |>
           recipes::step_zv(recipes::all_predictors()) |>
-          recipes::step_impute_median(recipes::all_predictors())
+          recipes::step_impute_median(recipes::all_predictors()) %>%
+          recipes::step_normalize(recipes::all_predictors())
 
         spec <- model_spec(sub_fuser)
         pred_cols <- setdiff(names(df_tr), c("YYYY", "Q"))
