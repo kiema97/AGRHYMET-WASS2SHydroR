@@ -186,13 +186,12 @@ wass2s_tune_pred_ml <- function(
 
   # ---- holdout slicing (by YYYYMMDD bounds) ----
   holdout_data <- NULL
-  bounds <- .pred_years_to_bounds(prediction_years)  # should return NULL or integer(2)
+  bounds <- .pred_years_to_bounds(prediction_years)|> unlist()|>sort()  # should return NULL or integer(2)
   if (!is.null(bounds)) {
-    bounds <- sort(bounds)
-    bounds[2] <- min(bounds[2], max(df_basin_product$YYYY, na.rm = TRUE))
+    bounds[2] <- min(max(bounds), max(df_basin_product$YYYY, na.rm = TRUE))
 
-    holdout_mask <- df_basin_product$YYYY >= bounds[1] &
-      df_basin_product$YYYY <= bounds[2]
+    holdout_mask <- df_basin_product$YYYY >= min(bounds) &
+      df_basin_product$YYYY <= max(bounds)
 
     holdout_data <- df_basin_product[holdout_mask, , drop = FALSE]
     df_basin_product <- df_basin_product[!holdout_mask, , drop = FALSE]

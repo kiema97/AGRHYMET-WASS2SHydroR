@@ -173,13 +173,13 @@ wass2s_tune_pred_stat <- function(
 
   # ---- Handle prediction years (convert to YYYYMMDD bounds) ----
   holdout_data <- NULL
-  bounds <- .pred_years_to_bounds(prediction_years)|> unlist()
+  bounds <- .pred_years_to_bounds(prediction_years)|> unlist()|>sort()
 
   if (!is.null(bounds)) {
-    bounds[2] <- min(bounds[2], max(df_basin_product$YYYY, na.rm = TRUE))
+    bounds[2] <- min(max(bounds), max(df_basin_product$YYYY, na.rm = TRUE))
 
-    holdout_mask <- df_basin_product$YYYY >= bounds[1] &
-      df_basin_product$YYYY <= bounds[2]
+    holdout_mask <- df_basin_product$YYYY >= min(bounds) &
+      df_basin_product$YYYY <= max(bounds)
 
     holdout_data <- df_basin_product[holdout_mask, , drop = FALSE]
     #holdout_data$Q <- NA_real_
