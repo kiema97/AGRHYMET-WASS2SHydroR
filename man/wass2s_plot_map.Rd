@@ -9,6 +9,11 @@ wass2s_plot_map(
   data,
   basin_col = "HYBAS_ID",
   type = c("auto", "probs", "class", "metrics", "metric_classes"),
+  layers = NULL,
+  layer_position = c("below", "above"),
+  sf_crop = NULL,
+  basin_line_color = NULL,
+  basin_line_size = NULL,
   ...
 )
 }
@@ -21,8 +26,20 @@ wass2s_plot_map(
 
 \item{type}{one of `"auto"`, `"probs"`, `"class"`, `"metrics"`, `"metric_classes"`.}
 
-\item{...}{passed to methods; for `type="metrics"`, argument `metrics=` can
-explicitly list the columns to plot, and `limits=` can provide per-metric ranges.}
+\item{layers}{Optional list of extra ggplot2 layers. Supports both:
+- plain layers: `list(geom_sf(...), ...)` (all positioned by `layer_position`)
+- positioned layers: `list(list(layer=geom_sf(...), position="below"), ...)`}
+
+\item{layer_position}{Default position for plain `layers` ("below" or "above").}
+
+\item{sf_crop}{Optional sf object/path used to crop plot extent (e.g., country boundary).}
+
+\item{basin_line_color}{Basin borders color (when supported by the underlying plotter).}
+
+\item{basin_line_size}{Basin borders size (when supported by the underlying plotter).}
+
+\item{...}{Additional arguments passed to methods and underlying plotters
+(e.g., `metrics=`, `limits=`, `palette=`, `facet_labels=`, `file=`, etc.).}
 }
 \value{
 a `ggplot2::ggplot` object (invisible if saved by the method).
@@ -38,16 +55,4 @@ Supported `type` values:
 - `"class"`             : dominant class map (requires `class_hat`)
 - `"metrics"`           : continuous metric maps (e.g., `KGE, RMSE`) with facets
 - `"metric_classes"`    : categorical map based on a `quality` column
-}
-\examples{
-\dontrun{
-# auto (detection)
-wass2s_plot_map("basins.gpkg", probs_df)
-
-# force a specific type
-wass2s_plot_map("basins.gpkg", class_df, type = "class")
-
-# continuous metrics with explicit columns
-wass2s_plot_map("basins.gpkg", metrics_df, type = "metrics", metrics = c("KGE","RMSE"))
-}
 }

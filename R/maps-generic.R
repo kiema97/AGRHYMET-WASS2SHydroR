@@ -89,26 +89,42 @@ as_map_data <- function(df, basin_col = "HYBAS_ID") {
 #' @param data data.frame/tibble (1 row per basin) containing the expected columns depending on `type`.
 #' @param basin_col join key with `sf_basins` (default `"HYBAS_ID"`).
 #' @param type one of `"auto"`, `"probs"`, `"class"`, `"metrics"`, `"metric_classes"`.
-#' @param ... passed to methods; for `type="metrics"`, argument `metrics=` can
-#'   explicitly list the columns to plot, and `limits=` can provide per-metric ranges.
+#'
+#' @param layers Optional list of extra ggplot2 layers. Supports both:
+#'   - plain layers: `list(geom_sf(...), ...)` (all positioned by `layer_position`)
+#'   - positioned layers: `list(list(layer=geom_sf(...), position="below"), ...)`
+#' @param layer_position Default position for plain `layers` ("below" or "above").
+#' @param sf_crop Optional sf object/path used to crop plot extent (e.g., country boundary).
+#' @param basin_line_color Basin borders color (when supported by the underlying plotter).
+#' @param basin_line_size Basin borders size (when supported by the underlying plotter).
+#'
+#' @param ... Additional arguments passed to methods and underlying plotters
+#'   (e.g., `metrics=`, `limits=`, `palette=`, `facet_labels=`, `file=`, etc.).
+#'
 #' @return a `ggplot2::ggplot` object (invisible if saved by the method).
-#' @examples
-#' \dontrun{
-#' # auto (detection)
-#' wass2s_plot_map("basins.gpkg", probs_df)
-#'
-#' # force a specific type
-#' wass2s_plot_map("basins.gpkg", class_df, type = "class")
-#'
-#' # continuous metrics with explicit columns
-#' wass2s_plot_map("basins.gpkg", metrics_df, type = "metrics", metrics = c("KGE","RMSE"))
-#' }
 #' @export
-wass2s_plot_map <- function(sf_basins, data, basin_col = "HYBAS_ID",
+wass2s_plot_map <- function(sf_basins, data,
+                            basin_col = "HYBAS_ID",
                         type = c("auto","probs","class","metrics","metric_classes"),
+                        layers = NULL,
+                        layer_position = c("below", "above"),
+                        sf_crop = NULL,
+                        basin_line_color = NULL,
+                        basin_line_size = NULL,
                         ...) {
   type <- match.arg(type)
   dots <- rlang::list2(...)
+
+
+  # ---- expose new parameters safely (do not override user dots unless explicitly provided) ----
+  if (!is.null(layers)) dots$layers <- layers
+  if (!is.null(layer_position)) dots$layer_position <- layer_position
+  if (!is.null(sf_crop)) dots$sf_crop <- sf_crop
+
+  # Only pass border params if user supplied them.
+  # (Avoid forcing defaults here; underlying plotters already have defaults.)
+  if (!is.null(basin_line_color)) dots$basin_line_color <- basin_line_color
+  if (!is.null(basin_line_size))  dots$basin_line_size  <- basin_line_size
 
   # Pre-type 'data' according to 'type'
   data_typed <- switch(
