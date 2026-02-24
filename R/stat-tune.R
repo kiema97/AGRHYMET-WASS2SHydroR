@@ -73,6 +73,8 @@
 #' normalized during a prior preprocessing stage (e.g., EOF/PCA computation),
 #' ensuring that the same scaling is not applied multiple times and maintaining
 #' consistency across modeling workflows.
+#' @param impute_nominal Logical; if \code{TRUE}, apply \code{step_impute_mode()}
+#'   to nominal predictors. Default: \code{TRUE}.
 #' @param target_positive Logical; if TRUE, force negative predictions to zero.
 #' @param resamples Optional \code{rsample::rset} object for resampling.
 #'   If \code{NULL}, a rolling-origin resampling is created via
@@ -125,6 +127,7 @@ wass2s_tune_pred_stat <- function(
     apply_impute = TRUE,
     apply_corr = TRUE,
     apply_normalize = TRUE,
+    impute_nominal = TRUE,
     target_positive = TRUE,
     resamples = NULL,
     pretrained_wflow = NULL,
@@ -302,7 +305,8 @@ wass2s_tune_pred_stat <- function(
         pca_var_threshold = pca_var_threshold,
         apply_corr = apply_corr,
         apply_normalize = apply_normalize,
-        apply_impute = apply_impute
+        apply_impute = apply_impute,
+        impute_nominal=impute_nominal
       )
 
     } else {

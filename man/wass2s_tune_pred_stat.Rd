@@ -18,6 +18,7 @@ wass2s_tune_pred_stat(
   apply_impute = TRUE,
   apply_corr = TRUE,
   apply_normalize = TRUE,
+  impute_nominal = TRUE,
   target_positive = TRUE,
   resamples = NULL,
   pretrained_wflow = NULL,
@@ -96,6 +97,9 @@ This argument can be set to `FALSE` when predictors have already been
 normalized during a prior preprocessing stage (e.g., EOF/PCA computation),
 ensuring that the same scaling is not applied multiple times and maintaining
 consistency across modeling workflows.}
+
+\item{impute_nominal}{Logical; if \code{TRUE}, apply \code{step_impute_mode()}
+to nominal predictors. Default: \code{TRUE}.}
 
 \item{target_positive}{Logical; if TRUE, force negative predictions to zero.}
 
