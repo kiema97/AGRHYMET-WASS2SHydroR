@@ -19,6 +19,9 @@ make_recipe(
   auto_pca = TRUE,
   auto_pca_when_gt = 15,
   auto_pca_var_threshold = 0.8,
+  apply_impute = TRUE,
+  apply_corr = TRUE,
+  apply_normalize = TRUE,
   verbose = FALSE
 )
 }
@@ -65,6 +68,35 @@ is greater than this threshold. Default: \code{15}.}
 
 \item{auto_pca_var_threshold}{Numeric in (0, 1); cumulative variance target used
 when auto-PCA is triggered. Default: \code{0.95}.}
+
+\item{apply_impute}{Logical; controls whether missing value imputation is
+applied to predictor variables. When `TRUE` (default), numeric predictors are
+imputed using median imputation via \code{recipes::step_impute_median()}, and
+nominal predictors (if \code{impute_nominal = TRUE}) are imputed using
+\code{recipes::step_impute_mode()}.
+
+This argument should typically be set to `FALSE` when predictors have already
+been preprocessed upstream (e.g., EOF/PCA transformation with prior
+imputation), in order to avoid redundant transformations and preserve
+reproducibility of the preprocessing pipeline.}
+
+\item{apply_corr}{Logical; indicates whether a correlation-based filtering
+step is applied to numeric predictors. When `TRUE` (default), highly
+correlated predictors are removed using \code{recipes::step_corr()} with the
+specified \code{corr_threshold} and \code{corr_method}.
+
+Setting this argument to `FALSE` is recommended when predictors have already
+undergone dimensionality reduction (e.g., EOF or PCA preprocessing), as the
+correlation structure has typically been addressed upstream.}
+
+\item{apply_normalize}{Logical; controls whether numeric predictors are
+standardized using \code{recipes::step_normalize()}. When `TRUE` (default),
+predictors are centered and scaled prior to modeling.
+
+This argument can be set to `FALSE` when predictors have already been
+normalized during a prior preprocessing stage (e.g., EOF/PCA computation),
+ensuring that the same scaling is not applied multiple times and maintaining
+consistency across modeling workflows.}
 
 \item{verbose}{Logical; if \code{TRUE}, emit informational messages.
 Default: \code{FALSE}.}

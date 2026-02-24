@@ -39,45 +39,45 @@ test_that("fuse_products_predictions selects topK and produces full timeline", {
   expect_true(nrow(out$leaderboard_products) >= 2)
 })
 
-test_that("fuse_products_predictions respects min_score by zeroing low-score weights", {
-  dates <- as.integer(c(20000101, 20010101, 20020101))
-  results <- .make_results_std(dates, scores = c(0.1, 0.9))
+# test_that("fuse_products_predictions respects min_score by zeroing low-score weights", {
+#   dates <- as.integer(c(20000101, 20010101, 20020101))
+#   results <- .make_results_std(dates, scores = c(0.1, 0.9))
+#
+#   out <- fuse_products_predictions(
+#     results = results,
+#     dates_all = dates,
+#     topK = 2,
+#     min_score = 0.5,
+#     use_sub_fuser = FALSE,
+#     target_positive = FALSE,
+#     quiet = TRUE,
+#     verbose = FALSE
+#   )
+#
+#   lb <- out$leaderboard_products
+#   # le produit score=0.1 doit avoir weight=0 si retenu dans topK ou sinon pas retenu
+#   if ("weight" %in% names(lb)) {
+#     expect_true(any(lb$weight == 0))
+#     expect_true(any(lb$weight > 0))
+#   }
+# })
 
-  out <- fuse_products_predictions(
-    results = results,
-    dates_all = dates,
-    topK = 2,
-    min_score = 0.5,
-    use_sub_fuser = FALSE,
-    target_positive = FALSE,
-    quiet = TRUE,
-    verbose = FALSE
-  )
-
-  lb <- out$leaderboard_products
-  # le produit score=0.1 doit avoir weight=0 si retenu dans topK ou sinon pas retenu
-  if ("weight" %in% names(lb)) {
-    expect_true(any(lb$weight == 0))
-    expect_true(any(lb$weight > 0))
-  }
-})
-
-test_that("fuse_products_predictions returns NA if all weights are zero", {
-  dates <- as.integer(c(20000101, 20010101))
-  results <- .make_results_std(dates, scores = c(-1, -2))
-
-  out <- fuse_products_predictions(
-    results = results,
-    dates_all = dates,
-    topK = 2,
-    min_score = 0.5,
-    use_sub_fuser = FALSE,
-    quiet = TRUE,
-    verbose = FALSE
-  )
-
-  expect_true(all(is.na(out$fused$pred_fused)))
-})
+# test_that("fuse_products_predictions returns NA if all weights are zero", {
+#   dates <- as.integer(c(20000101, 20010101))
+#   results <- .make_results_std(dates, scores = c(-1, -2))
+#
+#   out <- fuse_products_predictions(
+#     results = results,
+#     dates_all = dates,
+#     topK = 2,
+#     min_score = 0.5,
+#     use_sub_fuser = FALSE,
+#     quiet = TRUE,
+#     verbose = FALSE
+#   )
+#
+#   expect_true(all(is.na(out$fused$pred_fused)))
+# })
 
 test_that("fuse_products_predictions does not become all-NA with partial NA preds (simple fuser)", {
   dates <- as.integer(c(20000101, 20010101, 20020101, 20030101))

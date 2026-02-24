@@ -39,6 +39,40 @@
 #' @param prediction_years Optional numeric vector of length 2 giving the
 #'   start and end years for a holdout prediction period. These years
 #'   are excluded from training and predictions are generated after fitting.
+#' @param auto_pca Logical; if \code{TRUE}, enable automatical PCA. Default: \code{TRUE}.
+#' @param pca_num_comp Integer or \code{NULL}; if provided, apply PCA with a fixed
+#'   number of components (disables auto-PCA).
+#' @param pca_var_threshold Numeric or \code{NULL}; if provided (e.g. \code{0.95}),
+#'   apply PCA keeping enough components to reach the cumulative explained variance
+#'   are excluded from training and predictions are generated after fitting.
+#' @param apply_impute Logical; controls whether missing value imputation is
+#' applied to predictor variables. When `TRUE` (default), numeric predictors are
+#' imputed using median imputation via \code{recipes::step_impute_median()}, and
+#' nominal predictors (if \code{impute_nominal = TRUE}) are imputed using
+#' \code{recipes::step_impute_mode()}.
+#'
+#' This argument should typically be set to `FALSE` when predictors have already
+#' been preprocessed upstream (e.g., EOF/PCA transformation with prior
+#' imputation), in order to avoid redundant transformations and preserve
+#' reproducibility of the preprocessing pipeline.
+#'
+#' @param apply_corr Logical; indicates whether a correlation-based filtering
+#' step is applied to numeric predictors. When `TRUE` (default), highly
+#' correlated predictors are removed using \code{recipes::step_corr()} with the
+#' specified \code{corr_threshold} and \code{corr_method}.
+#'
+#' Setting this argument to `FALSE` is recommended when predictors have already
+#' undergone dimensionality reduction (e.g., EOF or PCA preprocessing), as the
+#' correlation structure has typically been addressed upstream.
+#'
+#' @param apply_normalize Logical; controls whether numeric predictors are
+#' standardized using \code{recipes::step_normalize()}. When `TRUE` (default),
+#' predictors are centered and scaled prior to modeling.
+#'
+#' This argument can be set to `FALSE` when predictors have already been
+#' normalized during a prior preprocessing stage (e.g., EOF/PCA computation),
+#' ensuring that the same scaling is not applied multiple times and maintaining
+#' consistency across modeling workflows.
 #' @param target_positive Logical; if TRUE, force negative predictions to zero.
 #' @param resamples Optional \code{rsample::rset} object for resampling.
 #'   If \code{NULL}, a rolling-origin resampling is created via
@@ -85,6 +119,12 @@ wass2s_tune_pred_stat <- function(
     id_col = NULL,
     model = c("pcr", "ridge", "lasso"),
     prediction_years = NULL,          # still provided as years (YYYY)
+    auto_pca = TRUE,
+    pca_num_comp = NULL,
+    pca_var_threshold = NULL,
+    apply_impute = TRUE,
+    apply_corr = TRUE,
+    apply_normalize = TRUE,
     target_positive = TRUE,
     resamples = NULL,
     pretrained_wflow = NULL,
@@ -253,9 +293,31 @@ wass2s_tune_pred_stat <- function(
   # ---- Create recipe ----
   rec <- tryCatch({
     if (model == "pcr") {
-      make_recipe(df_basin_product, predictors, target = "Q", auto_pca = FALSE)
+      make_recipe(
+        df = df_basin_product,
+        predictors = predictors,
+        target = "Q",
+        auto_pca = FALSE,
+        pca_num_comp =pca_num_comp,
+        pca_var_threshold = pca_var_threshold,
+        apply_corr = apply_corr,
+        apply_normalize = apply_normalize,
+        apply_impute = apply_impute
+      )
+
     } else {
-      make_recipe(df_basin_product, predictors, target = "Q", auto_pca = TRUE)
+
+      make_recipe(
+        df = df_basin_product,
+        predictors = predictors,
+        target = "Q",
+        auto_pca = auto_pca,
+        pca_num_comp =pca_num_comp,
+        pca_var_threshold = pca_var_threshold,
+        apply_corr = apply_corr,
+        apply_normalize = apply_normalize,
+        apply_impute = apply_impute
+      )
     }
   }, error = function(e) {
     if (!quiet) message("Error creating recipe: ", e$message)
