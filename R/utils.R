@@ -225,14 +225,18 @@ engine_is_available <- function(pkg, feature = NULL, strict = FALSE,
                                       max_na_frac = 0.30,
                                       impute = c("median", "mean", "none"),
                                       require_variance = TRUE) {
+
   impute <- match.arg(impute)
 
+  # ---- global guards ----
   if (!is.data.frame(df)) {
     stop("`.sanitize_numeric_columns()`: `df` must be a data.frame/tibble.", call. = FALSE)
   }
+
   if (!is.character(cols) || length(cols) < 1L) {
     stop("`.sanitize_numeric_columns()`: `cols` must be a non-empty character vector.", call. = FALSE)
   }
+
   if (!is.numeric(max_na_frac) || length(max_na_frac) != 1L || max_na_frac < 0 || max_na_frac > 1) {
     stop("`.sanitize_numeric_columns()`: `max_na_frac` must be in [0, 1].", call. = FALSE)
   }
@@ -243,48 +247,67 @@ engine_is_available <- function(pkg, feature = NULL, strict = FALSE,
          paste(missing_cols, collapse = ", "), call. = FALSE)
   }
 
+  # ---- column loop ----
   for (col in cols) {
+
     x <- df[[col]]
 
+    # Guard 1: type
     if (!is.numeric(x)) {
       stop("`.sanitize_numeric_columns()`: column '", col, "' must be numeric.", call. = FALSE)
+    }
+
+    # Guard 2: empty vector
+    if (length(x) == 0) {
+      stop("`.sanitize_numeric_columns()`: column '", col, "' is empty.", call. = FALSE)
+    }
+
+    # Guard 3: non-finite values (Inf / -Inf / NaN)
+    bad <- !is.finite(x) & !is.na(x)
+    if (any(bad)) {
+      stop(sprintf("Column '%s' contains non-finite values (Inf/-Inf/NaN).", col),
+           call. = FALSE)
     }
 
     n_total <- length(x)
     n_na    <- sum(is.na(x))
     frac_na <- n_na / n_total
 
-    # Guard 1: too many missing values
+    # Guard 4: too many NA
     if (frac_na > max_na_frac) {
       stop(sprintf("Too many missing values in '%s' (%.1f%% > %.1f%% allowed).",
                    col, 100 * frac_na, 100 * max_na_frac), call. = FALSE)
     }
 
-    # Guard 2: all NA (cannot impute)
+    # Guard 5: all NA
     if (n_na == n_total) {
-      stop(sprintf("All values in '%s' are NA; imputation is not possible.", col), call. = FALSE)
+      stop(sprintf("All values in '%s' are NA; imputation is not possible.", col),
+           call. = FALSE)
     }
 
-    # Optional imputation
+    # ---- optional imputation ----
     if (n_na > 0 && impute != "none") {
+
       fill <- switch(
         impute,
         median = stats::median(x, na.rm = TRUE),
         mean   = base::mean(x, na.rm = TRUE)
       )
+
       if (!is.finite(fill)) {
         stop(sprintf("Computed %s for '%s' is not finite; cannot impute.",
                      impute, col), call. = FALSE)
       }
+
       x[is.na(x)] <- fill
       df[[col]] <- x
     }
 
-    # Optional variance requirement
+    # ---- variance check ----
     if (isTRUE(require_variance)) {
       s <- stats::sd(df[[col]], na.rm = TRUE)
       if (!is.finite(s) || s == 0) {
-        stop(sprintf("Column '%s' has zero standard deviation after checks/imputation.", col),
+        stop(sprintf("Column '%s' has zero or undefined standard deviation after checks.", col),
              call. = FALSE)
       }
     }
@@ -292,5 +315,77 @@ engine_is_available <- function(pkg, feature = NULL, strict = FALSE,
 
   df
 }
-
+# .sanitize_numeric_columns_ <- function(df,
+#                                       cols,
+#                                       max_na_frac = 0.30,
+#                                       impute = c("median", "mean", "none"),
+#                                       require_variance = TRUE) {
+#   impute <- match.arg(impute)
+#
+#   if (!is.data.frame(df)) {
+#     stop("`.sanitize_numeric_columns()`: `df` must be a data.frame/tibble.", call. = FALSE)
+#   }
+#   if (!is.character(cols) || length(cols) < 1L) {
+#     stop("`.sanitize_numeric_columns()`: `cols` must be a non-empty character vector.", call. = FALSE)
+#   }
+#   if (!is.numeric(max_na_frac) || length(max_na_frac) != 1L || max_na_frac < 0 || max_na_frac > 1) {
+#     stop("`.sanitize_numeric_columns()`: `max_na_frac` must be in [0, 1].", call. = FALSE)
+#   }
+#
+#   missing_cols <- setdiff(cols, names(df))
+#   if (length(missing_cols)) {
+#     stop("`.sanitize_numeric_columns()`: columns not found: ",
+#          paste(missing_cols, collapse = ", "), call. = FALSE)
+#   }
+#
+#   for (col in cols) {
+#     x <- df[[col]]
+#
+#     if (!is.numeric(x)) {
+#       stop("`.sanitize_numeric_columns()`: column '", col, "' must be numeric.", call. = FALSE)
+#     }
+#
+#     n_total <- length(x)
+#     n_na    <- sum(is.na(x))
+#     frac_na <- n_na / n_total
+#
+#     # Guard 1: too many missing values
+#     if (frac_na > max_na_frac) {
+#       stop(sprintf("Too many missing values in '%s' (%.1f%% > %.1f%% allowed).",
+#                    col, 100 * frac_na, 100 * max_na_frac), call. = FALSE)
+#     }
+#
+#     # Guard 2: all NA (cannot impute)
+#     if (n_na == n_total) {
+#       stop(sprintf("All values in '%s' are NA; imputation is not possible.", col), call. = FALSE)
+#     }
+#
+#     # Optional imputation
+#     if (n_na > 0 && impute != "none") {
+#       fill <- switch(
+#         impute,
+#         median = stats::median(x, na.rm = TRUE),
+#         mean   = base::mean(x, na.rm = TRUE)
+#       )
+#       if (!is.finite(fill)) {
+#         stop(sprintf("Computed %s for '%s' is not finite; cannot impute.",
+#                      impute, col), call. = FALSE)
+#       }
+#       x[is.na(x)] <- fill
+#       df[[col]] <- x
+#     }
+#
+#     # Optional variance requirement
+#     if (isTRUE(require_variance)) {
+#       s <- stats::sd(df[[col]], na.rm = TRUE)
+#       if (!is.finite(s) || s == 0) {
+#         stop(sprintf("Column '%s' has zero standard deviation after checks/imputation.", col),
+#              call. = FALSE)
+#       }
+#     }
+#   }
+#
+#   df
+# }
+#
 

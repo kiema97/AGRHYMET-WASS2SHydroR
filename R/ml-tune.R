@@ -201,6 +201,18 @@ wass2s_tune_pred_ml <- function(
     }
   }
 
+  # ---- sanitize target AND predictors ----
+
+  # X : contrôle + imputation
+  df_basin_product <- .sanitize_numeric_columns(
+    df = df_basin_product,
+    cols = predictors,
+    max_na_frac = max_na_frac,
+    impute = impute,
+    require_variance = require_variance
+  )
+
+
   # ---- standardize names (keep ID if provided) ----
   if (!is.null(id_col)) {
     df_basin_product <- dplyr::rename(df_basin_product, ID = !!rlang::sym(id_col))
@@ -240,15 +252,14 @@ wass2s_tune_pred_ml <- function(
     stop("No valid predictors available after sanitization (all NA/constant).", call. = FALSE)
   }
 
-  # ---- sanitize target AND predictors ----
+  # Q : contrôle qualité uniquement
   df_basin_product <- .sanitize_numeric_columns(
-    df   = df_basin_product,
-    cols = c("Q", predictors),
+    df = df_basin_product,
+    cols = target,
     max_na_frac = max_na_frac,
-    impute = impute,
-    require_variance = require_variance
+    impute = "none",
+    require_variance = TRUE
   )
-
 
   # ---- recipe ----
   # IMPORTANT: ID must NOT be a predictor

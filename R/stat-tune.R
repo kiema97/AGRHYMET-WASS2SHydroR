@@ -197,6 +197,16 @@ wass2s_tune_pred_stat <- function(
       Q    = !!rlang::sym(target)
     )
 
+  # ---- Sanitize target ----
+  # X : contrôle + imputation
+  df_basin_product <- .sanitize_numeric_columns(
+    df = df_basin_product,
+    cols = predictors,
+    max_na_frac = max_na_frac,
+    impute = impute,
+    require_variance = require_variance
+  )
+
   # ---- Enforce YYYYMMDD format (internal standard) ----
   df_basin_product$YYYY <- .ensure_yyyymmdd(df_basin_product$YYYY)
 
@@ -283,17 +293,16 @@ wass2s_tune_pred_stat <- function(
     ))
   }
 
-  # ---- Sanitize target ----
-  df_basin_product <- .sanitize_numeric_columns(
-    df   = df_basin_product,
-    cols = "Q",
-    max_na_frac = max_na_frac,
-    impute = impute,
-    require_variance = require_variance
-  )
   # ---- Filter non-informative predictors ----
   predictors <- usable_predictors(df_basin_product, predictors)
-
+  # Q : contrôle qualité uniquement
+  df_basin_product <- .sanitize_numeric_columns(
+    df = df_basin_product,
+    cols = "Q",
+    max_na_frac = max_na_frac,
+    impute = "none",
+    require_variance = TRUE
+  )
   # ---- Create recipe ----
   rec <- tryCatch({
     if (model == "pcr") {
