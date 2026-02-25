@@ -205,14 +205,7 @@ wass2s_tune_pred_stat <- function(
     dplyr::ungroup() %>%
     { if (!is.null(id_col)) dplyr::arrange(., ID, YYYY) else dplyr::arrange(., YYYY) }
 
-  # ---- Sanitize target ----
-  df_basin_product <- .sanitize_numeric_columns(
-    df   = df_basin_product,
-    cols = "Q",
-    max_na_frac = max_na_frac,
-    impute = impute,
-    require_variance = require_variance
-  )
+
 
   # ---- Handle prediction years (convert to YYYYMMDD bounds) ----
   holdout_data <- NULL
@@ -290,6 +283,14 @@ wass2s_tune_pred_stat <- function(
     ))
   }
 
+  # ---- Sanitize target ----
+  df_basin_product <- .sanitize_numeric_columns(
+    df   = df_basin_product,
+    cols = "Q",
+    max_na_frac = max_na_frac,
+    impute = impute,
+    require_variance = require_variance
+  )
   # ---- Filter non-informative predictors ----
   predictors <- usable_predictors(df_basin_product, predictors)
 

@@ -217,14 +217,6 @@ wass2s_tune_pred_ml <- function(
     df_basin_product <- dplyr::arrange(df_basin_product, .data$YYYY)
   }
 
-  # ---- sanitize target AND predictors ----
-  df_basin_product <- .sanitize_numeric_columns(
-    df   = df_basin_product,
-    cols = c("Q", predictors),
-    max_na_frac = max_na_frac,
-    impute = impute,
-    require_variance = require_variance
-  )
 
   # ---- holdout slicing (by YYYYMMDD bounds) ----
   holdout_data <- NULL
@@ -247,6 +239,16 @@ wass2s_tune_pred_ml <- function(
   if (!has_valid_predictors(df_basin_product, predictors, require_variance = require_variance)) {
     stop("No valid predictors available after sanitization (all NA/constant).", call. = FALSE)
   }
+
+  # ---- sanitize target AND predictors ----
+  df_basin_product <- .sanitize_numeric_columns(
+    df   = df_basin_product,
+    cols = c("Q", predictors),
+    max_na_frac = max_na_frac,
+    impute = impute,
+    require_variance = require_variance
+  )
+
 
   # ---- recipe ----
   # IMPORTANT: ID must NOT be a predictor
