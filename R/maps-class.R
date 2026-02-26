@@ -152,7 +152,7 @@ plot_class_map <- function(
         above  = colors$above,
         climatology = colors$climatology
       ),
-      drop = TRUE,
+      drop = FALSE,
       na.value = colors$climatology,
       name = "Class"
     )
