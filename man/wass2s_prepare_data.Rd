@@ -2,7 +2,7 @@
 % Please edit documentation in R/wass2s_prepare_data.R
 \name{wass2s_prepare_data}
 \alias{wass2s_prepare_data}
-\title{Preprocess NetCDF/stars to tidy df (stars-first, multi-ref-time + temporal agg)}
+\title{Prepare gridded hydro-climatic data from NetCDF or stars objects}
 \usage{
 wass2s_prepare_data(
   x,
@@ -17,40 +17,140 @@ wass2s_prepare_data(
   dim_period = NULL,
   dim_member = NULL,
   ensemble_reduce = c("mean", "median", "min", "max", "none"),
+  keep_member = FALSE,
+  extra_dims_action = c("warn_mean", "error", "drop"),
+  tz = "UTC",
   verbose = TRUE
 )
 }
 \arguments{
-\item{x}{path to .nc or a `stars` object.}
+\item{x}{A path to a NetCDF file or a \code{stars} object.}
 
-\item{bbox}{optional numeric c(N, W, S, E) in lon/lat.}
+\item{bbox}{Optional bounding box used to spatially subset the grid.
+It can be:
+\itemize{
+  \item a named numeric vector with elements \code{xmin}, \code{ymin},
+    \code{xmax}, \code{ymax};
+  \item an unnamed numeric vector interpreted heuristically.
+}}
 
-\item{spatial_reduce}{"none","mean","median","min","max". Default "none".}
+\item{spatial_reduce}{Character string specifying how to spatially aggregate
+grid cells. One of \code{"none"}, \code{"mean"}, \code{"median"},
+\code{"min"}, or \code{"max"}.}
 
-\item{cell_layout}{when spatial_reduce="none": "long" (default) or "wide".}
+\item{cell_layout}{Output layout when \code{spatial_reduce = "none"}.
+Either \code{"long"} or \code{"wide"}.}
 
-\item{cell_prefix}{prefix for wide columns. Default "val".}
+\item{cell_prefix}{Prefix used for column names in wide format.}
 
-\item{dim_lon, dim_lat, dim_time}{optional overrides for lon/lat/time dims.}
+\item{dim_lon}{Optional name of the longitude dimension/column.}
 
-\item{dim_ref_time, dim_period}{optional overrides for ref-time & lead/period dims.}
+\item{dim_lat}{Optional name of the latitude dimension/column.}
 
-\item{dim_member}{optional override for member/ensemble dim (e.g. "number").}
+\item{dim_time}{Optional name of the time dimension/column.}
 
-\item{ensemble_reduce}{"mean","median","min","max","none". Default "mean".}
+\item{dim_ref_time}{Optional name of the forecast reference time
+dimension/column.}
 
-\item{verbose}{print progress. Default TRUE.}
+\item{dim_period}{Optional name of the forecast lead time / period
+dimension/column.}
+
+\item{dim_member}{Optional name of the ensemble member dimension/column.}
+
+\item{ensemble_reduce}{Character string specifying how to aggregate ensemble
+members. One of \code{"mean"}, \code{"median"}, \code{"min"},
+\code{"max"}, or \code{"none"}.}
+
+\item{keep_member}{Logical. If \code{TRUE} and
+\code{ensemble_reduce = "none"}, keep the ensemble member identifier in the
+output when available.}
+
+\item{extra_dims_action}{How to handle unexpected extra dimensions after the
+main dimensions have been identified. One of:
+\itemize{
+  \item \code{"warn_mean"}: collapse extra dimensions by mean and emit a warning;
+  \item \code{"error"}: stop with an informative error;
+  \item \code{"drop"}: drop extra dimensions before deduplication.
+}}
+
+\item{tz}{Time zone used when constructing the \code{DATE} column.
+Defaults to \code{"UTC"}.}
+
+\item{verbose}{Logical. If \code{TRUE}, informative messages and warnings are
+emitted during processing.}
 }
 \value{
-data.frame with DATE and values (shape depends on args).
+A \code{data.frame} containing at least a \code{DATE} column and one or more
+value columns depending on the selected output mode:
+\itemize{
+  \item if \code{spatial_reduce != "none"}, the result contains one value per
+    time step;
+  \item if \code{cell_layout = "long"}, the result contains
+    \code{DATE}, \code{lon}, \code{lat}, and \code{value};
+  \item if \code{cell_layout = "wide"}, each grid cell becomes a separate
+    column.
+}
 }
 \description{
-This function keeps computations in `stars`/arrays as long as possible:
-- optional bbox crop,
-- optional ensemble aggregation on the member dimension,
-- drops/averages any extra dims,
-- reconstructs a single time dim T from (time|valid_time) or (forecast_reference_time + forecast_period),
-- temporal aggregation on the (X,Y,T) cube: "year" (default), "month", or "none",
-- optional spatial aggregation,
-- finally returns a tidy `data.frame` (long or wide).
+Prepare gridded hydro-climatic data for downstream analysis, modelling, or
+forecasting workflows. The function reads a NetCDF file or a \code{stars}
+object, reconstructs a robust \code{DATE} column, optionally filters the
+spatial domain using a bounding box, handles ensemble members, and returns
+the result in either long or wide tabular format.
+}
+\details{
+This function is designed for hydro-climatic datasets such as precipitation,
+temperature, evapotranspiration, or forecast products distributed on regular
+longitude/latitude grids.
+
+
+The function attempts to reconstruct the \code{DATE} column as robustly as
+possible. It supports:
+\itemize{
+  \item direct date/time vectors stored as \code{Date} or \code{POSIXct};
+  \item character date/time representations such as \code{"YYYY-MM-DD"} or
+    \code{"YYYY-MM-DD HH:MM:SS"};
+  \item numeric time vectors with CF-compliant units such as
+    \code{"days since 1900-01-01"};
+  \item forecast products using \code{forecast_reference_time} combined with
+    \code{forecast_period}.
+}
+
+Longitude values can be automatically aligned between \code{[-180, 180]} and
+\code{[0, 360]} conventions when needed for spatial filtering.
+
+At present, curvilinear grids are not supported and trigger an explicit error.
+
+When \code{cell_layout = "wide"}, the returned object includes a
+\code{"cell_map"} attribute describing the mapping between generated cell
+columns and their corresponding longitude/latitude coordinates.
+}
+\examples{
+\dontrun{
+# Example 1: spatial mean over a bounding box
+res <- wass2s_prepare_data(
+  x = "precip.nc",
+  bbox = c(xmin = -5, ymin = 10, xmax = 2, ymax = 15),
+  spatial_reduce = "mean"
+)
+
+# Example 2: long format without spatial aggregation
+res <- wass2s_prepare_data(
+  x = "temperature.nc",
+  spatial_reduce = "none",
+  cell_layout = "long"
+)
+
+# Example 3: wide format
+res <- wass2s_prepare_data(
+  x = "forecast.nc",
+  spatial_reduce = "none",
+  cell_layout = "wide",
+  cell_prefix = "cell"
+)
+
+# Access the grid-to-column correspondence
+attr(res, "cell_map")
+}
+
 }
