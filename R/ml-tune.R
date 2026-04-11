@@ -183,7 +183,7 @@ wass2s_tune_pred_ml <- function(
   set.seed(seed)
 
   model <- match.arg(model, SUPPORTED_MODELS)
-  spec  <- model_spec(model)
+
 
   # ---- validation ----
   if (!is.data.frame(df_basin_product)) {
@@ -208,6 +208,7 @@ wass2s_tune_pred_ml <- function(
     stop("wass2s_tune_pred_ml(): predictors empty after intersection.", call. = FALSE)
   }
 
+  spec  <- model_spec(model,p= min(15, length(predictors)))
   # ---- validate prediction_years (YYYY or YYYYMMDD) ----
   if (!is.null(prediction_years)) {
     if (!is.numeric(prediction_years) || length(prediction_years) != 2 || anyNA(prediction_years)) {
