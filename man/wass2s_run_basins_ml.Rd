@@ -8,6 +8,7 @@ wass2s_run_basins_ml(
   data_by_product,
   hybas_id = "HYBAS_ID",
   pred_pattern_by_product = NULL,
+  prediction_years = NULL,
   models = SUPPORTED_MODELS,
   topK = 3,
   min_kge_model = -Inf,
@@ -26,6 +27,9 @@ wass2s_run_basins_ml(
 \item{hybas_id}{Name of the basin ID column.}
 
 \item{pred_pattern_by_product}{Optional per-product regex for predictor selection.}
+
+\item{prediction_years}{Optional numeric vector of length 2 giving the
+start and end years for a holdout prediction period. These years}
 
 \item{models}{Character vector of base models to include.}
 

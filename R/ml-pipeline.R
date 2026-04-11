@@ -738,6 +738,8 @@ wass2s_run_bas_mod_ml <- function(
 #' @param data_by_product Named list of data frames (one per product).
 #' @param hybas_id Name of the basin ID column.
 #' @param pred_pattern_by_product Optional per-product regex for predictor selection.
+#' @param prediction_years Optional numeric vector of length 2 giving the
+#'   start and end years for a holdout prediction period. These years
 #' @param models Character vector of base models to include.
 #' @param topK Integer, number of best products per base model.
 #' @param min_kge_model Minimum best KGE required to keep a base model.
@@ -759,6 +761,7 @@ wass2s_run_basins_ml <- function(
     data_by_product,
     hybas_id = "HYBAS_ID",
     pred_pattern_by_product = NULL,
+    prediction_years = NULL,
     models = SUPPORTED_MODELS,
     topK = 3,
     min_kge_model = -Inf,
@@ -767,7 +770,6 @@ wass2s_run_basins_ml <- function(
     workers = 4,
     grid_levels = 5,
     final_fuser = "rf",
-    prediction_years = NULL,
     quiet = TRUE,
     ...
 ) {
