@@ -217,7 +217,8 @@ wass2s_cons_mods_ml <- function(
 
     if (is.null(out) || is.null(out$preds) || !all(c("YYYY", "pred") %in% names(out$preds))) {
       .msg(quiet, verbose, "[", model, "] ", p, " : failed/invalid preds.")
-      return(NULL)
+      df_ <- dplyr::select(dfp, YYYY, Q, dplyr::all_of(predictors))
+      return(df_)
     }
 
     preds <- out$preds |>
