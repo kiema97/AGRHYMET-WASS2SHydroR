@@ -93,38 +93,30 @@ model_spec <- function(name) {
            parsnip::set_engine("ranger", importance = "impurity") |>
            parsnip::set_mode("regression"),
 
+         # xgb = parsnip::boost_tree(
+         #   trees = 1000,
+         #   learn_rate    = tune(),
+         #   tree_depth    = tune(),
+         #   loss_reduction= tune(),
+         #   mtry          = tune(),
+         #   min_n         = tune()
+         # ) |>
+         #   parsnip::set_engine("xgboost") |>
+         #   parsnip::set_mode("regression"),
+
          xgb = parsnip::boost_tree(
-           trees = 1000,
-           learn_rate    = tune(),
-           tree_depth    = tune(),
-           loss_reduction= tune(),
-           mtry          = tune(),
-           min_n         = tune()
+           trees = 2000,
+           learn_rate = tune(),
+           tree_depth = tune(),
+           mtry = tune(),
+           min_n = tune(),
+           loss_reduction = 0,
+           sample_size = 0.8,
+           stop_iter = 50
          ) |>
            parsnip::set_engine("xgboost") |>
            parsnip::set_mode("regression"),
 
-         # gbm = parsnip::boost_tree(
-         #   trees = 1000,
-         #   learn_rate    = tune(),
-         #   tree_depth    = tune(),
-         #   loss_reduction= tune(),
-         #   mtry          = tune(),
-         #   min_n         = tune()
-         # ) |>
-         #   set_engine("gbm") |>
-         #   set_mode("regression"),
-
-         # lgbm = parsnip::boost_tree(
-         #   trees = 1000,
-         #   learn_rate    = tune(),
-         #   tree_depth    = tune(),
-         #   loss_reduction= tune(),
-         #   mtry          = tune(),
-         #   min_n         = tune()
-         # ) |>
-         #   parsnip::set_engine("lightgbm") |>
-         #   parsnip::set_mode("regression"),
 
          glmnet = parsnip::linear_reg(
            penalty = tune(),
@@ -189,7 +181,7 @@ model_grid <- function(name, p, levels = 5, n_min = Inf) {
   switch(name,
          kknn = dials::grid_regular(
            dials::neighbors(range = c(3L, cap(25L, n_min - 1L))),
-           dials::weight_func(),
+           dials::weight_func(values = c("rectangular", "triangular", "epanechnikov")),
            levels = levels
          ),
 
@@ -205,12 +197,20 @@ model_grid <- function(name, p, levels = 5, n_min = Inf) {
            levels = levels
          ),
 
+         # xgb = dials::grid_regular(
+         #   dials::learn_rate(range = c(-3, -1)),
+         #   dials::tree_depth(range = c(2L, cap(6L, max(2L, floor(log2(n_min)))))),
+         #   dials::loss_reduction(),
+         #   dials::mtry(range = c(1L, max(1L, p))),
+         #   dials::min_n(range = c(2L, cap(40L, max(2L, floor(n_min/2))))),
+         #   levels = levels
+         # ),
+
          xgb = dials::grid_regular(
-           dials::learn_rate(range = c(-3, -1)),
-           dials::tree_depth(range = c(2L, cap(6L, max(2L, floor(log2(n_min)))))),
-           dials::loss_reduction(),
+           dials::learn_rate(range = c(-4, -1)),
+           dials::tree_depth(range = c(2L, cap(8L, max(2L, floor(log2(n_min)))))),
            dials::mtry(range = c(1L, max(1L, p))),
-           dials::min_n(range = c(2L, cap(40L, max(2L, floor(n_min/2))))),
+           dials::min_n(range = c(2L, cap(40L, max(2L, floor(n_min / 2))))),
            levels = levels
          ),
 
