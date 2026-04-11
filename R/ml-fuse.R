@@ -195,7 +195,6 @@ wass2s_cons_mods_ml <- function(
 
     .msg(quiet, verbose, "[", model, "] ", p, " : ", length(predictors),
          " predictors (pattern='", pat, "')")
-    df_test <<-dplyr::select(dfp, YYYY, Q, dplyr::all_of(predictors))
     out <- tryCatch({
       wass2s_tune_pred_ml(
         df_basin_product = dplyr::select(dfp, YYYY, Q, dplyr::all_of(predictors)),
@@ -208,6 +207,7 @@ wass2s_cons_mods_ml <- function(
         max_na_frac      = max_na_frac,
         impute           = impute,
         require_variance = require_variance,
+        prediction_years=prediction_years,
         ...
       )
     }, error = function(e) {
