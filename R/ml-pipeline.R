@@ -91,6 +91,7 @@ wass2s_run_bas_mod_ml <- function(
         max_na_frac = max_na_frac,
         impute = impute,
         require_variance = require_variance,
+        prediction_years = prediction_years,
         ...
       )
       list(
@@ -766,6 +767,7 @@ wass2s_run_basins_ml <- function(
     workers = 4,
     grid_levels = 5,
     final_fuser = "rf",
+    prediction_years = NULL,
     quiet = TRUE,
     ...
 ) {
@@ -811,6 +813,7 @@ wass2s_run_basins_ml <- function(
         grid_levels = grid_levels,
         final_fuser = final_fuser,
         quiet = quiet,
+        prediction_years=prediction_years,
         ...
       )
       result$basin_id <- bid

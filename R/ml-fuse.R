@@ -207,7 +207,7 @@ wass2s_cons_mods_ml <- function(
         max_na_frac      = max_na_frac,
         impute           = impute,
         require_variance = require_variance,
-        prediction_years=prediction_years,
+        prediction_years=hold_bounds,
         ...
       )
     }, error = function(e) {
