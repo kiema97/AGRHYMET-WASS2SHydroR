@@ -371,6 +371,265 @@ make_recipe <- function(
     df,
     predictors,
     target = "Q",
+    corr_threshold = 0.95,
+    corr_method = c("pearson", "spearman", "kendall"),
+    impute_nominal = TRUE,
+    include_dummy = FALSE,
+    y_transform = c("none", "log1p", "yeo"),
+    pca_num_comp = NULL,
+    pca_var_threshold = NULL,
+    remove_linear_comb = FALSE,
+    auto_pca = TRUE,
+    auto_pca_when_gt = 15,
+    auto_pca_var_threshold = 0.80,
+    apply_impute = TRUE,
+    apply_corr = TRUE,
+    apply_normalize = TRUE,
+    verbose = FALSE
+) {
+  y_transform <- match.arg(y_transform)
+  corr_method <- match.arg(corr_method)
+
+  # ---------------------------------------------------------------------------
+  # Validation
+  # ---------------------------------------------------------------------------
+
+  if (!is.data.frame(df)) {
+    stop("`df` must be a data.frame or tibble.", call. = FALSE)
+  }
+
+  if (!is.character(target) || length(target) != 1L || !nzchar(target)) {
+    stop("`target` must be a non-empty character scalar.", call. = FALSE)
+  }
+
+  if (!target %in% names(df)) {
+    stop(sprintf("Target '%s' not found in `df`.", target), call. = FALSE)
+  }
+
+  if (!is.numeric(df[[target]])) {
+    stop(sprintf("Target '%s' must be numeric.", target), call. = FALSE)
+  }
+
+  if (!is.character(predictors) || length(predictors) < 1L) {
+    stop("`predictors` must be a non-empty character vector.", call. = FALSE)
+  }
+
+  predictors <- unique(intersect(predictors, setdiff(names(df), target)))
+
+  if (length(predictors) == 0L) {
+    stop("No predictors found after intersection with `df` columns.", call. = FALSE)
+  }
+
+  if (!is.numeric(corr_threshold) || length(corr_threshold) != 1L ||
+      is.na(corr_threshold) || corr_threshold <= 0 || corr_threshold >= 1) {
+    stop("`corr_threshold` must be a single numeric value in (0, 1), e.g. 0.95.", call. = FALSE)
+  }
+
+  if (!is.null(pca_num_comp) && !is.null(pca_var_threshold)) {
+    stop("Provide either `pca_num_comp` or `pca_var_threshold`, not both.", call. = FALSE)
+  }
+
+  if (!is.null(pca_num_comp)) {
+    if (!is.numeric(pca_num_comp) || length(pca_num_comp) != 1L ||
+        is.na(pca_num_comp) || pca_num_comp < 1) {
+      stop("`pca_num_comp` must be a single positive integer.", call. = FALSE)
+    }
+    pca_num_comp <- as.integer(pca_num_comp)
+  }
+
+  if (!is.null(pca_var_threshold)) {
+    if (!is.numeric(pca_var_threshold) || length(pca_var_threshold) != 1L ||
+        is.na(pca_var_threshold) || pca_var_threshold <= 0 || pca_var_threshold >= 1) {
+      stop("`pca_var_threshold` must be a single numeric value in (0, 1), e.g. 0.90.", call. = FALSE)
+    }
+  }
+
+  if (!is.numeric(auto_pca_when_gt) || length(auto_pca_when_gt) != 1L ||
+      is.na(auto_pca_when_gt) || auto_pca_when_gt < 1) {
+    stop("`auto_pca_when_gt` must be a single positive integer.", call. = FALSE)
+  }
+
+  auto_pca_when_gt <- as.integer(auto_pca_when_gt)
+
+  if (!is.numeric(auto_pca_var_threshold) || length(auto_pca_var_threshold) != 1L ||
+      is.na(auto_pca_var_threshold) || auto_pca_var_threshold <= 0 || auto_pca_var_threshold >= 1) {
+    stop("`auto_pca_var_threshold` must be a single numeric value in (0, 1), e.g. 0.80.", call. = FALSE)
+  }
+
+  if (!isTRUE(apply_impute) && isTRUE(impute_nominal)) {
+    stop("`impute_nominal = TRUE` requires `apply_impute = TRUE`.", call. = FALSE)
+  }
+
+  if (y_transform == "log1p" && any(df[[target]] < -1, na.rm = TRUE)) {
+    stop("`y_transform = 'log1p'` requires all target values to be >= -1.", call. = FALSE)
+  }
+
+  # Informative warnings for NA patterns when imputation is disabled
+  if (!isTRUE(apply_impute)) {
+    na_cols <- names(which(colSums(is.na(df[predictors])) > 0))
+    if (length(na_cols) > 0 && isTRUE(verbose)) {
+      message(
+        "Imputation is disabled. Missing values detected in predictors: ",
+        paste(na_cols, collapse = ", ")
+      )
+    }
+  }
+
+  if (isTRUE(verbose)) {
+    message("Number of requested predictors: ", length(predictors))
+    na_cols <- names(which(colSums(is.na(df[predictors])) > 0))
+    if (length(na_cols) > 0) {
+      message("Predictors containing NA values: ", paste(na_cols, collapse = ", "))
+    }
+  }
+
+  # ---------------------------------------------------------------------------
+  # Recipe skeleton
+  # ---------------------------------------------------------------------------
+
+  form <- stats::reformulate(termlabels = predictors, response = target)
+
+  rec <- recipes::recipe(form, data = df) |>
+    recipes::step_zv(recipes::all_predictors(), id = "zv") |>
+    recipes::step_nzv(recipes::all_predictors(), id = "nzv")
+
+  # ---------------------------------------------------------------------------
+  # Optional imputation
+  # ---------------------------------------------------------------------------
+
+  if (isTRUE(apply_impute)) {
+    rec <- rec |>
+      recipes::step_impute_median(recipes::all_numeric_predictors(), id = "imp_num")
+
+    if (isTRUE(impute_nominal)) {
+      rec <- rec |>
+        recipes::step_impute_mode(recipes::all_nominal_predictors(), id = "imp_nom")
+    }
+  }
+
+  # ---------------------------------------------------------------------------
+  # Optional linear-combination filtering
+  # ---------------------------------------------------------------------------
+
+  if (isTRUE(remove_linear_comb)) {
+    rec <- rec |>
+      recipes::step_lincomb(recipes::all_numeric_predictors(), id = "lincomb")
+  }
+
+  # ---------------------------------------------------------------------------
+  # Optional dummy encoding
+  # ---------------------------------------------------------------------------
+
+  if (isTRUE(include_dummy)) {
+    rec <- rec |>
+      recipes::step_dummy(
+        recipes::all_nominal_predictors(),
+        one_hot = TRUE,
+        id = "dummy"
+      )
+  }
+
+  # ---------------------------------------------------------------------------
+  # Optional correlation filter
+  # ---------------------------------------------------------------------------
+
+  if (isTRUE(apply_corr)) {
+    rec <- rec |>
+      recipes::step_corr(
+        recipes::all_numeric_predictors(),
+        threshold = corr_threshold,
+        method = corr_method,
+        id = "corr"
+      )
+  }
+
+  # ---------------------------------------------------------------------------
+  # Optional normalization
+  # ---------------------------------------------------------------------------
+
+  if (isTRUE(apply_normalize)) {
+    rec <- rec |>
+      recipes::step_normalize(recipes::all_numeric_predictors(), id = "norm")
+  }
+
+  # ---------------------------------------------------------------------------
+  # Optional outcome transformation
+  # ---------------------------------------------------------------------------
+
+  if (y_transform == "log1p") {
+    rec <- rec |>
+      recipes::step_log(recipes::all_outcomes(), offset = 1, id = "y_log1p")
+  } else if (y_transform == "yeo") {
+    rec <- rec |>
+      recipes::step_YeoJohnson(recipes::all_outcomes(), id = "y_yeo")
+  }
+
+  # ---------------------------------------------------------------------------
+  # PCA logic
+  # ---------------------------------------------------------------------------
+
+  do_auto_pca <- isTRUE(auto_pca) &&
+    is.null(pca_num_comp) &&
+    is.null(pca_var_threshold) &&
+    length(predictors) > auto_pca_when_gt
+
+  if (do_auto_pca) {
+    if (isTRUE(verbose)) {
+      message(
+        "Auto PCA enabled because the number of predictors (",
+        length(predictors),
+        ") exceeds `auto_pca_when_gt` (", auto_pca_when_gt,
+        "). Retaining enough PCs to explain ",
+        round(auto_pca_var_threshold * 100, 1),
+        "% of the variance."
+      )
+    }
+
+    rec <- rec |>
+      recipes::step_pca(
+        recipes::all_numeric_predictors(),
+        threshold = auto_pca_var_threshold,
+        id = "pca"
+      )
+  } else {
+    if (!is.null(pca_num_comp)) {
+      if (isTRUE(verbose)) {
+        message("PCA enabled with fixed number of components: ", pca_num_comp)
+      }
+
+      rec <- rec |>
+        recipes::step_pca(
+          recipes::all_numeric_predictors(),
+          num_comp = pca_num_comp,
+          id = "pca"
+        )
+    } else if (!is.null(pca_var_threshold)) {
+      if (isTRUE(verbose)) {
+        message(
+          "PCA enabled with explained variance threshold: ",
+          round(pca_var_threshold * 100, 1), "%"
+        )
+      }
+
+      rec <- rec |>
+        recipes::step_pca(
+          recipes::all_numeric_predictors(),
+          threshold = pca_var_threshold,
+          id = "pca"
+        )
+    } else {
+      if (isTRUE(verbose)) {
+        message("PCA disabled.")
+      }
+    }
+  }
+
+  rec
+}
+make_recipe__ <- function(
+    df,
+    predictors,
+    target = "Q",
     corr_threshold = 0.99,
     corr_method = "pearson",
     impute_nominal = TRUE,
@@ -396,6 +655,10 @@ make_recipe <- function(
     stop("`target` must be a non-empty character scalar.", call. = FALSE)
   if (!target %in% names(df))
     stop(sprintf("make_recipe(): target '%s' not found in `df`.", target), call. = FALSE)
+
+  if (y_transform == "log1p" && any(df[[target]] < -1, na.rm = TRUE)) {
+    stop("`log1p` transformation requires target values >= -1.", call. = FALSE)
+  }
   if (!is.numeric(df[[target]]))
     stop(sprintf("make_recipe(): target '%s' must be numeric.", target), call. = FALSE)
   if (!is.character(predictors) || length(predictors) < 1L)
@@ -405,7 +668,7 @@ make_recipe <- function(
   if (length(predictors) == 0L)
     stop("make_recipe(): no predictors found after intersection.", call. = FALSE)
 
-  if (!is.numeric(corr_threshold) || corr_threshold <= 0 || corr_threshold >= 1)
+  if (!is.numeric(corr_threshold) || corr_threshold < 0 || corr_threshold > 1)
     stop("`corr_threshold` must be in (0,1), e.g. 0.80.", call. = FALSE)
   if (!is.null(pca_num_comp) && !is.null(pca_var_threshold))
     stop("Provide either `pca_num_comp` OR `pca_var_threshold`, not both.", call. = FALSE)
@@ -417,6 +680,7 @@ make_recipe <- function(
   if (!isTRUE(apply_impute) && isTRUE(impute_nominal)) {
     stop("`impute_nominal = TRUE` requires `apply_impute = TRUE`.", call. = FALSE)
   }
+
 
   if (isTRUE(verbose)) {
     na_cols <- names(which(colSums(is.na(df[predictors])) > 0))

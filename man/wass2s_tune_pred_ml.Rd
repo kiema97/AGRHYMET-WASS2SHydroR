@@ -11,7 +11,12 @@ wass2s_tune_pred_ml(
   date_col = "YYYY",
   id_col = NULL,
   prediction_years = NULL,
+  y_transform = c("none", "log1p", "yeo"),
+  include_dummy = FALSE,
+  corr_threshold = 0.99,
+  corr_method = "pearson",
   auto_pca = TRUE,
+  auto_pca_when_gt = 15,
   pca_num_comp = NULL,
   pca_var_threshold = NULL,
   apply_impute = TRUE,
@@ -60,7 +65,24 @@ wass2s_tune_pred_ml(
 \item{prediction_years}{Optional numeric vector of length 2 giving the
 start and end years for a holdout prediction period. These years}
 
+\item{y_transform}{Character; one of \code{"none"} (default), \code{"log1p"}
+(applies \code{log(Q + 1)}) or \code{"yeo"} (Yeo–Johnson) for the outcome.
+The outcome is left untransformed by default.}
+
+\item{include_dummy}{Logical; if \code{TRUE}, expand nominal predictors via
+\code{step_dummy(one_hot = TRUE, keep_original_cols = FALSE)} before
+correlation filtering. Default: \code{FALSE}.}
+
+\item{corr_threshold}{Numeric in (0, 1); absolute correlation threshold used
+by \code{recipes::step_corr()}. Default: \code{0.90}.}
+
+\item{corr_method}{Correlation method for \code{step_corr()}, typically
+\code{"pearson"} (default) or \code{"spearman"}.}
+
 \item{auto_pca}{Logical; if \code{TRUE}, enable automatical PCA. Default: \code{TRUE}.}
+
+\item{auto_pca_when_gt}{Integer; enable auto-PCA when the number of predictors
+is greater than this threshold. Default: \code{15}.}
 
 \item{pca_num_comp}{Integer or \code{NULL}; if provided, apply PCA with a fixed
 number of components (disables auto-PCA).}
