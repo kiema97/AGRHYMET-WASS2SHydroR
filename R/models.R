@@ -79,7 +79,7 @@ engine_pkg <- c(
 #' @seealso \code{\link{model_grid}}
 #' @keywords internal
 #' @noRd
-model_spec <- function(name) {
+model_spec <- function(name,p=NULL) {
   name <- match.arg(name, SUPPORTED_MODELS)
   pkg <- engine_pkg[[name]]
   .require_pkg(pkg)
@@ -105,10 +105,10 @@ model_spec <- function(name) {
          #   parsnip::set_mode("regression"),
 
          xgb = parsnip::boost_tree(
-           trees = 2000,
+           trees = 1000,
            learn_rate = tune(),
            tree_depth = tune(),
-           mtry = tune(),
+           mtry = min(p, max(1L, floor(sqrt(p)))),
            min_n = tune(),
            loss_reduction = 0,
            sample_size = 0.8,
@@ -209,7 +209,6 @@ model_grid <- function(name, p, levels = 5, n_min = Inf) {
          xgb = dials::grid_regular(
            dials::learn_rate(range = c(-4, -1)),
            dials::tree_depth(range = c(2L, cap(8L, max(2L, floor(log2(n_min)))))),
-           dials::mtry(range = c(1L, max(1L, p))),
            dials::min_n(range = c(2L, cap(40L, max(2L, floor(n_min / 2))))),
            levels = levels
          ),
