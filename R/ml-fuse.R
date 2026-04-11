@@ -195,7 +195,7 @@ wass2s_cons_mods_ml <- function(
 
     .msg(quiet, verbose, "[", model, "] ", p, " : ", length(predictors),
          " predictors (pattern='", pat, "')")
-
+    df_test <<-dplyr::select(dfp, YYYY, Q, dplyr::all_of(predictors))
     out <- tryCatch({
       wass2s_tune_pred_ml(
         df_basin_product = dplyr::select(dfp, YYYY, Q, dplyr::all_of(predictors)),
@@ -217,8 +217,7 @@ wass2s_cons_mods_ml <- function(
 
     if (is.null(out) || is.null(out$preds) || !all(c("YYYY", "pred") %in% names(out$preds))) {
       .msg(quiet, verbose, "[", model, "] ", p, " : failed/invalid preds.")
-      df_ <- dplyr::select(dfp, YYYY, Q, dplyr::all_of(predictors))
-      return(df_)
+      return(NULL)
     }
 
     preds <- out$preds |>
