@@ -207,8 +207,7 @@ wass2s_cons_mods_ml <- function(
         max_na_frac      = max_na_frac,
         impute           = impute,
         require_variance = require_variance,
-        prediction_years=hold_bounds,
-        ...
+        prediction_years=hold_bounds,...
       )
     }, error = function(e) {
       .msg(quiet, verbose, glue::glue("Error training product '{p}' for basin {basin_id}: {e$message}"))
@@ -258,8 +257,7 @@ wass2s_cons_mods_ml <- function(
     min_data_required = min_data_required,
     target_positive   = target_positive,
     quiet             = quiet,
-    verbose           = verbose,
-    ...
+    verbose           = verbose
   )
 
   # Keep old name "kge" expected elsewhere
