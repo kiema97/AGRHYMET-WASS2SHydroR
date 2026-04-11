@@ -16,7 +16,7 @@ SUPPORTED_FUSERS <- c("rf","xgb","glmnet","kknn","svmlinear","mars","cubist")
 #' @format Character vector.
 #' @keywords internal
 
-SUPPORTED_MODELS <- c("rf","xgb","mlp","kknn","svmlinear","mars","cubist")
+SUPPORTED_MODELS <- c("rf","xgb","mlp","kknn","svmlinear","mars","cubist","glmnet")
 
 #' Mapping of ML engines to required R packages
 #' @format A named character vector:
