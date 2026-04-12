@@ -2,7 +2,7 @@
 % Please edit documentation in R/ml-pipeline.R
 \name{wass2s_run_bas_mod_ml}
 \alias{wass2s_run_bas_mod_ml}
-\title{Train all selected ML models for one basin and perform final fusion}
+\title{Run basin-level machine learning model consolidation and final fusion}
 \usage{
 wass2s_run_bas_mod_ml(
   data_by_product,
@@ -16,9 +16,12 @@ wass2s_run_bas_mod_ml(
   topK = 3,
   min_kge_model = -Inf,
   grid_levels = 5,
+  fusion_method = c("meta", "mean", "median", "weighted_mean"),
   final_fuser = "rf",
   quiet = TRUE,
   verbose_tune = TRUE,
+  target_positive = TRUE,
+  allow_par = TRUE,
   max_na_frac = 0.3,
   impute = "median",
   require_variance = TRUE,
@@ -49,11 +52,30 @@ start and end years for a holdout prediction period. These years}
 
 \item{grid_levels}{Grid density for tuning both base models and meta-learner.}
 
+\item{fusion_method}{Character string specifying the final fusion strategy.
+Supported values are:
+\itemize{
+  \item \code{"meta"}: train a meta-learner on the consolidated model predictions;
+  \item \code{"mean"}: use the simple arithmetic mean across consolidated predictions;
+  \item \code{"median"}: use the median across consolidated predictions;
+  \item \code{"weighted_mean"}: use a performance-based weighted mean, where
+    weights are derived from the Kling-Gupta Efficiency (KGE) computed on the
+    training subset.
+}}
+
 \item{final_fuser}{Name of the meta-learner to use (subset of \code{SUPPORTED_FUSERS}).}
 
 \item{quiet}{Logical; if \code{FALSE}, emits informative messages.}
 
 \item{verbose_tune}{A logical for logging results (other than warnings and errors, which are always shown) as they are generated during training in a single R process.}
+
+\item{target_positive}{Logical. If \code{TRUE}, final fused predictions are
+constrained to be non-negative using \code{pmax(pred, 0)}. This is useful
+for hydrological targets such as streamflow, which are physically non-negative.}
+
+\item{allow_par}{Logical. If \code{TRUE}, parallel execution is allowed during
+hyperparameter tuning of the meta-learner when \code{fusion_method = "meta"}.
+If \code{FALSE}, tuning is forced to run sequentially.}
 
 \item{max_na_frac}{Numeric in \eqn{[0, 1]}: maximum allowed fraction of missing
 values per column before stopping (default \code{0.20} = 20\%).}
@@ -67,19 +89,43 @@ standard deviation after imputation (default \code{TRUE}).}
 \item{...}{Passed to \code{WASS2SHydroR::wass2s_cons_mods_ml}.}
 }
 \value{
-A list with:
+A list containing:
 \itemize{
-  \item \code{fused_by_model}: tibble with \code{YYYY}, \code{Q}, and consolidated columns per model,
-  \item \code{final_test}: tibble for the test year with \code{pred_final},
-  \item \code{scores}: tibble with \code{HYBAS_ID}, \code{kge_final}, \code{rmse_final},
-  \item \code{leaderboards}: list of product leaderboards per model.
-  \item \code{cv_rs}: resampling results (or NULL if not applicable)
+  \item \code{fused_by_model}: data frame containing observed values and the
+    consolidated predictions, along with the final fused prediction
+    (\code{pred_final});
+  \item \code{final_test}: the last available row of the fused output table;
+  \item \code{scores}: combined performance summary for training and testing
+    subsets;
+  \item \code{scores_train}: performance metrics computed on the training subset;
+  \item \code{scores_test}: performance metrics computed on the testing subset;
+  \item \code{fusion_method}: the fusion strategy effectively used;
+  \item \code{fusion_weights}: named numeric vector of weights when
+    \code{fusion_method = "weighted_mean"}, otherwise \code{NULL};
+  \item \code{leaderboards}: per-model leaderboards returned from the
+    consolidation stage;
+  \item \code{cv_rs}: tuning metrics collected from the meta-learner when
+    \code{fusion_method = "meta"}, otherwise \code{NULL};
+  \item \code{best_meta_params}: best hyperparameter combination selected for
+    the meta-learner when applicable, otherwise \code{NULL}.
 }
 }
 \description{
-For a given basin, consolidate each chosen base model across products (top-K
-weighted fusion), then train a meta-learner on the consolidated columns to
-produce the final prediction for the last year.
+This function consolidates predictions from multiple machine learning models
+for a given basin and applies a final fusion strategy across the retained
+consolidated model outputs. The final fusion can be based on a meta-learner,
+a simple mean, a median, or a performance-based weighted mean.
+}
+\details{
+The function first consolidates predictions separately for each requested
+machine learning model across available products. The resulting consolidated
+predictions are then merged into a single table aligned by date.
+
+A final fusion step is subsequently applied using the method selected through
+\code{fusion_method}. When \code{fusion_method = "meta"}, a second-level
+regression model is trained on the consolidated predictions. When
+\code{fusion_method = "weighted_mean"}, model weights are computed from
+basin-specific training performance using the Kling-Gupta Efficiency (KGE).
 }
 \examples{
 # wass2s_run_bas_mod_ml(basin_id = 1, data_by_product = lst, models = c("rf","xgb"))

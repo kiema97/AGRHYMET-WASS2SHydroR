@@ -12,7 +12,7 @@ fuse_products_predictions(
   prediction_years = NULL,
   use_sub_fuser = FALSE,
   sub_fuser = "rf",
-  sub_grid_levels = 10,
+  sub_grid_levels = 5,
   min_data_required = 10,
   target_positive = TRUE,
   quiet = TRUE,

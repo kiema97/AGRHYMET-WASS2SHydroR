@@ -1,8 +1,9 @@
-#' Train all selected ML models for one basin and perform final fusion
+#' Run basin-level machine learning model consolidation and final fusion
 #'
-#' For a given basin, consolidate each chosen base model across products (top-K
-#' weighted fusion), then train a meta-learner on the consolidated columns to
-#' produce the final prediction for the last year.
+#' This function consolidates predictions from multiple machine learning models
+#' for a given basin and applies a final fusion strategy across the retained
+#' consolidated model outputs. The final fusion can be based on a meta-learner,
+#' a simple mean, a median, or a performance-based weighted mean.
 #'
 #' @param data_by_product Named list of data frames (one per product).
 #' @param basin_id Basin identifier value.
@@ -17,8 +18,24 @@
 #' @param min_kge_model Minimum best KGE required to keep a base model for the basin.
 #' @param final_fuser Name of the meta-learner to use (subset of \code{SUPPORTED_FUSERS}).
 #' @param grid_levels Grid density for tuning both base models and meta-learner.
+#' @param fusion_method Character string specifying the final fusion strategy.
+#'   Supported values are:
+#'   \itemize{
+#'     \item \code{"meta"}: train a meta-learner on the consolidated model predictions;
+#'     \item \code{"mean"}: use the simple arithmetic mean across consolidated predictions;
+#'     \item \code{"median"}: use the median across consolidated predictions;
+#'     \item \code{"weighted_mean"}: use a performance-based weighted mean, where
+#'       weights are derived from the Kling-Gupta Efficiency (KGE) computed on the
+#'       training subset.
+#'   }
 #' @param quiet Logical; if \code{FALSE}, emits informative messages.
 #' @param verbose_tune A logical for logging results (other than warnings and errors, which are always shown) as they are generated during training in a single R process.
+#' @param target_positive Logical. If \code{TRUE}, final fused predictions are
+#'   constrained to be non-negative using \code{pmax(pred, 0)}. This is useful
+#'   for hydrological targets such as streamflow, which are physically non-negative.
+#' @param allow_par Logical. If \code{TRUE}, parallel execution is allowed during
+#'   hyperparameter tuning of the meta-learner when \code{fusion_method = "meta"}.
+#'   If \code{FALSE}, tuning is forced to run sequentially.
 #' @param max_na_frac Numeric in \eqn{[0, 1]}: maximum allowed fraction of missing
 #'   values per column before stopping (default \code{0.20} = 20\%).
 #' @param impute Character, one of \code{"median"}, \code{"mean"}, or \code{"none"}.
@@ -26,13 +43,35 @@
 #' @param require_variance Logical; if \code{TRUE}, stop when a column has zero
 #'   standard deviation after imputation (default \code{TRUE}).
 #' @param ... Passed to \code{WASS2SHydroR::wass2s_cons_mods_ml}.
-#' @return A list with:
+#' @details
+#' The function first consolidates predictions separately for each requested
+#' machine learning model across available products. The resulting consolidated
+#' predictions are then merged into a single table aligned by date.
+#'
+#' A final fusion step is subsequently applied using the method selected through
+#' \code{fusion_method}. When \code{fusion_method = "meta"}, a second-level
+#' regression model is trained on the consolidated predictions. When
+#' \code{fusion_method = "weighted_mean"}, model weights are computed from
+#' basin-specific training performance using the Kling-Gupta Efficiency (KGE).
+#' @return A list containing:
 #' \itemize{
-#'   \item \code{fused_by_model}: tibble with \code{YYYY}, \code{Q}, and consolidated columns per model,
-#'   \item \code{final_test}: tibble for the test year with \code{pred_final},
-#'   \item \code{scores}: tibble with \code{HYBAS_ID}, \code{kge_final}, \code{rmse_final},
-#'   \item \code{leaderboards}: list of product leaderboards per model.
-#'   \item \code{cv_rs}: resampling results (or NULL if not applicable)
+#'   \item \code{fused_by_model}: data frame containing observed values and the
+#'     consolidated predictions, along with the final fused prediction
+#'     (\code{pred_final});
+#'   \item \code{final_test}: the last available row of the fused output table;
+#'   \item \code{scores}: combined performance summary for training and testing
+#'     subsets;
+#'   \item \code{scores_train}: performance metrics computed on the training subset;
+#'   \item \code{scores_test}: performance metrics computed on the testing subset;
+#'   \item \code{fusion_method}: the fusion strategy effectively used;
+#'   \item \code{fusion_weights}: named numeric vector of weights when
+#'     \code{fusion_method = "weighted_mean"}, otherwise \code{NULL};
+#'   \item \code{leaderboards}: per-model leaderboards returned from the
+#'     consolidation stage;
+#'   \item \code{cv_rs}: tuning metrics collected from the meta-learner when
+#'     \code{fusion_method = "meta"}, otherwise \code{NULL};
+#'   \item \code{best_meta_params}: best hyperparameter combination selected for
+#'     the meta-learner when applicable, otherwise \code{NULL}.
 #' }
 #' @examples
 #' # wass2s_run_bas_mod_ml(basin_id = 1, data_by_product = lst, models = c("rf","xgb"))
@@ -50,23 +89,30 @@ wass2s_run_bas_mod_ml <- function(
     topK = 3,
     min_kge_model = -Inf,
     grid_levels = 5,
+    fusion_method = c("meta", "mean", "median", "weighted_mean"),
     final_fuser = "rf",
     quiet = TRUE,
     verbose_tune = TRUE,
+    target_positive = TRUE,
+    allow_par = TRUE,
     max_na_frac = 0.3,
     impute = "median",
     require_variance = TRUE,
     ...
 ) {
+  fusion_method <- match.arg(fusion_method)
+
   # ----------------------------
   # Validate models & packages
   # ----------------------------
   models <- unique(tolower(models))
   bad <- setdiff(models, SUPPORTED_MODELS)
+
   if (length(bad)) {
     message("Ignoring unsupported base models: ", paste(bad, collapse = ", "))
     models <- intersect(models, SUPPORTED_MODELS)
   }
+
   final_fuser <- match.arg(final_fuser, SUPPORTED_FUSERS)
   .require_pkg(engine_pkg[c(final_fuser, models)])
 
@@ -94,6 +140,7 @@ wass2s_run_bas_mod_ml <- function(
         prediction_years = prediction_years,
         ...
       )
+
       list(
         model = toupper(m),
         fused = cm$fused,
@@ -102,6 +149,7 @@ wass2s_run_bas_mod_ml <- function(
       )
     }, error = function(e) {
       if (!quiet) message("Error processing model ", m, ": ", e$message)
+
       list(
         model = toupper(m),
         fused = NULL,
@@ -111,7 +159,10 @@ wass2s_run_bas_mod_ml <- function(
     })
   })
 
-  fused_list <- purrr::set_names(purrr::map(outs, "fused"), purrr::map_chr(outs, "model"))
+  fused_list <- purrr::set_names(
+    purrr::map(outs, "fused"),
+    purrr::map_chr(outs, "model")
+  )
   fused_list_compact <- purrr::compact(fused_list)
 
   # ----------------------------
@@ -124,9 +175,8 @@ wass2s_run_bas_mod_ml <- function(
     tibble::tibble(YYYY = integer(), Q = numeric())
   })
 
-  # Standardize names if needed and enforce YYYYMMDD
   if (nrow(any_df) > 0) {
-    # If user passed different names, standardize here
+    # Standardize names if user passed different names
     if (date_col %in% names(any_df) && !"YYYY" %in% names(any_df)) {
       any_df <- dplyr::rename(any_df, YYYY = !!rlang::sym(date_col))
     }
@@ -135,7 +185,6 @@ wass2s_run_bas_mod_ml <- function(
     }
 
     if (!"YYYY" %in% names(any_df) || !"Q" %in% names(any_df)) {
-      # Safe fallback
       any_df <- tibble::tibble(YYYY = integer(), Q = numeric())
     } else {
       any_df$YYYY <- .ensure_yyyymmdd(any_df$YYYY)
@@ -144,7 +193,7 @@ wass2s_run_bas_mod_ml <- function(
   }
 
   any_df <- .sanitize_numeric_columns(
-    df   = any_df,
+    df = any_df,
     cols = "Q",
     max_na_frac = max_na_frac,
     impute = impute,
@@ -155,28 +204,60 @@ wass2s_run_bas_mod_ml <- function(
   # Case A: no retained model
   # ----------------------------
   if (length(fused_list_compact) == 0L) {
-    if (!quiet) warning(glue::glue(
-      "No ML model retained for basin {basin_id}: returning empty structures."
-    ))
+    if (!quiet) {
+      warning(glue::glue(
+        "No ML model retained for basin {basin_id}: returning empty structures."
+      ))
+    }
+
+    out_empty <- any_df
+    if (!"pred_final" %in% names(out_empty)) {
+      out_empty <- dplyr::mutate(out_empty, pred_final = NA_real_)
+    }
+
     return(list(
-      fused_by_model = any_df,
-      final_test = dplyr::mutate(dplyr::slice_tail(any_df, n = 1), pred_final = NA_real_),
+      fused_by_model = out_empty,
+      final_test = dplyr::slice_tail(out_empty, n = 1),
       scores = tibble::tibble(
         HYBAS_ID = basin_id,
-        kge_final = NA_real_,
-        rmse_final = NA_real_
+        kge = NA_real_,
+        rmse = NA_real_,
+        split = "test"
       ),
-      leaderboards = stats::setNames(purrr::map(outs, "leaderboard"), purrr::map_chr(outs, "model")),
-      cv_rs = NULL
+      scores_train = tibble::tibble(
+        HYBAS_ID = basin_id,
+        kge = NA_real_,
+        rmse = NA_real_
+      ),
+      scores_test = tibble::tibble(
+        HYBAS_ID = basin_id,
+        kge = NA_real_,
+        rmse = NA_real_
+      ),
+      fusion_method = fusion_method,
+      fusion_weights = NULL,
+      leaderboards = stats::setNames(
+        purrr::map(outs, "leaderboard"),
+        purrr::map_chr(outs, "model")
+      ),
+      cv_rs = NULL,
+      best_meta_params = NULL
     ))
   }
 
   # ----------------------------
   # 3) Join consolidated series across base models
   # ----------------------------
-  fused_list_compact2 <- purrr::imap(fused_list_compact, ~ dplyr::rename(.x, pred = pred_fused))
+  fused_list_compact2 <- purrr::imap(fused_list_compact, ~ {
+    out <- .x %>%
+      dplyr::select(YYYY, pred_fused) %>%
+      dplyr::rename(!!.y := pred_fused)
 
-  fused_models <- tryCatch({
+    out$YYYY <- .ensure_yyyymmdd(out$YYYY)
+    out
+  })
+
+  fused_models_pred <- tryCatch({
     safe_full_join_preds(fused_list_compact2)
   }, error = function(e) {
     if (!quiet) message("Error joining predictions: ", e$message)
@@ -184,193 +265,433 @@ wass2s_run_bas_mod_ml <- function(
     tibble::tibble(YYYY = sort(yyyys))
   })
 
-  # Ensure YYYYMMDD in fused_models too
-  if ("YYYY" %in% names(fused_models)) {
-    fused_models$YYYY <- .ensure_yyyymmdd(fused_models$YYYY)
-    fused_models <- dplyr::arrange(fused_models, YYYY)
+  if ("YYYY" %in% names(fused_models_pred)) {
+    fused_models_pred$YYYY <- .ensure_yyyymmdd(fused_models_pred$YYYY)
+    fused_models_pred <- dplyr::arrange(fused_models_pred, YYYY)
   }
 
-  # Add observed Q (align by YYYYMMDD)
-  if (nrow(any_df) == 0) {
-    any_df <- tibble::tibble(YYYY = fused_models$YYYY, Q = NA_real_)
+  if (nrow(any_df) == 0L) {
+    any_df <- tibble::tibble(YYYY = fused_models_pred$YYYY, Q = NA_real_)
   }
-  fused_models <- dplyr::left_join(any_df, fused_models, by = "YYYY")
 
-  if (nrow(fused_models) == 0) {
-    if (!quiet) warning(glue::glue("No data available for basin {basin_id} after processing"))
+  fused_models <- dplyr::left_join(any_df, fused_models_pred, by = "YYYY") %>%
+    dplyr::arrange(YYYY)
+
+  # ----------------------------
+  # Case B: no data after merge
+  # ----------------------------
+  if (nrow(fused_models) == 0L) {
+    if (!quiet) {
+      warning(glue::glue(
+        "No data available for basin {basin_id} after processing."
+      ))
+    }
+
     return(list(
       fused_by_model = fused_models,
       final_test = tibble::tibble(YYYY = integer(), Q = numeric(), pred_final = numeric()),
       scores = tibble::tibble(
         HYBAS_ID = basin_id,
-        kge_final = NA_real_,
-        rmse_final = NA_real_
+        kge = NA_real_,
+        rmse = NA_real_,
+        split = "test"
       ),
-      leaderboards = stats::setNames(purrr::map(outs, "leaderboard"), purrr::map_chr(outs, "model")),
-      cv_rs = NULL
+      scores_train = tibble::tibble(
+        HYBAS_ID = basin_id,
+        kge = NA_real_,
+        rmse = NA_real_
+      ),
+      scores_test = tibble::tibble(
+        HYBAS_ID = basin_id,
+        kge = NA_real_,
+        rmse = NA_real_
+      ),
+      fusion_method = fusion_method,
+      fusion_weights = NULL,
+      leaderboards = stats::setNames(
+        purrr::map(outs, "leaderboard"),
+        purrr::map_chr(outs, "model")
+      ),
+      cv_rs = NULL,
+      best_meta_params = NULL
     ))
   }
 
   # ----------------------------
-  # 4) Meta-learner (final fusion)
+  # 4) Centralized final fusion
   # ----------------------------
-  bounds <- .pred_years_to_bounds(prediction_years)
-
-  if (!is.null(bounds)) {
-    df_te <- dplyr::filter(fused_models, YYYY >= bounds[1], YYYY <= bounds[2])
-    df_tr <- dplyr::filter(fused_models, !(YYYY >= bounds[1] & YYYY <= bounds[2]))
-  } else {
-    train_idx <- 1:(nrow(fused_models) - 1L)
-    df_tr <- fused_models[train_idx, ]
-    df_te <- fused_models[-train_idx, ]
-  }
-
-  # Fallback if too few training rows
-  if (nrow(df_tr) < 5L) {
-    if (!quiet) warning(glue::glue(
-      "Too few training rows ({nrow(df_tr)}) for basin {basin_id}: using simple mean across predictors."
-    ))
-
-    pred_cols <- setdiff(names(fused_models), c("YYYY", "Q"))
-    if (length(pred_cols) == 0) {
-      final <- fused_models |>
-        dplyr::mutate(pred_final = NA_real_)
-    } else {
-      final <- fused_models |>
-        dplyr::mutate(pred_final = rowMeans(
-          dplyr::select(., dplyr::all_of(pred_cols)),
-          na.rm = TRUE
-        )) |>
-        dplyr::mutate(pred_final = ifelse(is.nan(pred_final), NA_real_, pred_final))
-    }
-
-    # Score on training portion if possible
-    train_pred <- final |>
-      dplyr::filter(YYYY %in% df_tr$YYYY) |>
-      dplyr::filter(!is.na(Q), !is.na(pred_final))
-
-    kge_val <- if (nrow(train_pred) > 0) kge_vec(train_pred$Q, train_pred$pred_final) else NA_real_
-    rmse_val <- if (nrow(train_pred) > 0) yardstick::rmse_vec(train_pred$Q, train_pred$pred_final) else NA_real_
-
-    return(list(
-      fused_by_model = final,
-      final_test = dplyr::slice_tail(final, n = 1),
-      scores = tibble::tibble(
-        HYBAS_ID = basin_id,
-        kge_final = kge_val,
-        rmse_final = rmse_val
-      ),
-      leaderboards = stats::setNames(purrr::map(outs, "leaderboard"), purrr::map_chr(outs, "model")),
-      cv_rs = NULL
-    ))
-  }
-
-  pred_cols <- setdiff(names(df_tr), c("Q", "YYYY"))
-  if (length(pred_cols) < 1L) {
-    stop("wass2s_run_bas_mod_ml(): no meta-features available (only 'Q').", call. = FALSE)
-  }
-
-  rec_meta <- recipes::recipe(df_tr) |>
-    recipes::update_role(!!rlang::sym("Q"), new_role = "outcome") |>
-    recipes::update_role(dplyr::all_of(pred_cols), new_role = "predictor") |>
-    recipes::step_zv(recipes::all_predictors()) |>
-    recipes::step_impute_median(recipes::all_predictors())
-
-  spec <- model_spec(final_fuser, p = length(pred_cols))
-  grid <- model_grid(final_fuser, p = length(pred_cols), levels = grid_levels)
-
-  wf_meta <- workflows::workflow() |>
-    workflows::add_recipe(rec_meta) |>
-    workflows::add_model(spec)
-
-  # Create resamples for tuning
-  rset <- tryCatch({
-    make_rolling(df_tr, year_col = "YYYY", n_splits = 2)
-  }, error = function(e) {
-    if (!quiet) message("Error creating resamples: ", e$message)
-    NULL
-  })
-
-  # Tune meta-learner
-  rs <- NULL
-  if (!is.null(rset)) {
-    ctrl <- tune::control_grid(save_pred = TRUE, verbose = !verbose_tune, allow_par = TRUE)
-
-    rs <- tryCatch({
-      tune::tune_grid(
-        wf_meta,
-        resamples = rset,
-        grid = grid,
-        metrics = yardstick::metric_set(yardstick::rmse),
-        control = ctrl
-      )
-    }, error = function(e) {
-      if (!quiet) message("Error tuning meta-learner: ", e$message)
-      NULL
-    })
-  }
-
-  # Handle tuning failure
-  if (is.null(rs) || length(rs$.metrics) == 0 || nrow(rs$.metrics[[1]]) == 0) {
-    if (!quiet) warning(glue::glue(
-      "Meta-learner tuning failed for basin {basin_id}: fallback to simple mean."
-    ))
-
-    final <- fused_models |>
-      dplyr::mutate(pred_final = rowMeans(
-        dplyr::select(., dplyr::all_of(pred_cols)),
-        na.rm = TRUE
-      )) |>
-      dplyr::mutate(pred_final = ifelse(is.nan(pred_final), NA_real_, pred_final))
-
-    train_pred <- final |>
-      dplyr::filter(YYYY %in% df_tr$YYYY) |>
-      dplyr::filter(!is.na(Q), !is.na(pred_final))
-
-    kge_val <- if (nrow(train_pred) > 0) kge_vec(train_pred$Q, train_pred$pred_final) else NA_real_
-    rmse_val <- if (nrow(train_pred) > 0) yardstick::rmse_vec(train_pred$Q, train_pred$pred_final) else NA_real_
-
-    return(list(
-      fused_by_model = final,
-      final_test = dplyr::slice_tail(final, n = 1),
-      scores = tibble::tibble(
-        HYBAS_ID = basin_id,
-        kge_final = kge_val,
-        rmse_final = rmse_val
-      ),
-      leaderboards = stats::setNames(purrr::map(outs, "leaderboard"), purrr::map_chr(outs, "model")),
-      cv_rs = NULL
-    ))
-  }
-
-  best    <- tune::select_best(rs, metric = "rmse")
-  wf_fin  <- tune::finalize_workflow(wf_meta, best)
-  fit_fin <- parsnip::fit(wf_fin, df_tr)
-
-  train_prediction <- df_tr |>
-    dplyr::mutate(pred_final = predict(fit_fin, df_tr)$.pred)
-
-  fused_models$pred_final <- predict(fit_fin, fused_models)$.pred
-
-  scores <- tibble::tibble(
-    HYBAS_ID   = basin_id,
-    kge_final  = kge_vec(train_prediction$Q, train_prediction$pred_final),
-    rmse_final = yardstick::rmse_vec(train_prediction$Q, train_prediction$pred_final)
+  fusion_res <- .wass2s_fuse_predictions(
+    fused_models = fused_models,
+    basin_id = basin_id,
+    target = "Q",
+    date_col = "YYYY",
+    prediction_years = prediction_years,
+    fusion_method = fusion_method,
+    final_fuser = final_fuser,
+    grid_levels = grid_levels,
+    quiet = quiet,
+    verbose_tune = verbose_tune,
+    allow_par = allow_par,
+    target_positive = target_positive
   )
 
-  message(glue::glue(
-    "Successfully trained and fused {length(models)} base model(s) for basin {basin_id} ",
-    "using meta-learner '{final_fuser}'."
-  ))
+  if (!quiet) {
+    message(glue::glue(
+      "Successfully fused {length(models)} base model(s) for basin {basin_id} ",
+      "using fusion method '{fusion_res$fusion_method}'."
+    ))
+  }
 
   list(
-    fused_by_model = fused_models,
-    cv_rs          = tune::collect_metrics(rs),
-    scores         = scores,
-    leaderboards   = stats::setNames(purrr::map(outs, "leaderboard"),
-                                     purrr::map_chr(outs, "model"))
+    fused_by_model = fusion_res$fused_by_model,
+    final_test = fusion_res$final_test,
+    scores = fusion_res$scores,
+    scores_train = fusion_res$scores_train,
+    scores_test = fusion_res$scores_test,
+    fusion_method = fusion_res$fusion_method,
+    fusion_weights = fusion_res$fusion_weights,
+    leaderboards = stats::setNames(
+      purrr::map(outs, "leaderboard"),
+      purrr::map_chr(outs, "model")
+    ),
+    cv_rs = fusion_res$cv_rs,
+    best_meta_params = fusion_res$best_meta_params
   )
 }
+
+# wass2s_run_bas_mod_ml_ <- function(
+#     data_by_product,
+#     basin_id,
+#     prediction_years = NULL,
+#     target = "Q",
+#     date_col = "YYYY",
+#     hybas_id = "HYBAS_ID",
+#     pred_pattern_by_product = NULL,
+#     models = SUPPORTED_MODELS,
+#     topK = 3,
+#     min_kge_model = -Inf,
+#     grid_levels = 5,
+#     final_fuser = "rf",
+#     quiet = TRUE,
+#     verbose_tune = TRUE,
+#     max_na_frac = 0.3,
+#     impute = "median",
+#     require_variance = TRUE,
+#     ...
+# ) {
+#   # ----------------------------
+#   # Validate models & packages
+#   # ----------------------------
+#   models <- unique(tolower(models))
+#   bad <- setdiff(models, SUPPORTED_MODELS)
+#   if (length(bad)) {
+#     message("Ignoring unsupported base models: ", paste(bad, collapse = ", "))
+#     models <- intersect(models, SUPPORTED_MODELS)
+#   }
+#   final_fuser <- match.arg(final_fuser, SUPPORTED_FUSERS)
+#   .require_pkg(engine_pkg[c(final_fuser, models)])
+#
+#   # ----------------------------
+#   # 1) Consolidate per base model
+#   # ----------------------------
+#   outs <- purrr::map(models, function(m) {
+#     tryCatch({
+#       cm <- wass2s_cons_mods_ml(
+#         basin_id = basin_id,
+#         data_by_product = data_by_product,
+#         hybas_id = hybas_id,
+#         target = target,
+#         date_col = date_col,
+#         pred_pattern_by_product = pred_pattern_by_product,
+#         model = m,
+#         topK = topK,
+#         min_kge_model = min_kge_model,
+#         grid_levels = grid_levels,
+#         quiet = quiet,
+#         verbose_tune = verbose_tune,
+#         max_na_frac = max_na_frac,
+#         impute = impute,
+#         require_variance = require_variance,
+#         prediction_years = prediction_years,
+#         ...
+#       )
+#       list(
+#         model = toupper(m),
+#         fused = cm$fused,
+#         leaderboard = cm$leaderboard_products,
+#         all_results = cm$all_results
+#       )
+#     }, error = function(e) {
+#       if (!quiet) message("Error processing model ", m, ": ", e$message)
+#       list(
+#         model = toupper(m),
+#         fused = NULL,
+#         leaderboard = tibble::tibble(product = character(), kge = numeric()),
+#         all_results = list()
+#       )
+#     })
+#   })
+#
+#   fused_list <- purrr::set_names(purrr::map(outs, "fused"), purrr::map_chr(outs, "model"))
+#   fused_list_compact <- purrr::compact(fused_list)
+#
+#   # ----------------------------
+#   # 2) Get observed series (YYYY/Q) and enforce YYYYMMDD
+#   # ----------------------------
+#   any_df <- tryCatch({
+#     get_any_Q(data_by_product, basin_id, hybas_id)
+#   }, error = function(e) {
+#     if (!quiet) message("Error getting base data: ", e$message)
+#     tibble::tibble(YYYY = integer(), Q = numeric())
+#   })
+#
+#   # Standardize names if needed and enforce YYYYMMDD
+#   if (nrow(any_df) > 0) {
+#     # If user passed different names, standardize here
+#     if (date_col %in% names(any_df) && !"YYYY" %in% names(any_df)) {
+#       any_df <- dplyr::rename(any_df, YYYY = !!rlang::sym(date_col))
+#     }
+#     if (target %in% names(any_df) && !"Q" %in% names(any_df)) {
+#       any_df <- dplyr::rename(any_df, Q = !!rlang::sym(target))
+#     }
+#
+#     if (!"YYYY" %in% names(any_df) || !"Q" %in% names(any_df)) {
+#       # Safe fallback
+#       any_df <- tibble::tibble(YYYY = integer(), Q = numeric())
+#     } else {
+#       any_df$YYYY <- .ensure_yyyymmdd(any_df$YYYY)
+#       any_df <- dplyr::arrange(any_df, YYYY)
+#     }
+#   }
+#
+#   any_df <- .sanitize_numeric_columns(
+#     df   = any_df,
+#     cols = "Q",
+#     max_na_frac = max_na_frac,
+#     impute = impute,
+#     require_variance = require_variance
+#   )
+#
+#   # ----------------------------
+#   # Case A: no retained model
+#   # ----------------------------
+#   if (length(fused_list_compact) == 0L) {
+#     if (!quiet) warning(glue::glue(
+#       "No ML model retained for basin {basin_id}: returning empty structures."
+#     ))
+#     return(list(
+#       fused_by_model = any_df,
+#       final_test = dplyr::mutate(dplyr::slice_tail(any_df, n = 1), pred_final = NA_real_),
+#       scores = tibble::tibble(
+#         HYBAS_ID = basin_id,
+#         kge_final = NA_real_,
+#         rmse_final = NA_real_
+#       ),
+#       leaderboards = stats::setNames(purrr::map(outs, "leaderboard"), purrr::map_chr(outs, "model")),
+#       cv_rs = NULL
+#     ))
+#   }
+#
+#   # ----------------------------
+#   # 3) Join consolidated series across base models
+#   # ----------------------------
+#   fused_list_compact2 <- purrr::imap(fused_list_compact, ~ dplyr::rename(.x, pred = pred_fused))
+#
+#   fused_models <- tryCatch({
+#     safe_full_join_preds(fused_list_compact2)
+#   }, error = function(e) {
+#     if (!quiet) message("Error joining predictions: ", e$message)
+#     yyyys <- unique(unlist(lapply(fused_list_compact2, function(x) x$YYYY)))
+#     tibble::tibble(YYYY = sort(yyyys))
+#   })
+#
+#   # Ensure YYYYMMDD in fused_models too
+#   if ("YYYY" %in% names(fused_models)) {
+#     fused_models$YYYY <- .ensure_yyyymmdd(fused_models$YYYY)
+#     fused_models <- dplyr::arrange(fused_models, YYYY)
+#   }
+#
+#   # Add observed Q (align by YYYYMMDD)
+#   if (nrow(any_df) == 0) {
+#     any_df <- tibble::tibble(YYYY = fused_models$YYYY, Q = NA_real_)
+#   }
+#   fused_models <- dplyr::left_join(any_df, fused_models, by = "YYYY")
+#
+#   if (nrow(fused_models) == 0) {
+#     if (!quiet) warning(glue::glue("No data available for basin {basin_id} after processing"))
+#     return(list(
+#       fused_by_model = fused_models,
+#       final_test = tibble::tibble(YYYY = integer(), Q = numeric(), pred_final = numeric()),
+#       scores = tibble::tibble(
+#         HYBAS_ID = basin_id,
+#         kge_final = NA_real_,
+#         rmse_final = NA_real_
+#       ),
+#       leaderboards = stats::setNames(purrr::map(outs, "leaderboard"), purrr::map_chr(outs, "model")),
+#       cv_rs = NULL
+#     ))
+#   }
+#
+#   # ----------------------------
+#   # 4) Meta-learner (final fusion)
+#   # ----------------------------
+#   bounds <- .pred_years_to_bounds(prediction_years)
+#
+#   if (!is.null(bounds)) {
+#     df_te <- dplyr::filter(fused_models, YYYY >= bounds[1], YYYY <= bounds[2])
+#     df_tr <- dplyr::filter(fused_models, !(YYYY >= bounds[1] & YYYY <= bounds[2]))
+#   } else {
+#     train_idx <- 1:(nrow(fused_models) - 1L)
+#     df_tr <- fused_models[train_idx, ]
+#     df_te <- fused_models[-train_idx, ]
+#   }
+#
+#   # Fallback if too few training rows
+#   if (nrow(df_tr) < 5L) {
+#     if (!quiet) warning(glue::glue(
+#       "Too few training rows ({nrow(df_tr)}) for basin {basin_id}: using simple mean across predictors."
+#     ))
+#
+#     pred_cols <- setdiff(names(fused_models), c("YYYY", "Q"))
+#     if (length(pred_cols) == 0) {
+#       final <- fused_models |>
+#         dplyr::mutate(pred_final = NA_real_)
+#     } else {
+#       final <- fused_models |>
+#         dplyr::mutate(pred_final = rowMeans(
+#           dplyr::select(., dplyr::all_of(pred_cols)),
+#           na.rm = TRUE
+#         )) |>
+#         dplyr::mutate(pred_final = ifelse(is.nan(pred_final), NA_real_, pred_final))
+#     }
+#
+#     # Score on training portion if possible
+#     train_pred <- final |>
+#       dplyr::filter(YYYY %in% df_tr$YYYY) |>
+#       dplyr::filter(!is.na(Q), !is.na(pred_final))
+#
+#     kge_val <- if (nrow(train_pred) > 0) kge_vec(train_pred$Q, train_pred$pred_final) else NA_real_
+#     rmse_val <- if (nrow(train_pred) > 0) yardstick::rmse_vec(train_pred$Q, train_pred$pred_final) else NA_real_
+#
+#     return(list(
+#       fused_by_model = final,
+#       final_test = dplyr::slice_tail(final, n = 1),
+#       scores = tibble::tibble(
+#         HYBAS_ID = basin_id,
+#         kge_final = kge_val,
+#         rmse_final = rmse_val
+#       ),
+#       leaderboards = stats::setNames(purrr::map(outs, "leaderboard"), purrr::map_chr(outs, "model")),
+#       cv_rs = NULL
+#     ))
+#   }
+#
+#   pred_cols <- setdiff(names(df_tr), c("Q", "YYYY"))
+#   if (length(pred_cols) < 1L) {
+#     stop("wass2s_run_bas_mod_ml(): no meta-features available (only 'Q').", call. = FALSE)
+#   }
+#
+#   rec_meta <- recipes::recipe(df_tr) |>
+#     recipes::update_role(!!rlang::sym("Q"), new_role = "outcome") |>
+#     recipes::update_role(dplyr::all_of(pred_cols), new_role = "predictor") |>
+#     recipes::step_zv(recipes::all_predictors()) |>
+#     recipes::step_impute_median(recipes::all_predictors())
+#
+#   spec <- model_spec(final_fuser, p = length(pred_cols))
+#   grid <- model_grid(final_fuser, p = length(pred_cols), levels = grid_levels)
+#
+#   wf_meta <- workflows::workflow() |>
+#     workflows::add_recipe(rec_meta) |>
+#     workflows::add_model(spec)
+#
+#   # Create resamples for tuning
+#   rset <- tryCatch({
+#     make_rolling(df_tr, year_col = "YYYY", n_splits = 2)
+#   }, error = function(e) {
+#     if (!quiet) message("Error creating resamples: ", e$message)
+#     NULL
+#   })
+#
+#   # Tune meta-learner
+#   rs <- NULL
+#   if (!is.null(rset)) {
+#     ctrl <- tune::control_grid(save_pred = TRUE, verbose = !verbose_tune, allow_par = TRUE)
+#
+#     rs <- tryCatch({
+#       tune::tune_grid(
+#         wf_meta,
+#         resamples = rset,
+#         grid = grid,
+#         metrics = yardstick::metric_set(yardstick::rmse),
+#         control = ctrl
+#       )
+#     }, error = function(e) {
+#       if (!quiet) message("Error tuning meta-learner: ", e$message)
+#       NULL
+#     })
+#   }
+#
+#   # Handle tuning failure
+#   if (is.null(rs) || length(rs$.metrics) == 0 || nrow(rs$.metrics[[1]]) == 0) {
+#     if (!quiet) warning(glue::glue(
+#       "Meta-learner tuning failed for basin {basin_id}: fallback to simple mean."
+#     ))
+#
+#     final <- fused_models |>
+#       dplyr::mutate(pred_final = rowMeans(
+#         dplyr::select(., dplyr::all_of(pred_cols)),
+#         na.rm = TRUE
+#       )) |>
+#       dplyr::mutate(pred_final = ifelse(is.nan(pred_final), NA_real_, pred_final))
+#
+#     train_pred <- final |>
+#       dplyr::filter(YYYY %in% df_tr$YYYY) |>
+#       dplyr::filter(!is.na(Q), !is.na(pred_final))
+#
+#     kge_val <- if (nrow(train_pred) > 0) kge_vec(train_pred$Q, train_pred$pred_final) else NA_real_
+#     rmse_val <- if (nrow(train_pred) > 0) yardstick::rmse_vec(train_pred$Q, train_pred$pred_final) else NA_real_
+#
+#     return(list(
+#       fused_by_model = final,
+#       final_test = dplyr::slice_tail(final, n = 1),
+#       scores = tibble::tibble(
+#         HYBAS_ID = basin_id,
+#         kge_final = kge_val,
+#         rmse_final = rmse_val
+#       ),
+#       leaderboards = stats::setNames(purrr::map(outs, "leaderboard"), purrr::map_chr(outs, "model")),
+#       cv_rs = NULL
+#     ))
+#   }
+#
+#   best    <- tune::select_best(rs, metric = "rmse")
+#   wf_fin  <- tune::finalize_workflow(wf_meta, best)
+#   fit_fin <- parsnip::fit(wf_fin, df_tr)
+#
+#   train_prediction <- df_tr |>
+#     dplyr::mutate(pred_final = predict(fit_fin, df_tr)$.pred)
+#
+#   fused_models$pred_final <- predict(fit_fin, fused_models)$.pred
+#
+#   scores <- tibble::tibble(
+#     HYBAS_ID   = basin_id,
+#     kge_final  = kge_vec(train_prediction$Q, train_prediction$pred_final),
+#     rmse_final = yardstick::rmse_vec(train_prediction$Q, train_prediction$pred_final)
+#   )
+#
+#   message(glue::glue(
+#     "Successfully trained and fused {length(models)} base model(s) for basin {basin_id} ",
+#     "using meta-learner '{final_fuser}'."
+#   ))
+#
+#   list(
+#     fused_by_model = fused_models,
+#     cv_rs          = tune::collect_metrics(rs),
+#     scores         = scores,
+#     leaderboards   = stats::setNames(purrr::map(outs, "leaderboard"),
+#                                      purrr::map_chr(outs, "model"))
+#   )
+# }
 
 # wass2s_run_bas_mod_ml <- function(
 #     data_by_product,

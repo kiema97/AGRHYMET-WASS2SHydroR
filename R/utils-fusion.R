@@ -8,7 +8,7 @@ fuse_products_predictions <- function(
     prediction_years = NULL,         # YYYY or YYYYMMDD (len 2)
     use_sub_fuser = FALSE,
     sub_fuser = "rf",
-    sub_grid_levels = 10,
+    sub_grid_levels = 5,
     min_data_required = 10,
     target_positive = TRUE,
     quiet = TRUE,
@@ -134,7 +134,8 @@ fuse_products_predictions <- function(
 
         spec <- model_spec(sub_fuser)
         pred_cols <- setdiff(names(df_tr), c("YYYY", "Q"))
-        grid_sub <- model_grid(sub_fuser, p = length(pred_cols), levels = sub_grid_levels)
+        grid_sub <- model_grid(sub_fuser, p = length(pred_cols),
+                               levels = sub_grid_levels)
 
         wf <- workflows::workflow() |>
           workflows::add_recipe(rec) |>
@@ -490,4 +491,405 @@ get_any_Q <- function(data_by_product, basin_id, basin_col = "HYBAS_ID") {
 # }
 
 
+
+
+
+
+
+#' Internal helper to compute KGE-based fusion weights
+#'
+#' @keywords internal
+.wass2s_compute_kge_weights <- function(df, pred_cols, target = "Q") {
+  if (!target %in% names(df)) {
+    stop("Target column not found in data.", call. = FALSE)
+  }
+
+  if (length(pred_cols) == 0L) {
+    return(stats::setNames(numeric(0), character(0)))
+  }
+
+  scores <- vapply(pred_cols, function(col) {
+    wass2s_kge(df[[target]], df[[col]])
+  }, numeric(1))
+
+  scores_pos <- pmax(scores, 0)
+  scores_pos[!is.finite(scores_pos)] <- 0
+
+  if (sum(scores_pos) <= 0) {
+    weights <- rep(1 / length(pred_cols), length(pred_cols))
+  } else {
+    weights <- scores_pos / sum(scores_pos)
+  }
+
+  stats::setNames(weights, pred_cols)
+}
+
+
+#' Internal helper to apply a weighted mean row-wise
+#'
+#' @keywords internal
+.wass2s_apply_weighted_mean <- function(df, pred_cols, weights) {
+  stopifnot(all(pred_cols %in% names(df)))
+  stopifnot(all(pred_cols %in% names(weights)))
+
+  x <- as.matrix(df[, pred_cols, drop = FALSE])
+  w <- weights[pred_cols]
+
+  pred <- apply(x, 1, function(row) {
+    ok <- is.finite(row)
+    if (!any(ok)) return(NA_real_)
+
+    ww <- w[ok]
+    if (sum(ww) <= 0) {
+      ww <- rep(1 / sum(ok), sum(ok))
+    } else {
+      ww <- ww / sum(ww)
+    }
+
+    sum(row[ok] * ww)
+  })
+
+  as.numeric(pred)
+}
+
+
+#' Internal helper to apply a simple row-wise fusion
+#'
+#' @keywords internal
+.wass2s_apply_simple_fusion <- function(df, pred_cols, method = c("mean", "median")) {
+  method <- match.arg(method)
+
+  if (length(pred_cols) == 0L) {
+    return(rep(NA_real_, nrow(df)))
+  }
+
+  x <- as.matrix(df[, pred_cols, drop = FALSE])
+
+  if (method == "mean") {
+    out <- rowMeans(x, na.rm = TRUE)
+    out[is.nan(out)] <- NA_real_
+    return(as.numeric(out))
+  }
+
+  out <- apply(x, 1, function(row) {
+    if (all(!is.finite(row))) return(NA_real_)
+    stats::median(row[is.finite(row)], na.rm = TRUE)
+  })
+
+  as.numeric(out)
+}
+
+
+#' Internal helper to split fusion data into training and testing sets
+#'
+#' @keywords internal
+.wass2s_split_fusion_data <- function(fused_models, prediction_years = NULL, date_col = "YYYY") {
+  if (!date_col %in% names(fused_models)) {
+    stop("Date column not found in `fused_models`.", call. = FALSE)
+  }
+
+  if (!is.null(prediction_years)) {
+    bounds <- .pred_years_to_bounds(prediction_years)
+    df_te <- dplyr::filter(fused_models, .data[[date_col]] >= bounds[1], .data[[date_col]] <= bounds[2])
+    df_tr <- dplyr::filter(fused_models, !(.data[[date_col]] >= bounds[1] & .data[[date_col]] <= bounds[2]))
+  } else {
+    if (nrow(fused_models) < 2L) {
+      stop("Need at least 2 rows to split into training/testing.", call. = FALSE)
+    }
+    idx <- seq_len(nrow(fused_models) - 1L)
+    df_tr <- fused_models[idx, , drop = FALSE]
+    df_te <- fused_models[-idx, , drop = FALSE]
+  }
+
+  list(train = df_tr, test = df_te)
+}
+
+
+#' Internal helper to score fusion outputs
+#'
+#' @keywords internal
+.wass2s_score_fusion <- function(df, basin_id, target = "Q", pred_col = "pred_final") {
+  df_ok <- df %>%
+    dplyr::filter(is.finite(.data[[target]]), is.finite(.data[[pred_col]]))
+
+  tibble::tibble(
+    HYBAS_ID = basin_id,
+    kge = if (nrow(df_ok) > 0) wass2s_kge(df_ok[[target]], df_ok[[pred_col]]) else NA_real_,
+    rmse = if (nrow(df_ok) > 0) yardstick::rmse_vec(df_ok[[target]], df_ok[[pred_col]]) else NA_real_
+  )
+}
+
+
+#' Internal helper to run meta-fusion
+#'
+#' @keywords internal
+.wass2s_run_meta_fuser <- function(
+    df_tr,
+    df_all,
+    basin_id,
+    target = "Q",
+    date_col = "YYYY",
+    final_fuser = "rf",
+    grid_levels = 5,
+    quiet = TRUE,
+    verbose_tune = TRUE,
+    allow_par = TRUE,
+    target_positive = FALSE
+) {
+  pred_cols <- setdiff(names(df_tr), c(target, date_col))
+  if (length(pred_cols) < 1L) {
+    stop("No meta-features available for meta-fusion.", call. = FALSE)
+  }
+
+  rec_meta <- recipes::recipe(stats::reformulate(pred_cols, response = target), data = df_tr) |>
+    recipes::update_role(dplyr::all_of(date_col), new_role = "id") |>
+    recipes::step_rm(dplyr::all_of(date_col)) |>
+    recipes::step_zv(recipes::all_predictors()) |>
+    recipes::step_impute_median(recipes::all_numeric_predictors())
+
+  spec <- model_spec(final_fuser, p = length(pred_cols))
+  grid <- model_grid(final_fuser, p = length(pred_cols), levels = grid_levels)
+
+  wf_meta <- workflows::workflow() |>
+    workflows::add_recipe(rec_meta) |>
+    workflows::add_model(spec)
+
+  rset <- tryCatch({
+    make_rolling(
+      df_tr,
+      year_col = date_col,
+      init_frac = 0.7,
+      assess_frac = 0.2,
+      n_splits = min(3, nrow(df_tr) - 1L),
+      quiet = TRUE
+    )
+  }, error = function(e) {
+    if (!quiet) message("Error creating resamples: ", e$message)
+    NULL
+  })
+
+  rs <- NULL
+  best <- NULL
+  fit_fin <- NULL
+  metrics_cv <- NULL
+
+  if (!is.null(rset)) {
+    ctrl <- tune::control_grid(
+      save_pred = TRUE,
+      verbose = verbose_tune,
+      allow_par = allow_par
+    )
+
+    rs <- tryCatch({
+      tune::tune_grid(
+        wf_meta,
+        resamples = rset,
+        grid = grid,
+        metrics = yardstick::metric_set(yardstick::rmse),
+        control = ctrl
+      )
+    }, error = function(e) {
+      if (!quiet) message("Error tuning meta-learner: ", e$message)
+      NULL
+    })
+  }
+
+  has_valid_metrics <- FALSE
+  if (!is.null(rs)) {
+    metrics_cv <- tryCatch(tune::collect_metrics(rs), error = function(e) NULL)
+    has_valid_metrics <- !is.null(metrics_cv) && nrow(metrics_cv) > 0
+  }
+
+  if (!has_valid_metrics) {
+    return(list(
+      success = FALSE,
+      fitted = NULL,
+      pred_all = NULL,
+      cv_rs = NULL,
+      best_params = NULL
+    ))
+  }
+
+  best <- tune::select_best(rs, metric = "rmse")
+  wf_fin <- tune::finalize_workflow(wf_meta, best)
+
+  fit_fin <- tryCatch({
+    parsnip::fit(wf_fin, data = df_tr)
+  }, error = function(e) {
+    if (!quiet) message("Error fitting finalized meta-learner: ", e$message)
+    NULL
+  })
+
+  if (is.null(fit_fin)) {
+    return(list(
+      success = FALSE,
+      fitted = NULL,
+      pred_all = NULL,
+      cv_rs = metrics_cv,
+      best_params = best
+    ))
+  }
+
+  pred_all <- predict(fit_fin, new_data = df_all)$.pred
+  if (isTRUE(target_positive)) {
+    pred_all <- pmax(pred_all, 0)
+  }
+
+  list(
+    success = TRUE,
+    fitted = fit_fin,
+    pred_all = pred_all,
+    cv_rs = metrics_cv,
+    best_params = best
+  )
+}
+
+
+#' Internal unified fusion engine
+#'
+#' @keywords internal
+.wass2s_fuse_predictions <- function(
+    fused_models,
+    basin_id,
+    target = "Q",
+    date_col = "YYYY",
+    prediction_years = NULL,
+    fusion_method = c("meta", "mean", "median", "weighted_mean"),
+    final_fuser = "rf",
+    grid_levels = 5,
+    quiet = TRUE,
+    verbose_tune = TRUE,
+    allow_par = TRUE,
+    target_positive = FALSE
+) {
+  fusion_method <- match.arg(fusion_method)
+
+  if (!is.data.frame(fused_models)) {
+    stop("`fused_models` must be a data.frame.", call. = FALSE)
+  }
+  if (!all(c(date_col, target) %in% names(fused_models))) {
+    stop("`fused_models` must contain date and target columns.", call. = FALSE)
+  }
+
+  fused_models <- fused_models %>%
+    dplyr::arrange(.data[[date_col]])
+
+  pred_cols <- setdiff(names(fused_models), c(target, date_col))
+
+  if (length(pred_cols) == 0L) {
+    out <- fused_models %>%
+      dplyr::mutate(pred_final = NA_real_)
+
+    return(list(
+      fused_by_model = out,
+      final_test = dplyr::slice_tail(out, n = 1),
+      scores_train = .wass2s_score_fusion(out[0, , drop = FALSE], basin_id, target = target),
+      scores_test = .wass2s_score_fusion(out, basin_id, target = target),
+      scores = dplyr::bind_rows(
+        .wass2s_score_fusion(out[0, , drop = FALSE], basin_id, target = target) %>% dplyr::mutate(split = "train"),
+        .wass2s_score_fusion(out, basin_id, target = target) %>% dplyr::mutate(split = "test")
+      ),
+      fusion_method = fusion_method,
+      fusion_weights = NULL,
+      cv_rs = NULL,
+      best_meta_params = NULL
+    ))
+  }
+
+  split_obj <- .wass2s_split_fusion_data(
+    fused_models = fused_models,
+    prediction_years = prediction_years,
+    date_col = date_col
+  )
+
+  df_tr <- split_obj$train
+  df_te <- split_obj$test
+
+  too_short <- nrow(df_tr) < 5L
+  constant_cols <- vapply(df_tr[, pred_cols, drop = FALSE], function(z) {
+    s <- stats::sd(z, na.rm = TRUE)
+    is.na(s) || s < 1e-12
+  }, logical(1))
+  all_constant <- all(constant_cols)
+
+  # Fallback to mean if meta cannot reasonably run
+  if (fusion_method == "meta" && (too_short || all_constant)) {
+    if (!quiet) {
+      message("Meta-fusion fallback to mean: insufficient training information.")
+    }
+    fusion_method <- "mean"
+  }
+
+  weights <- NULL
+  cv_rs <- NULL
+  best_meta_params <- NULL
+
+  if (fusion_method == "mean") {
+    fused_models$pred_final <- .wass2s_apply_simple_fusion(fused_models, pred_cols, method = "mean")
+  } else if (fusion_method == "median") {
+    fused_models$pred_final <- .wass2s_apply_simple_fusion(fused_models, pred_cols, method = "median")
+  } else if (fusion_method == "weighted_mean") {
+    weights <- .wass2s_compute_kge_weights(df_tr, pred_cols, target = target)
+    fused_models$pred_final <- .wass2s_apply_weighted_mean(fused_models, pred_cols, weights)
+  } else if (fusion_method == "meta") {
+    meta_res <- .wass2s_run_meta_fuser(
+      df_tr = df_tr,
+      df_all = fused_models,
+      basin_id = basin_id,
+      target = target,
+      date_col = date_col,
+      final_fuser = final_fuser,
+      grid_levels = grid_levels,
+      quiet = quiet,
+      verbose_tune = verbose_tune,
+      allow_par = allow_par,
+      target_positive = target_positive
+    )
+
+    if (!isTRUE(meta_res$success)) {
+      if (!quiet) {
+        message("Meta-fusion failed, fallback to mean.")
+      }
+      fusion_method <- "mean"
+      fused_models$pred_final <- .wass2s_apply_simple_fusion(fused_models, pred_cols, method = "mean")
+    } else {
+      fused_models$pred_final <- meta_res$pred_all
+      cv_rs <- meta_res$cv_rs
+      best_meta_params <- meta_res$best_params
+    }
+  }
+
+  if (isTRUE(target_positive)) {
+    fused_models$pred_final <- pmax(fused_models$pred_final, 0)
+  }
+
+  train_scores <- .wass2s_score_fusion(
+    fused_models %>% dplyr::filter(.data[[date_col]] %in% df_tr[[date_col]]),
+    basin_id = basin_id,
+    target = target
+  )
+
+  test_scores <- .wass2s_score_fusion(
+    fused_models %>% dplyr::filter(.data[[date_col]] %in% df_te[[date_col]]),
+    basin_id = basin_id,
+    target = target
+  )
+
+  scores <- dplyr::bind_rows(
+    train_scores %>% dplyr::mutate(split = "train"),
+    test_scores %>% dplyr::mutate(split = "test")
+  )
+
+  list(
+    fused_by_model = fused_models,
+    final_test = dplyr::slice_tail(fused_models, n = 1),
+    scores_train = train_scores,
+    scores_test = test_scores,
+    scores = scores,
+    fusion_method = fusion_method,
+    fusion_weights = weights,
+    cv_rs = cv_rs,
+    best_meta_params = best_meta_params
+  )
+}
 

@@ -6,7 +6,7 @@
 #' @format Character vector.
 #' @keywords internal
 
-SUPPORTED_FUSERS <- c("rf","xgb","glmnet","kknn","svmlinear","mars","cubist")
+SUPPORTED_FUSERS <- c("rf","xgb","glmnet","kknn","svmlinear","mars","cubist","mlp")
 
 
 #' Supported ML models
