@@ -249,10 +249,19 @@ wass2s_run_bas_mod_ml <- function(
   # 3) Join consolidated series across base models
   # ----------------------------
   fused_list_compact2 <- purrr::imap(fused_list_compact, ~ {
-    out <- .x %>%
-      dplyr::select(YYYY, pred_fused) %>%
-      dplyr::rename(!!.y := pred_fused)
+    if (!is.data.frame(.x)) {
+      stop("Fused object for model ", .y, " is not a data.frame.", call. = FALSE)
+    }
+    if (!all(c("YYYY", "pred_fused") %in% names(.x))) {
+      stop(
+        "Fused object for model ", .y,
+        " must contain columns 'YYYY' and 'pred_fused'. Found: ",
+        paste(names(.x), collapse = ", "),
+        call. = FALSE
+      )
+    }
 
+    out <- dplyr::rename(.x, pred = pred_fused)
     out$YYYY <- .ensure_yyyymmdd(out$YYYY)
     out
   })
