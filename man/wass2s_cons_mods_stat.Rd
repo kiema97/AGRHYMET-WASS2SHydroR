@@ -28,6 +28,7 @@ wass2s_cons_mods_stat(
   cumulative = TRUE,
   quiet = TRUE,
   verbose = TRUE,
+  allow_par = TRUE,
   seed = 123,
   max_na_frac = 0.3,
   impute = "median",
@@ -112,6 +113,9 @@ underlying tuning/prediction calls).}
 
 \item{verbose}{Logical; if \code{TRUE}, emits diagnostic messages for product
 processing and failures (default: \code{TRUE}).}
+
+\item{allow_par}{Logical. If \code{TRUE}, allow parallel execution during
+hyperparameter tuning of the meta-learner.}
 
 \item{seed}{Integer; random seed for reproducibility.}
 

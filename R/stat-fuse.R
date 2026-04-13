@@ -112,6 +112,8 @@
 #'   underlying tuning/prediction calls).
 #' @param verbose Logical; if \code{TRUE}, emits diagnostic messages for product
 #'   processing and failures (default: \code{TRUE}).
+#' @param allow_par Logical. If \code{TRUE}, allow parallel execution during
+#'   hyperparameter tuning of the meta-learner.
 #' @param seed Integer; random seed for reproducibility.
 #' @param max_na_frac Numeric in \eqn{[0, 1]}; maximum allowed fraction of
 #'   missing values per guarded column before stopping (default: 0.3).
@@ -191,6 +193,7 @@ wass2s_cons_mods_stat <- function(
     cumulative = TRUE,
     quiet = TRUE,
     verbose = TRUE,
+    allow_par=TRUE,
     seed = 123,
 
     # --- data quality guards ---
@@ -340,7 +343,7 @@ wass2s_cons_mods_stat <- function(
         n_splits         = n_splits,
         cumulative       = cumulative,
         quiet            = quiet,
-        allow_par        = TRUE,
+        allow_par        = allow_par,
         verbose_tune     = TRUE,
         max_na_frac      = max_na_frac,
         impute           = impute,
@@ -417,8 +420,7 @@ wass2s_cons_mods_stat <- function(
     target_positive    = target_positive,
     quiet              = quiet,
     verbose            = verbose,
-    seed               = seed,
-    ...
+    seed               = seed
   )
 
   # ---------------------------
