@@ -2,7 +2,7 @@
 % Please edit documentation in R/stat-pipeline.R
 \name{wass2s_run_basin_mods_stat}
 \alias{wass2s_run_basin_mods_stat}
-\title{Run the statistical pipeline for a single basin (PCR/Ridge/Lasso + meta-fusion)}
+\title{Run basin-level statistical model consolidation and fusion}
 \usage{
 wass2s_run_basin_mods_stat(
   basin_id,
@@ -13,11 +13,13 @@ wass2s_run_basin_mods_stat(
   pred_pattern_by_product = NULL,
   prediction_years = NULL,
   topK = 3,
+  fusion_method = c("meta", "mean", "median", "weighted_mean"),
   final_fuser = "rf",
   grid_levels = 5,
   quiet = TRUE,
   verbose_tune = TRUE,
   target_positive = TRUE,
+  allow_par = TRUE,
   max_na_frac = 0.3,
   impute = "median",
   require_variance = TRUE,
@@ -25,58 +27,126 @@ wass2s_run_basin_mods_stat(
 )
 }
 \arguments{
-\item{basin_id}{Basin identifier value.}
+\item{basin_id}{Integer or character identifier of the basin to process.}
 
-\item{data_by_product}{Named list of data.frames (one per product).}
+\item{data_by_product}{A nested list containing predictor data grouped by product.
+This structure is typically produced upstream in the WASS2SHydroR workflow.}
 
-\item{hybas_id}{Name of the basin ID column.}
+\item{hybas_id}{Character. Name of the basin identifier column.
+Default is \code{"HYBAS_ID"}.}
 
-\item{target}{Name of the target column (default: `"Q"`).}
+\item{target}{Character. Name of the target variable (e.g., streamflow).
+Default is \code{"Q"}.}
 
-\item{date_col}{Name of the date column (default: `"YYYY"`).}
+\item{date_col}{Character. Name of the temporal column.
+Default is \code{"YYYY"}.}
 
-\item{pred_pattern_by_product}{Optional named vector/list of regex patterns
-to select predictors per product (defaults to "^pt_").}
+\item{pred_pattern_by_product}{Optional named list defining predictor selection
+patterns for each product.}
 
-\item{prediction_years}{Optional numeric vector of length 2 giving the
-start and end years for a holdout prediction period.}
+\item{prediction_years}{Optional numeric vector of length 2 specifying the
+prediction period (start, end). Can be provided as years or YYYYMMDD format.}
 
-\item{topK}{Integer, number of best products per model (default: 3).}
+\item{topK}{Integer. Number of best predictors/products retained per model.}
 
-\item{final_fuser}{Name of the meta-learner to use (subset of \code{SUPPORTED_FUSERS}).}
+\item{fusion_method}{Character string specifying the final fusion strategy.
+Supported values are:
+\itemize{
+  \item \code{"meta"}: train a meta-learner using the consolidated model outputs;
+  \item \code{"mean"}: simple arithmetic mean across models;
+  \item \code{"median"}: median across models;
+  \item \code{"weighted_mean"}: weighted mean using model performance
+    (KGE-based weights computed on training data).
+}}
 
-\item{grid_levels}{Grid density for tuning both base models and meta-learner.}
+\item{final_fuser}{Character. Meta-learner used when
+\code{fusion_method = "meta"}. Must be one of \code{SUPPORTED_FUSERS}.}
 
-\item{quiet}{Logical; if \code{FALSE}, emits informative messages.}
+\item{grid_levels}{Integer. Number of levels used to generate hyperparameter grids
+for tuning the meta-learner.}
 
-\item{verbose_tune}{A logical for logging results (other than warnings and errors, which are always shown) as they are generated during training in a single R process.}
+\item{quiet}{Logical. If \code{TRUE}, suppress informational messages.}
 
-\item{target_positive}{Logical; if TRUE, force negative predictions to zero.}
+\item{verbose_tune}{Logical. If \code{TRUE}, print tuning progress.}
 
-\item{max_na_frac}{Numeric in \eqn{[0, 1]}: maximum allowed fraction of missing
-values per column before stopping (default \code{0.20} = 20\%).}
+\item{target_positive}{Logical. If \code{TRUE}, constrain final predictions
+to be non-negative using \code{pmax(pred, 0)}.}
 
-\item{impute}{Character, one of \code{"median"}, \code{"mean"}, or \code{"none"}.
-If \code{"none"}, no imputation is performed after the guard (default \code{"median"}).}
+\item{allow_par}{Logical. If \code{TRUE}, allow parallel execution during
+hyperparameter tuning of the meta-learner.}
 
-\item{require_variance}{Logical; if \code{TRUE}, stop when a column has zero
-standard deviation after imputation (default \code{TRUE}).}
+\item{max_na_frac}{Numeric. Maximum fraction of missing values allowed per variable.}
 
-\item{...}{Additional parameters passed to \code{wass2s_cons_mods_stat}.}
+\item{impute}{Character. Imputation method for missing values.
+Default is \code{"median"}.}
+
+\item{require_variance}{Logical. If \code{TRUE}, remove predictors with no variance.}
+
+\item{...}{Additional arguments passed to \code{wass2s_cons_mods_stat()}.}
 }
 \value{
-A list with:
+A list containing:
 \itemize{
-  \item \code{fused_by_model}: tibble with \code{YYYY}, \code{Q}, and columns \code{PCR}, \code{RIDGE}, \code{LASSO}
-  \item \code{final_test}: tibble for the test year with \code{pred_final}
-  \item \code{scores}: tibble with \code{HYBAS_ID}, \code{kge_final}, \code{kge_pcr}, \code{kge_ridge}, \code{kge_lasso}, \code{rmse_final}
-  \item \code{leaderboards}: list of product leaderboards per model
-  \item \code{cv_rs}: resampling results from meta-learner tuning (if applicable)
+  \item \code{fused_by_model}: Data frame containing observed values and model predictions,
+    including the final fused prediction (\code{pred_final});
+  \item \code{final_test}: The last available row of the fused output;
+  \item \code{scores}: Performance metrics (KGE, RMSE) for training and testing subsets;
+  \item \code{scores_train}: Performance metrics on the training subset;
+  \item \code{scores_test}: Performance metrics on the testing subset;
+  \item \code{fusion_method}: Fusion strategy effectively used;
+  \item \code{fusion_weights}: Named numeric vector of weights when using
+    \code{"weighted_mean"}, otherwise \code{NULL};
+  \item \code{leaderboards}: Per-model ranking of selected predictors/products;
+  \item \code{cv_rs}: Cross-validation metrics from meta-learner tuning
+    (only when \code{fusion_method = "meta"});
+  \item \code{best_meta_params}: Best hyperparameters selected for the meta-learner,
+    if applicable.
 }
 }
 \description{
-Consolidate predictions across products for PCR, Ridge, and Lasso,
-then fuse the consolidated columns into a final prediction (last-year test).
-Falls back to a simple average if the training window is too short
-or meta-learning is not feasible.
+This function consolidates statistical models (PCR, RIDGE, LASSO) for a given
+basin and applies a final fusion strategy to combine their predictions into
+a single forecast.
+}
+\details{
+The function supports multiple fusion strategies including simple averaging,
+median aggregation, performance-based weighted averaging, and meta-learning.
+
+
+The function proceeds in four main steps:
+\enumerate{
+  \item Build statistical models (PCR, RIDGE, LASSO) using available predictors;
+  \item Extract and align observed data (\code{Q}) across time;
+  \item Merge model predictions into a unified table indexed by date;
+  \item Apply a final fusion method to produce a single prediction series.
+}
+
+When \code{fusion_method = "weighted_mean"}, model weights are computed from
+their training performance using the Kling-Gupta Efficiency (KGE).
+
+When \code{fusion_method = "meta"}, a second-level regression model is trained
+using the consolidated model outputs as predictors.
+}
+\examples{
+\dontrun{
+res <- wass2s_run_basin_mods_stat(
+  basin_id = 1050915990,
+  data_by_product = data_by_product,
+  fusion_method = "median"
+)
+
+res <- wass2s_run_basin_mods_stat(
+  basin_id = 1050915990,
+  data_by_product = data_by_product,
+  fusion_method = "weighted_mean"
+)
+
+res <- wass2s_run_basin_mods_stat(
+  basin_id = 1050915990,
+  data_by_product = data_by_product,
+  fusion_method = "meta",
+  final_fuser = "rf"
+)
+}
+
 }
