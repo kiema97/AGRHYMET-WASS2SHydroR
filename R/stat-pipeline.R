@@ -164,27 +164,9 @@ wass2s_run_basin_mods_stat <- function(
   # =========================
 
   models <- list(
-    PCR = wass2s_cons_mods_stat(data_by_product=data_by_product,
-                                basin_id=basin_id,
-                                pred_pattern_by_product=pred_pattern_by_product,
-                                prediction_years=prediction_years,
-                                impute=impute,
-                                require_variance=require_variance,
-                                max_na_frac=max_na_frac, model = "pcr",...),
-    RIDGE = wass2s_cons_mods_stat(data_by_product=data_by_product,
-                                  basin_id=basin_id,
-                                  pred_pattern_by_product=pred_pattern_by_product,
-                                  prediction_years=prediction_years,
-                                  impute=impute,
-                                  require_variance=require_variance,
-                                  max_na_frac=max_na_frac, model = "ridge",...),
-    LASSO = wass2s_cons_mods_stat(data_by_product=data_by_product,
-                                  basin_id=basin_id,
-                                  pred_pattern_by_product=pred_pattern_by_product,
-                                  prediction_years=prediction_years,
-                                  impute=impute,
-                                  require_variance=require_variance,
-                                  max_na_frac=max_na_frac, model = "lasso",...)
+    PCR = wass2s_cons_mods_stat(data_by_product=data_by_product, model = "pcr",...),
+    RIDGE = wass2s_cons_mods_stat(data_by_product=data_by_product, model = "ridge",...),
+    LASSO = wass2s_cons_mods_stat(data_by_product=data_by_product, model = "lasso",...)
   )
 
   # =========================
