@@ -39,8 +39,7 @@ wass2s_tune_pred_ml(
   max_na_frac = 0.3,
   impute = "median",
   require_variance = TRUE,
-  min_data_required = 10,
-  ...
+  min_data_required = 10
 )
 }
 \arguments{
@@ -167,8 +166,6 @@ If \code{"none"}, no imputation is performed after the guard (default \code{"med
 standard deviation after imputation (default \code{TRUE}).}
 
 \item{min_data_required}{Minimum number of rows required to train.}
-
-\item{...}{Others parameters passed to \code{tune::control_grid()}}
 }
 \value{
 A list with the following elements:

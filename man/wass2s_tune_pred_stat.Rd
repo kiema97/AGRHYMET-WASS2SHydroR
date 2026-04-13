@@ -34,8 +34,7 @@ wass2s_tune_pred_stat(
   verbose_tune = TRUE,
   max_na_frac = 0.3,
   impute = "median",
-  require_variance = TRUE,
-  ...
+  require_variance = TRUE
 )
 }
 \arguments{
@@ -139,8 +138,6 @@ If \code{"none"}, no imputation is performed after the guard (default \code{"med
 
 \item{require_variance}{Logical; if \code{TRUE}, stop when a column has zero
 standard deviation after imputation (default \code{TRUE}).}
-
-\item{...}{Others parameters passed to \code{tune::control_grid()}}
 }
 \value{
 A list with:

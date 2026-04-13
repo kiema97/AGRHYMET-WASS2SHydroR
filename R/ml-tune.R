@@ -102,7 +102,6 @@ min_analysis_n <- function(rset) {
 #' @param require_variance Logical; if \code{TRUE}, stop when a column has zero
 #'   standard deviation after imputation (default \code{TRUE}).
 #' @param min_data_required Minimum number of rows required to train.
-#' @param ... Others parameters passed to \code{tune::control_grid()}
 #' @return A list with the following elements:
 #' \itemize{
 #'   \item \code{kge_cv_mean} Mean KGE of the best configuration across CV splits.
@@ -177,8 +176,7 @@ wass2s_tune_pred_ml <- function(
     max_na_frac = 0.3,
     impute = "median",
     require_variance = TRUE,
-    min_data_required = 10,
-    ...
+    min_data_required = 10
 ){
   set.seed(seed)
 
@@ -402,8 +400,7 @@ wass2s_tune_pred_ml <- function(
   ctrl <- tune::control_grid(
     save_pred = TRUE,
     verbose   = !verbose_tune,
-    allow_par = allow_par,
-    ...
+    allow_par = allow_par
   )
 
   rs <- tune::tune_grid(

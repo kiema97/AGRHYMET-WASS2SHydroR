@@ -98,7 +98,6 @@
 #'   If \code{"none"}, no imputation is performed after the guard (default \code{"median"}).
 #' @param require_variance Logical; if \code{TRUE}, stop when a column has zero
 #'   standard deviation after imputation (default \code{TRUE}).
-#' @param ... Others parameters passed to \code{tune::control_grid()}
 #' @return A list with:
 #'   \itemize{
 #'     \item `kge_cv_mean` (numeric): mean KGE across splits for the best config.
@@ -143,8 +142,7 @@ wass2s_tune_pred_stat <- function(
     verbose_tune = TRUE,
     max_na_frac = 0.3,
     impute = "median",
-    require_variance = TRUE,
-    ...
+    require_variance = TRUE
 ) {
   # ---- Input validation ----
   model <- match.arg(model)
@@ -497,8 +495,7 @@ wass2s_tune_pred_stat <- function(
     save_pred = TRUE,
     verbose = !verbose_tune,
     allow_par = allow_par,
-    parallel_over = "resamples",
-    ...
+    parallel_over = "resamples"
   )
 
   res <- tryCatch({
