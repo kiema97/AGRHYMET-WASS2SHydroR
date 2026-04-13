@@ -641,6 +641,27 @@ get_any_Q <- function(data_by_product, basin_id, basin_col = "HYBAS_ID") {
     stop("No meta-features available for meta-fusion.", call. = FALSE)
   }
 
+
+  if (!quiet) {
+    message("Meta-fuser: final_fuser = ", final_fuser)
+    message("Meta-fuser: nrow(df_tr) = ", nrow(df_tr))
+    message("Meta-fuser: nrow(df_all) = ", nrow(df_all))
+    message("Meta-fuser: pred_cols = ", paste(pred_cols, collapse = ", "))
+    message("Meta-fuser: classes = ", paste(vapply(df_tr[, pred_cols, drop = FALSE], class, character(1)), collapse = ", "))
+  }
+  if (!quiet) {
+    print(utils::head(df_tr))
+  }
+
+  pred_cols <- setdiff(names(df_tr), c(target, date_col))
+
+  # Keep only numeric predictors
+  pred_cols <- pred_cols[vapply(df_tr[, pred_cols, drop = FALSE], is.numeric, logical(1))]
+
+  if (length(pred_cols) < 1L) {
+    stop("No numeric meta-features available for meta-fusion.", call. = FALSE)
+  }
+
   rec_meta <- recipes::recipe(stats::reformulate(pred_cols, response = target), data = df_tr) |>
     recipes::update_role(dplyr::all_of(date_col), new_role = "id") |>
     recipes::step_rm(dplyr::all_of(date_col)) |>
