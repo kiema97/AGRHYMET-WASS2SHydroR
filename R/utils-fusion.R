@@ -662,9 +662,9 @@ get_any_Q <- function(data_by_product, basin_id, basin_col = "HYBAS_ID") {
     stop("No numeric meta-features available for meta-fusion.", call. = FALSE)
   }
 
-  rec_meta <- recipes::recipe(stats::reformulate(pred_cols, response = target), data = df_tr) |>
-    recipes::update_role(dplyr::all_of(date_col), new_role = "id") |>
-    recipes::step_rm(dplyr::all_of(date_col)) |>
+  form <- stats::reformulate(termlabels = pred_cols, response = target)
+
+  rec_meta <- recipes::recipe(form, data = df_tr) |>
     recipes::step_zv(recipes::all_predictors()) |>
     recipes::step_impute_median(recipes::all_numeric_predictors())
 
