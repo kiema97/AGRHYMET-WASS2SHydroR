@@ -1001,10 +1001,36 @@ wass2s_run_basin_mods_stat <- function(
 #'   select predictor columns for that product.
 #' @param topK Integer, number of top products to keep in the fusion (by KGE).
 #' @param final_fuser Name of the meta-learner to use (subset of \code{SUPPORTED_FUSERS}).
+#' @param grid_levels Integer. Number of levels used to generate hyperparameter grids
+#'   for tuning the meta-learner.
+#' @param fusion_method Character string specifying the final fusion strategy.
+#'   Supported values are:
+#'   \itemize{
+#'     \item \code{"meta"}: train a meta-learner using the consolidated model outputs;
+#'     \item \code{"mean"}: simple arithmetic mean across models;
+#'     \item \code{"median"}: median across models;
+#'     \item \code{"weighted_mean"}: weighted mean using model performance
+#'       (KGE-based weights computed on training data).
+#'   }
 #' @param basins Optional vector of basin IDs to process; default uses all found.
 #' @param parallel Logical, run basins in parallel using \pkg{furrr}.
 #' @param workers Integer, number of parallel workers when `parallel = TRUE`.
-#' @param quiet Logical; if \code{FALSE}, emits informative messages.
+#' @param quiet Logical. If \code{TRUE}, suppress informational messages.
+#'
+#' @param verbose_tune Logical. If \code{TRUE}, print tuning progress.
+#'
+#' @param target_positive Logical. If \code{TRUE}, constrain final predictions
+#'   to be non-negative using \code{pmax(pred, 0)}.
+#'
+#' @param allow_par Logical. If \code{TRUE}, allow parallel execution during
+#'   hyperparameter tuning of the meta-learner.
+#'
+#' @param max_na_frac Numeric. Maximum fraction of missing values allowed per variable.
+#'
+#' @param impute Character. Imputation method for missing values.
+#'   Default is \code{"median"}.
+#'
+#' @param require_variance Logical. If \code{TRUE}, remove predictors with no variance.
 #' @param ... Additional arguments passed to \code{wass2s_run_basin_mods_stat}.
 #'
 #' @return Named list keyed by basin id, each element the result of
@@ -1020,11 +1046,18 @@ wass2s_run_basins_stat <- function(data_by_product,
                                    pred_pattern_by_product = NULL,
                                    topK = 3,
                                    final_fuser = "rf",
+                                   grid_levels = 5,
                                    fusion_method = c("meta", "mean", "median", "weighted_mean"),
                                    basins = NULL,
                                    parallel = FALSE,
                                    workers = 4,
                                    quiet = TRUE,
+                                   verbose_tune = TRUE,
+                                   target_positive=target_positive,
+                                   allow_par = TRUE,
+                                   max_na_frac = 0.3,
+                                   impute = "median",
+                                   require_variance = TRUE,
                                    ...) {
 
   .require_pkg(engine_pkg[final_fuser])
@@ -1067,8 +1100,16 @@ wass2s_run_basins_stat <- function(data_by_product,
         hybas_id = hybas_id,
         pred_pattern_by_product = pred_pattern_by_product,
         topK = topK,
+        final_fuser=final_fuser,
+        fusion_method=fusion_method,
+        grid_levels=grid_levels,
         quiet = quiet,
-        fusion_method=fusion_method,...
+        verbose_tune=verbose_tune,
+        target_positive=target_positive,
+        allow_par=allow_par,
+        max_na_frac=max_na_frac,
+        impute=impute,
+        require_variance=require_variance,...
       )
     }, error = function(e) {
       warning("Error processing basin ", bid, ": ", e$message)

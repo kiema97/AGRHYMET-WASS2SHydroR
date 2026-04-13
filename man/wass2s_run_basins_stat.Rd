@@ -10,10 +10,18 @@ wass2s_run_basins_stat(
   pred_pattern_by_product = NULL,
   topK = 3,
   final_fuser = "rf",
+  grid_levels = 5,
+  fusion_method = c("meta", "mean", "median", "weighted_mean"),
   basins = NULL,
   parallel = FALSE,
   workers = 4,
   quiet = TRUE,
+  verbose_tune = TRUE,
+  target_positive = target_positive,
+  allow_par = TRUE,
+  max_na_frac = 0.3,
+  impute = "median",
+  require_variance = TRUE,
   ...
 )
 }
@@ -29,13 +37,41 @@ select predictor columns for that product.}
 
 \item{final_fuser}{Name of the meta-learner to use (subset of \code{SUPPORTED_FUSERS}).}
 
+\item{grid_levels}{Integer. Number of levels used to generate hyperparameter grids
+for tuning the meta-learner.}
+
+\item{fusion_method}{Character string specifying the final fusion strategy.
+Supported values are:
+\itemize{
+  \item \code{"meta"}: train a meta-learner using the consolidated model outputs;
+  \item \code{"mean"}: simple arithmetic mean across models;
+  \item \code{"median"}: median across models;
+  \item \code{"weighted_mean"}: weighted mean using model performance
+    (KGE-based weights computed on training data).
+}}
+
 \item{basins}{Optional vector of basin IDs to process; default uses all found.}
 
 \item{parallel}{Logical, run basins in parallel using \pkg{furrr}.}
 
 \item{workers}{Integer, number of parallel workers when `parallel = TRUE`.}
 
-\item{quiet}{Logical; if \code{FALSE}, emits informative messages.}
+\item{quiet}{Logical. If \code{TRUE}, suppress informational messages.}
+
+\item{verbose_tune}{Logical. If \code{TRUE}, print tuning progress.}
+
+\item{target_positive}{Logical. If \code{TRUE}, constrain final predictions
+to be non-negative using \code{pmax(pred, 0)}.}
+
+\item{allow_par}{Logical. If \code{TRUE}, allow parallel execution during
+hyperparameter tuning of the meta-learner.}
+
+\item{max_na_frac}{Numeric. Maximum fraction of missing values allowed per variable.}
+
+\item{impute}{Character. Imputation method for missing values.
+Default is \code{"median"}.}
+
+\item{require_variance}{Logical. If \code{TRUE}, remove predictors with no variance.}
 
 \item{...}{Additional arguments passed to \code{wass2s_run_basin_mods_stat}.}
 }
