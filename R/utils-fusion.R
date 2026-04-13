@@ -650,10 +650,9 @@ get_any_Q <- function(data_by_product, basin_id, basin_col = "HYBAS_ID") {
     message("Meta-fuser: classes = ", paste(vapply(df_tr[, pred_cols, drop = FALSE], class, character(1)), collapse = ", "))
   }
   if (!quiet) {
-    print(utils::head(df_tr))
+    #print(utils::head(df_tr))
   }
 
-  pred_cols <- setdiff(names(df_tr), c(target, date_col))
 
   # Keep only numeric predictors
   pred_cols <- pred_cols[vapply(df_tr[, pred_cols, drop = FALSE], is.numeric, logical(1))]
