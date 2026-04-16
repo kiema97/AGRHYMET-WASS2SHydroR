@@ -28,8 +28,18 @@
 #' @param min_kge_model Minimum KGE threshold to accept non-zero fusion weight (default: -Inf).
 #' @param prediction_years Optional numeric vector of length 2 (start_year, end_year) defining a holdout
 #'   period excluded from training (for the sub-fuser training step).
-#' @param use_sub_fuser Logical; if TRUE, tries a meta-learner fusion (requires observed Q).
-#' @param sub_fuser Character; meta-learner model name passed to \code{model_spec()} (e.g. "rf").
+#' @param fusion_method Character string specifying the fusion strategy.
+#'   Supported values are:
+#'   \itemize{
+#'     \item \code{"meta"}: train a second-level learner on retained product predictions;
+#'     \item \code{"mean"}: simple arithmetic mean across retained products;
+#'     \item \code{"median"}: median across retained products;
+#'     \item \code{"weighted_mean"}: weighted mean using product performance scores;
+#'     \item \code{"best"}: keep only the best-ranked product.
+#'   }
+#' @param sub_fuser Character. Meta-model used when
+#'   \code{fusion_method = "meta"}. Must be supported by \code{model_spec()} and
+#'   \code{model_grid()}.
 #' @param sub_grid_levels Integer; grid levels for the sub-fuser via \code{model_grid()}.
 #' @param pretrained Optional list of pre-trained workflows (indexed by \code{model} then \code{product}).
 #' @param grid_levels Tuning grid granularity for the base ML model (passed to \code{wass2s_tune_pred_ml()}).
@@ -41,6 +51,7 @@
 #' @param max_na_frac Numeric in [0,1]; maximum allowed missingness per guarded column (default: 0.3).
 #' @param impute Character; one of "median", "mean", "none" (default: "median").
 #' @param require_variance Logical; if TRUE, requires non-zero variance after guard (default: TRUE).
+#' @param seed Integer; random seed for reproducibility.
 #' @param ... Passed to the underlying tuner/predictor.
 #'
 #' @return A list with:
@@ -70,7 +81,7 @@ wass2s_cons_mods_ml <- function(
     prediction_years = NULL,
 
     # --- fusion options ---
-    use_sub_fuser = TRUE,
+    fusion_method="median",
     sub_fuser = "rf",
     sub_grid_levels = 10,
 
@@ -87,6 +98,7 @@ wass2s_cons_mods_ml <- function(
     max_na_frac = 0.3,
     impute = "median",
     require_variance = TRUE,
+    seed=123,
     ...
 ) {
   model <- match.arg(model, SUPPORTED_MODELS)
@@ -208,6 +220,7 @@ wass2s_cons_mods_ml <- function(
         impute           = impute,
         require_variance = require_variance,
         prediction_years=hold_bounds,
+        seed=seed,
         ...
       )
     }, error = function(e) {
@@ -252,13 +265,14 @@ wass2s_cons_mods_ml <- function(
     topK              = topK,
     min_score         = min_kge_model,
     prediction_years  = prediction_years,   # util converts to YYYYMMDD bounds
-    use_sub_fuser     = use_sub_fuser,
+    fusion_method     = fusion_method,
     sub_fuser         = sub_fuser,
     sub_grid_levels   = sub_grid_levels,
     min_data_required = min_data_required,
     target_positive   = target_positive,
     quiet             = quiet,
-    verbose           = verbose
+    verbose           = verbose,
+    seed = seed
   )
 
   # Keep old name "kge" expected elsewhere

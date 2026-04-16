@@ -1,6 +1,451 @@
-#' Fuse predictions across products (top-K), with optional sub-fuser
+#' Fuse predictions from multiple products into a single forecast
+#'
+#' This function combines product-level predictions into a single fused prediction
+#' series using one of several fusion strategies: meta-learning, simple mean,
+#' median, performance-based weighted mean, or best-product selection.
+#'
+#' Product-level results are expected to come from upstream model training steps,
+#' with each product contributing predicted values over time and an associated
+#' performance score (for example cross-validated KGE).
+#'
+#' @param results A list of product-level results. Each element must typically
+#'   contain:
+#'   \itemize{
+#'     \item \code{product}: product name;
+#'     \item \code{score}: product performance score used for ranking and weighting;
+#'     \item \code{preds}: a data frame containing at least \code{YYYY} and
+#'       \code{pred}, and optionally \code{Q}.
+#'   }
+#'
+#' @param dates_all A vector of all dates to retain in the final fused output.
+#'   Dates are internally standardized to \code{YYYYMMDD} format.
+#'
+#' @param topK Integer. Number of best products retained before applying the
+#'   fusion method.
+#'
+#' @param min_score Numeric. Minimum score floor used when computing weights for
+#'   the \code{"weighted_mean"} fusion strategy. This prevents zero or negative
+#'   weights from dominating the weighted fusion.
+#'
+#' @param prediction_years Optional numeric vector of length 2 specifying the
+#'   prediction period boundaries. Values can be provided as \code{YYYY} or
+#'   \code{YYYYMMDD}. This argument is mainly used when
+#'   \code{fusion_method = "meta"} to define the holdout period excluded from
+#'   sub-fuser training.
+#'
+#' @param fusion_method Character string specifying the fusion strategy.
+#'   Supported values are:
+#'   \itemize{
+#'     \item \code{"meta"}: train a second-level learner on retained product predictions;
+#'     \item \code{"mean"}: simple arithmetic mean across retained products;
+#'     \item \code{"median"}: median across retained products;
+#'     \item \code{"weighted_mean"}: weighted mean using product performance scores;
+#'     \item \code{"best"}: keep only the best-ranked product.
+#'   }
+#'
+#' @param sub_fuser Character. Meta-model used when
+#'   \code{fusion_method = "meta"}. Must be supported by \code{model_spec()} and
+#'   \code{model_grid()}.
+#'
+#' @param sub_grid_levels Integer. Number of levels used to generate the tuning
+#'   grid for the meta-fuser.
+#'
+#' @param min_data_required Integer. Minimum number of training observations
+#'   required to fit the meta-fuser. If not met, the function falls back to the
+#'   \code{"median"} strategy.
+#'
+#' @param target_positive Logical. If \code{TRUE}, fused predictions are
+#'   constrained to be non-negative using \code{pmax(pred_fused, 0)}.
+#'
+#' @param quiet Logical. If \code{TRUE}, suppress most informational messages.
+#'
+#' @param verbose Logical. If \code{TRUE}, allow progress and fallback messages
+#'   through the internal messaging helper.
+#'
+#' @param seed Integer random seed for reproducibility.
+#'
+#' @param ... Additional arguments reserved for future extensions.
+#'
+#' @details
+#' The function first filters the input results to retain only products with
+#' usable predictions. It then builds a product leaderboard using the supplied
+#' performance scores and keeps the top \code{topK} products.
+#'
+#' For simple fusion strategies (\code{"mean"}, \code{"median"},
+#' \code{"weighted_mean"}, \code{"best"}), predictions are combined directly
+#' across retained products.
+#'
+#' For \code{"meta"}, a second-level model is trained using retained product
+#' predictions as predictors and observed values \code{Q} as the outcome. If the
+#' meta-fuser cannot be trained (for example because of insufficient data,
+#' missing \code{Q}, or fitting failure), the function automatically falls back
+#' to \code{"median"}.
+#'
+#' Product weights used by \code{"weighted_mean"} are derived from the retained
+#' product scores after applying a lower bound defined by \code{min_score}.
+#'
+#' @return A list with the following elements:
+#' \itemize{
+#'   \item \code{fused}: a data frame containing \code{YYYY}, \code{pred_fused},
+#'     and, when available, \code{Q};
+#'   \item \code{leaderboard_products}: a ranked data frame of products with
+#'     their scores and assigned weights;
+#'   \item \code{all_results}: the filtered input results retained internally;
+#'   \item \code{fusion_method}: the fusion strategy effectively used. This may
+#'     differ from the requested one if an automatic fallback occurred.
+#' }
+#'
+#' @examples
+#' \dontrun{
+#' # Median fusion across the best 3 products
+#' out <- fuse_products_predictions(
+#'   results = results_std,
+#'   dates_all = dates_all,
+#'   topK = 3,
+#'   fusion_method = "median"
+#' )
+#'
+#' # Weighted mean fusion
+#' out <- fuse_products_predictions(
+#'   results = results_std,
+#'   dates_all = dates_all,
+#'   topK = 3,
+#'   fusion_method = "weighted_mean"
+#' )
+#'
+#' # Best-product strategy
+#' out <- fuse_products_predictions(
+#'   results = results_std,
+#'   dates_all = dates_all,
+#'   topK = 1,
+#'   fusion_method = "best"
+#' )
+#'
+#' # Meta-fusion
+#' out <- fuse_products_predictions(
+#'   results = results_std,
+#'   dates_all = dates_all,
+#'   topK = 3,
+#'   fusion_method = "meta",
+#'   sub_fuser = "rf"
+#' )
+#' }
+#'
 #' @keywords internal
 fuse_products_predictions <- function(
+    results,
+    dates_all,
+    topK = 3,
+    min_score = 0.2,                 # e.g., min KGE
+    prediction_years = NULL,         # YYYY or YYYYMMDD (len 2)
+    fusion_method = c("median", "mean", "meta", "weighted_mean", "best"),
+    sub_fuser = "rf",
+    sub_grid_levels = 5,
+    min_data_required = 10,
+    target_positive = TRUE,
+    quiet = TRUE,
+    verbose = TRUE,
+    use_sub_fuser = TRUE,
+    seed = 123,
+    ...
+) {
+  set.seed(seed)
+
+  fusion_method <- match.arg(fusion_method)
+
+  # Keep only products with usable preds
+  results <- purrr::keep(results, ~ !is.null(.x$preds) && nrow(.x$preds) > 0)
+
+  if (length(results) == 0) {
+    return(list(
+      fused = tibble::tibble(YYYY = dates_all, pred_fused = NA_real_),
+      leaderboard_products = tibble::tibble(),
+      all_results = results,
+      fusion_method = fusion_method
+    ))
+  }
+
+  # Build leaderboard
+  lb <- tibble::tibble(
+    product = purrr::map_chr(results, "product"),
+    score   = purrr::map_dbl(results, "score")
+  ) |>
+    dplyr::mutate(score = ifelse(is.finite(.data$score), .data$score, NA_real_))
+
+  lb_ok <- dplyr::filter(lb, is.finite(.data$score)) |>
+    dplyr::arrange(dplyr::desc(.data$score))
+
+  if (nrow(lb_ok) == 0) {
+    return(list(
+      fused = tibble::tibble(YYYY = dates_all, pred_fused = NA_real_),
+      leaderboard_products = dplyr::mutate(lb, weight = 0),
+      all_results = results,
+      fusion_method = fusion_method
+    ))
+  }
+
+  # Keep best topK products
+  keep_names <- head(lb_ok$product, n = min(topK, nrow(lb_ok)))
+  results_top <- results[match(keep_names, purrr::map_chr(results, "product"))]
+
+  # Weights from scores
+  scores_keep <- lb_ok$score[match(keep_names, lb_ok$product)]
+  w <- pmax(scores_keep, min_score)
+
+  if (all(w == 0) || anyNA(w) || !all(is.finite(w))) {
+    w <- rep(1, length(keep_names))
+  }
+  w <- w / sum(w)
+
+  leaderboard <- dplyr::mutate(lb, weight = 0)
+  leaderboard$weight[match(keep_names, leaderboard$product)] <- w
+
+  # Long table of predictions
+  preds_long <- purrr::map2_dfr(results_top, seq_along(results_top), ~ {
+    dplyr::transmute(
+      .x$preds,
+      YYYY    = .ensure_yyyymmdd(.data$YYYY),
+      pred    = .data$pred,
+      product = .x$product,
+      w       = w[.y]
+    )
+  })
+
+  # Observed Q if available
+  obs <- purrr::map_dfr(results_top, ~ {
+    if ("Q" %in% names(.x$preds)) {
+      dplyr::transmute(.x$preds, YYYY = .ensure_yyyymmdd(.data$YYYY), Q = .data$Q)
+    } else {
+      dplyr::transmute(.x$preds, YYYY = .ensure_yyyymmdd(.data$YYYY)) |>
+        dplyr::mutate(Q = NA_real_)
+    }
+  }) |>
+    dplyr::distinct(.data$YYYY, .keep_all = TRUE)
+
+  # Bounds (YYYYMMDD)
+  bounds <- .ensure_year_bounds(prediction_years)
+
+  # ---- simple fusion helpers ----
+  simple_mean_fused <- function() {
+    preds_long |>
+      dplyr::group_by(.data$YYYY) |>
+      dplyr::summarise(
+        pred_fused = mean(.data$pred, na.rm = TRUE),
+        .groups = "drop"
+      ) |>
+      dplyr::mutate(pred_fused = ifelse(is.nan(.data$pred_fused), NA_real_, .data$pred_fused)) |>
+      dplyr::full_join(obs, by = "YYYY")
+  }
+
+  median_fused <- function() {
+    preds_long |>
+      dplyr::group_by(.data$YYYY) |>
+      dplyr::summarise(
+        pred_fused = stats::median(.data$pred, na.rm = TRUE),
+        .groups = "drop"
+      ) |>
+      dplyr::mutate(pred_fused = ifelse(is.nan(.data$pred_fused), NA_real_, .data$pred_fused)) |>
+      dplyr::full_join(obs, by = "YYYY")
+  }
+
+  weighted_mean_fused <- function() {
+    preds_long |>
+      dplyr::group_by(.data$YYYY) |>
+      dplyr::summarise(
+        pred_fused = {
+          ok <- is.finite(.data$pred) & is.finite(.data$w)
+          if (!any(ok)) {
+            NA_real_
+          } else {
+            ww <- .data$w[ok]
+            pp <- .data$pred[ok]
+            if (sum(ww) <= 0) {
+              mean(pp, na.rm = TRUE)
+            } else {
+              sum(pp * ww, na.rm = TRUE) / sum(ww, na.rm = TRUE)
+            }
+          }
+        },
+        .groups = "drop"
+      ) |>
+      dplyr::full_join(obs, by = "YYYY")
+  }
+
+  best_product_fused <- function() {
+    best_prod <- keep_names[1]
+    preds_long |>
+      dplyr::filter(.data$product == best_prod) |>
+      dplyr::transmute(YYYY = .data$YYYY, pred_fused = .data$pred) |>
+      dplyr::full_join(obs, by = "YYYY")
+  }
+
+  fused <- NULL
+  method_used <- fusion_method
+
+  # ---------------------------
+  # Fusion switch
+  # ---------------------------
+  if (fusion_method == "mean") {
+
+    fused <- simple_mean_fused()
+
+  } else if (fusion_method == "median") {
+
+    fused <- median_fused()
+
+  } else if (fusion_method == "weighted_mean") {
+
+    fused <- weighted_mean_fused()
+
+  } else if (fusion_method == "best") {
+
+    fused <- best_product_fused()
+
+  } else if (fusion_method == "meta") {
+
+    if (length(results_top) < 2) {
+      .msg(quiet, verbose, "fusion_method = 'meta' but fewer than 2 products retained. Falling back to 'median'.")
+      fused <- median_fused()
+      method_used <- "median"
+
+    } else if (all(is.na(obs$Q))) {
+      .msg(quiet, verbose, "fusion_method = 'meta' but observed Q is unavailable. Falling back to 'median'.")
+      fused <- median_fused()
+      method_used <- "median"
+
+    } else {
+
+      # Wide matrix of retained product predictions
+      lst_wide <- purrr::map(results_top, ~ {
+        dplyr::transmute(.x$preds, YYYY = .ensure_yyyymmdd(.data$YYYY), pred = .data$pred) |>
+          dplyr::rename(!!.x$product := .data$pred)
+      })
+
+      prods_wide <- Reduce(function(a, b) dplyr::full_join(a, b, by = "YYYY"), lst_wide)
+
+      dat <- dplyr::left_join(obs, prods_wide, by = "YYYY") |>
+        dplyr::arrange(.data$YYYY)
+
+      df_tr <- dat
+      if (!is.null(bounds)) {
+        df_tr <- dplyr::filter(dat, !(.data$YYYY >= bounds[1] & .data$YYYY <= bounds[2]))
+      }
+
+      pred_cols <- setdiff(names(df_tr), c("YYYY", "Q"))
+      pred_cols <- pred_cols[vapply(df_tr[, pred_cols, drop = FALSE], is.numeric, logical(1))]
+
+      if (nrow(df_tr) < min_data_required || length(pred_cols) < 2) {
+        .msg(quiet, verbose, "fusion_method = 'meta' fallback to 'median' (insufficient training data or predictors).")
+        fused <- median_fused()
+        method_used <- "median"
+
+      } else {
+
+        form <- stats::reformulate(termlabels = pred_cols, response = "Q")
+
+        rec <- recipes::recipe(form, data = df_tr) |>
+          recipes::step_zv(recipes::all_predictors()) |>
+          recipes::step_impute_median(recipes::all_numeric_predictors()) |>
+          recipes::step_normalize(recipes::all_numeric_predictors())
+
+        spec <- model_spec(sub_fuser, p = length(pred_cols))
+        grid_sub <- model_grid(
+          sub_fuser,
+          p = length(pred_cols),
+          levels = sub_grid_levels,
+          n_min = nrow(df_tr)
+        )
+
+        wf <- workflows::workflow() |>
+          workflows::add_recipe(rec) |>
+          workflows::add_model(spec)
+
+        rset <- tryCatch({
+          make_rolling(
+            df_tr,
+            year_col = "YYYY",
+            init_frac = 0.8,
+            assess_frac = 0.2,
+            n_splits = min(3, nrow(df_tr) - 1L),
+            cumulative = TRUE,
+            quiet = TRUE
+          )
+        }, error = function(e) NULL)
+
+        fit <- NULL
+
+        if (!is.null(rset) && length(rset$splits) >= 1) {
+          ctrl <- tune::control_grid(
+            save_pred = TRUE,
+            verbose = FALSE,
+            allow_par = TRUE
+          )
+
+          tuned <- tryCatch({
+            suppressWarnings(
+              tune::tune_grid(
+                wf,
+                resamples = rset,
+                grid = grid_sub,
+                metrics = yardstick::metric_set(yardstick::rmse),
+                control = ctrl
+              )
+            )
+          }, error = function(e) {
+            .msg(quiet, verbose, "Meta sub-fuser tuning failed: ", e$message)
+            NULL
+          })
+
+          tuned_metrics <- tryCatch(tune::collect_metrics(tuned), error = function(e) NULL)
+
+          if (!is.null(tuned) && !is.null(tuned_metrics) && nrow(tuned_metrics) > 0) {
+            best <- tryCatch(tune::select_best(tuned, metric = "rmse"), error = function(e) NULL)
+            if (!is.null(best)) {
+              wf2 <- tune::finalize_workflow(wf, best)
+              fit <- tryCatch(parsnip::fit(wf2, df_tr), error = function(e) NULL)
+            }
+          }
+        }
+
+        if (is.null(fit)) {
+          fit <- tryCatch(parsnip::fit(wf, df_tr), error = function(e) NULL)
+        }
+
+        if (is.null(fit)) {
+          .msg(quiet, verbose, "Meta sub-fuser fit failed. Falling back to 'median'.")
+          fused <- median_fused()
+          method_used <- "median"
+        } else {
+          fused <- dat |>
+            dplyr::mutate(pred_fused = predict(fit, new_data = dat)$.pred)
+        }
+      }
+    }
+  }
+
+  if (isTRUE(target_positive)) {
+    fused <- dplyr::mutate(fused, pred_fused = pmax(.data$pred_fused, 0))
+  }
+
+  fused <- dplyr::full_join(tibble::tibble(YYYY = dates_all), fused, by = "YYYY") |>
+    dplyr::arrange(.data$YYYY)
+
+  list(
+    fused = fused,
+    leaderboard_products = dplyr::arrange(
+      leaderboard,
+      dplyr::desc(.data$weight),
+      dplyr::desc(.data$score)
+    ),
+    all_results = results,
+    fusion_method = method_used
+  )
+}
+
+
+#' Fuse predictions across products (top-K), with optional sub-fuser
+#' @keywords internal
+fuse_products_predictions_ <- function(
     results,
     dates_all,
     topK = 3,

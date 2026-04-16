@@ -2,7 +2,7 @@
 % Please edit documentation in R/utils-fusion.R
 \name{fuse_products_predictions}
 \alias{fuse_products_predictions}
-\title{Fuse predictions across products (top-K), with optional sub-fuser}
+\title{Fuse predictions from multiple products into a single forecast}
 \usage{
 fuse_products_predictions(
   results,
@@ -10,18 +10,152 @@ fuse_products_predictions(
   topK = 3,
   min_score = 0.2,
   prediction_years = NULL,
-  use_sub_fuser = FALSE,
+  fusion_method = c("median", "mean", "meta", "weighted_mean", "best"),
   sub_fuser = "rf",
   sub_grid_levels = 5,
   min_data_required = 10,
   target_positive = TRUE,
   quiet = TRUE,
   verbose = TRUE,
+  use_sub_fuser = TRUE,
   seed = 123,
   ...
 )
 }
+\arguments{
+\item{results}{A list of product-level results. Each element must typically
+contain:
+\itemize{
+  \item \code{product}: product name;
+  \item \code{score}: product performance score used for ranking and weighting;
+  \item \code{preds}: a data frame containing at least \code{YYYY} and
+    \code{pred}, and optionally \code{Q}.
+}}
+
+\item{dates_all}{A vector of all dates to retain in the final fused output.
+Dates are internally standardized to \code{YYYYMMDD} format.}
+
+\item{topK}{Integer. Number of best products retained before applying the
+fusion method.}
+
+\item{min_score}{Numeric. Minimum score floor used when computing weights for
+the \code{"weighted_mean"} fusion strategy. This prevents zero or negative
+weights from dominating the weighted fusion.}
+
+\item{prediction_years}{Optional numeric vector of length 2 specifying the
+prediction period boundaries. Values can be provided as \code{YYYY} or
+\code{YYYYMMDD}. This argument is mainly used when
+\code{fusion_method = "meta"} to define the holdout period excluded from
+sub-fuser training.}
+
+\item{fusion_method}{Character string specifying the fusion strategy.
+Supported values are:
+\itemize{
+  \item \code{"meta"}: train a second-level learner on retained product predictions;
+  \item \code{"mean"}: simple arithmetic mean across retained products;
+  \item \code{"median"}: median across retained products;
+  \item \code{"weighted_mean"}: weighted mean using product performance scores;
+  \item \code{"best"}: keep only the best-ranked product.
+}}
+
+\item{sub_fuser}{Character. Meta-model used when
+\code{fusion_method = "meta"}. Must be supported by \code{model_spec()} and
+\code{model_grid()}.}
+
+\item{sub_grid_levels}{Integer. Number of levels used to generate the tuning
+grid for the meta-fuser.}
+
+\item{min_data_required}{Integer. Minimum number of training observations
+required to fit the meta-fuser. If not met, the function falls back to the
+\code{"median"} strategy.}
+
+\item{target_positive}{Logical. If \code{TRUE}, fused predictions are
+constrained to be non-negative using \code{pmax(pred_fused, 0)}.}
+
+\item{quiet}{Logical. If \code{TRUE}, suppress most informational messages.}
+
+\item{verbose}{Logical. If \code{TRUE}, allow progress and fallback messages
+through the internal messaging helper.}
+
+\item{seed}{Integer random seed for reproducibility.}
+
+\item{...}{Additional arguments reserved for future extensions.}
+}
+\value{
+A list with the following elements:
+\itemize{
+  \item \code{fused}: a data frame containing \code{YYYY}, \code{pred_fused},
+    and, when available, \code{Q};
+  \item \code{leaderboard_products}: a ranked data frame of products with
+    their scores and assigned weights;
+  \item \code{all_results}: the filtered input results retained internally;
+  \item \code{fusion_method}: the fusion strategy effectively used. This may
+    differ from the requested one if an automatic fallback occurred.
+}
+}
 \description{
-Fuse predictions across products (top-K), with optional sub-fuser
+This function combines product-level predictions into a single fused prediction
+series using one of several fusion strategies: meta-learning, simple mean,
+median, performance-based weighted mean, or best-product selection.
+}
+\details{
+Product-level results are expected to come from upstream model training steps,
+with each product contributing predicted values over time and an associated
+performance score (for example cross-validated KGE).
+
+
+The function first filters the input results to retain only products with
+usable predictions. It then builds a product leaderboard using the supplied
+performance scores and keeps the top \code{topK} products.
+
+For simple fusion strategies (\code{"mean"}, \code{"median"},
+\code{"weighted_mean"}, \code{"best"}), predictions are combined directly
+across retained products.
+
+For \code{"meta"}, a second-level model is trained using retained product
+predictions as predictors and observed values \code{Q} as the outcome. If the
+meta-fuser cannot be trained (for example because of insufficient data,
+missing \code{Q}, or fitting failure), the function automatically falls back
+to \code{"median"}.
+
+Product weights used by \code{"weighted_mean"} are derived from the retained
+product scores after applying a lower bound defined by \code{min_score}.
+}
+\examples{
+\dontrun{
+# Median fusion across the best 3 products
+out <- fuse_products_predictions(
+  results = results_std,
+  dates_all = dates_all,
+  topK = 3,
+  fusion_method = "median"
+)
+
+# Weighted mean fusion
+out <- fuse_products_predictions(
+  results = results_std,
+  dates_all = dates_all,
+  topK = 3,
+  fusion_method = "weighted_mean"
+)
+
+# Best-product strategy
+out <- fuse_products_predictions(
+  results = results_std,
+  dates_all = dates_all,
+  topK = 1,
+  fusion_method = "best"
+)
+
+# Meta-fusion
+out <- fuse_products_predictions(
+  results = results_std,
+  dates_all = dates_all,
+  topK = 3,
+  fusion_method = "meta",
+  sub_fuser = "rf"
+)
+}
+
 }
 \keyword{internal}

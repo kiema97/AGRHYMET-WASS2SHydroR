@@ -16,7 +16,7 @@ wass2s_cons_mods_ml(
   target_positive = TRUE,
   min_kge_model = -Inf,
   prediction_years = NULL,
-  use_sub_fuser = TRUE,
+  fusion_method = "median",
   sub_fuser = "rf",
   sub_grid_levels = 10,
   pretrained = NULL,
@@ -29,6 +29,7 @@ wass2s_cons_mods_ml(
   max_na_frac = 0.3,
   impute = "median",
   require_variance = TRUE,
+  seed = 123,
   ...
 )
 }
@@ -58,9 +59,19 @@ predictions to zero.}
 \item{prediction_years}{Optional numeric vector of length 2 (start_year, end_year) defining a holdout
 period excluded from training (for the sub-fuser training step).}
 
-\item{use_sub_fuser}{Logical; if TRUE, tries a meta-learner fusion (requires observed Q).}
+\item{fusion_method}{Character string specifying the fusion strategy.
+Supported values are:
+\itemize{
+  \item \code{"meta"}: train a second-level learner on retained product predictions;
+  \item \code{"mean"}: simple arithmetic mean across retained products;
+  \item \code{"median"}: median across retained products;
+  \item \code{"weighted_mean"}: weighted mean using product performance scores;
+  \item \code{"best"}: keep only the best-ranked product.
+}}
 
-\item{sub_fuser}{Character; meta-learner model name passed to \code{model_spec()} (e.g. "rf").}
+\item{sub_fuser}{Character. Meta-model used when
+\code{fusion_method = "meta"}. Must be supported by \code{model_spec()} and
+\code{model_grid()}.}
 
 \item{sub_grid_levels}{Integer; grid levels for the sub-fuser via \code{model_grid()}.}
 
@@ -83,6 +94,8 @@ period excluded from training (for the sub-fuser training step).}
 \item{impute}{Character; one of "median", "mean", "none" (default: "median").}
 
 \item{require_variance}{Logical; if TRUE, requires non-zero variance after guard (default: TRUE).}
+
+\item{seed}{Integer; random seed for reproducibility.}
 
 \item{...}{Passed to the underlying tuner/predictor.}
 }

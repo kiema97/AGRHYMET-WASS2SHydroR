@@ -17,7 +17,7 @@ wass2s_run_basins_stat(
   workers = 4,
   quiet = TRUE,
   verbose_tune = TRUE,
-  target_positive = target_positive,
+  target_positive = TRUE,
   allow_par = TRUE,
   max_na_frac = 0.3,
   impute = "median",

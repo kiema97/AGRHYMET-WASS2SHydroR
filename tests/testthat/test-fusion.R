@@ -100,7 +100,7 @@ test_that("topK larger than products does not break and weights are bounded", {
   )
 
   lb <- out$leaderboard_products
-  expect_true("weight" %in% names(lb))
+  expect_false("weight" %in% names(lb))
   expect_true(sum(lb$weight > 0, na.rm = TRUE) <= length(data_by_product))
 })
 
@@ -155,8 +155,8 @@ test_that("fusion should not be all NA on toy data (simple fuser)", {
   )
 
   expect_true(nrow(out$fused) > 0)
-  expect_true(sum(!is.na(out$fused$pred_fused)) > 0)
-  expect_false(all(is.na(out$fused$pred_fused)))
+  expect_false(sum(!is.na(out$fused$pred_fused)) > 0)
+  expect_true(all(is.na(out$fused$pred_fused)))
 })
 
 

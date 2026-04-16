@@ -73,9 +73,15 @@
 #' @param model One of \code{"pcr"}, \code{"ridge"}, \code{"lasso"}.
 #' @param grid Optional tibble of tuning parameters passed to
 #'   \code{wass2s_tune_pred_stat()}. If \code{NULL}, defaults are used.
-#' @param use_sub_fuser Logical; if \code{TRUE}, attempts a meta-learner fusion on
-#'   product predictions (requires observed \code{Q} in the merged data).
-#'   If \code{FALSE} (or if prerequisites are not met), uses weighted fusion.
+#' @param fusion_method Character string specifying the fusion strategy.
+#'   Supported values are:
+#'   \itemize{
+#'     \item \code{"meta"}: train a second-level learner on retained product predictions;
+#'     \item \code{"mean"}: simple arithmetic mean across retained products;
+#'     \item \code{"median"}: median across retained products;
+#'     \item \code{"weighted_mean"}: weighted mean using product performance scores;
+#'     \item \code{"best"}: keep only the best-ranked product.
+#'   }
 #' @param sub_fuser Character; meta-learner model name passed to
 #'   \code{model_spec()} (e.g. \code{"rf"}). Only used when
 #'   \code{use_sub_fuser = TRUE}.
@@ -170,7 +176,7 @@ wass2s_cons_mods_stat <- function(
     grid = NULL,
 
     # --- fusion options ---
-    use_sub_fuser = TRUE,
+    fusion_method="median",
     sub_fuser = "rf",
     sub_grid_levels = 10,
 
@@ -413,7 +419,7 @@ wass2s_cons_mods_stat <- function(
     topK               = topK,
     min_score          = min_kge_model,
     prediction_years   = prediction_years,
-    use_sub_fuser      = use_sub_fuser,
+    fusion_method      = fusion_method,
     sub_fuser          = sub_fuser,
     sub_grid_levels    = sub_grid_levels,
     min_data_required  = min_data_required,
