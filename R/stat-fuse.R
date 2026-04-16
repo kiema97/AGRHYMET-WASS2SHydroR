@@ -73,7 +73,7 @@
 #' @param model One of \code{"pcr"}, \code{"ridge"}, \code{"lasso"}.
 #' @param grid Optional tibble of tuning parameters passed to
 #'   \code{wass2s_tune_pred_stat()}. If \code{NULL}, defaults are used.
-#' @param fusion_method Character string specifying the fusion strategy.
+#' @param product_fusion_method Character string specifying the fusion strategy.
 #'   Supported values are:
 #'   \itemize{
 #'     \item \code{"meta"}: train a second-level learner on retained product predictions;
@@ -176,7 +176,7 @@ wass2s_cons_mods_stat <- function(
     grid = NULL,
 
     # --- fusion options ---
-    fusion_method="median",
+    product_fusion_method="median",
     sub_fuser = "rf",
     sub_grid_levels = 10,
 
@@ -419,7 +419,7 @@ wass2s_cons_mods_stat <- function(
     topK               = topK,
     min_score          = min_kge_model,
     prediction_years   = prediction_years,
-    fusion_method      = fusion_method,
+    product_fusion_method      = product_fusion_method,
     sub_fuser          = sub_fuser,
     sub_grid_levels    = sub_grid_levels,
     min_data_required  = min_data_required,

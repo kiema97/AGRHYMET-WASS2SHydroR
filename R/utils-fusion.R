@@ -30,10 +30,10 @@
 #' @param prediction_years Optional numeric vector of length 2 specifying the
 #'   prediction period boundaries. Values can be provided as \code{YYYY} or
 #'   \code{YYYYMMDD}. This argument is mainly used when
-#'   \code{fusion_method = "meta"} to define the holdout period excluded from
+#'   \code{product_fusion_method = "meta"} to define the holdout period excluded from
 #'   sub-fuser training.
 #'
-#' @param fusion_method Character string specifying the fusion strategy.
+#' @param product_fusion_method Character string specifying the fusion strategy.
 #'   Supported values are:
 #'   \itemize{
 #'     \item \code{"meta"}: train a second-level learner on retained product predictions;
@@ -44,7 +44,7 @@
 #'   }
 #'
 #' @param sub_fuser Character. Meta-model used when
-#'   \code{fusion_method = "meta"}. Must be supported by \code{model_spec()} and
+#'   \code{product_fusion_method = "meta"}. Must be supported by \code{model_spec()} and
 #'   \code{model_grid()}.
 #'
 #' @param sub_grid_levels Integer. Number of levels used to generate the tuning
@@ -91,7 +91,7 @@
 #'   \item \code{leaderboard_products}: a ranked data frame of products with
 #'     their scores and assigned weights;
 #'   \item \code{all_results}: the filtered input results retained internally;
-#'   \item \code{fusion_method}: the fusion strategy effectively used. This may
+#'   \item \code{product_fusion_method}: the fusion strategy effectively used. This may
 #'     differ from the requested one if an automatic fallback occurred.
 #' }
 #'
@@ -102,7 +102,7 @@
 #'   results = results_std,
 #'   dates_all = dates_all,
 #'   topK = 3,
-#'   fusion_method = "median"
+#'   product_fusion_method = "median"
 #' )
 #'
 #' # Weighted mean fusion
@@ -110,7 +110,7 @@
 #'   results = results_std,
 #'   dates_all = dates_all,
 #'   topK = 3,
-#'   fusion_method = "weighted_mean"
+#'   product_fusion_method = "weighted_mean"
 #' )
 #'
 #' # Best-product strategy
@@ -118,7 +118,7 @@
 #'   results = results_std,
 #'   dates_all = dates_all,
 #'   topK = 1,
-#'   fusion_method = "best"
+#'   product_fusion_method = "best"
 #' )
 #'
 #' # Meta-fusion
@@ -126,7 +126,7 @@
 #'   results = results_std,
 #'   dates_all = dates_all,
 #'   topK = 3,
-#'   fusion_method = "meta",
+#'   product_fusion_method = "meta",
 #'   sub_fuser = "rf"
 #' )
 #' }
@@ -138,7 +138,7 @@ fuse_products_predictions <- function(
     topK = 3,
     min_score = 0.2,                 # e.g., min KGE
     prediction_years = NULL,         # YYYY or YYYYMMDD (len 2)
-    fusion_method = c("median", "mean", "meta", "weighted_mean", "best"),
+    product_fusion_method = c("median", "mean", "meta", "weighted_mean", "best"),
     sub_fuser = "rf",
     sub_grid_levels = 5,
     min_data_required = 10,
@@ -151,7 +151,7 @@ fuse_products_predictions <- function(
 ) {
   set.seed(seed)
 
-  fusion_method <- match.arg(fusion_method)
+  product_fusion_method <- match.arg(product_fusion_method)
 
   # Keep only products with usable preds
   results <- purrr::keep(results, ~ !is.null(.x$preds) && nrow(.x$preds) > 0)
@@ -161,7 +161,7 @@ fuse_products_predictions <- function(
       fused = tibble::tibble(YYYY = dates_all, pred_fused = NA_real_),
       leaderboard_products = tibble::tibble(),
       all_results = results,
-      fusion_method = fusion_method
+      product_fusion_method = product_fusion_method
     ))
   }
 
@@ -180,7 +180,7 @@ fuse_products_predictions <- function(
       fused = tibble::tibble(YYYY = dates_all, pred_fused = NA_real_),
       leaderboard_products = dplyr::mutate(lb, weight = 0),
       all_results = results,
-      fusion_method = fusion_method
+      product_fusion_method = product_fusion_method
     ))
   }
 
@@ -280,36 +280,36 @@ fuse_products_predictions <- function(
   }
 
   fused <- NULL
-  method_used <- fusion_method
+  method_used <- product_fusion_method
 
   # ---------------------------
   # Fusion switch
   # ---------------------------
-  if (fusion_method == "mean") {
+  if (product_fusion_method == "mean") {
 
     fused <- simple_mean_fused()
 
-  } else if (fusion_method == "median") {
+  } else if (product_fusion_method == "median") {
 
     fused <- median_fused()
 
-  } else if (fusion_method == "weighted_mean") {
+  } else if (product_fusion_method == "weighted_mean") {
 
     fused <- weighted_mean_fused()
 
-  } else if (fusion_method == "best") {
+  } else if (product_fusion_method == "best") {
 
     fused <- best_product_fused()
 
-  } else if (fusion_method == "meta") {
+  } else if (product_fusion_method == "meta") {
 
     if (length(results_top) < 2) {
-      .msg(quiet, verbose, "fusion_method = 'meta' but fewer than 2 products retained. Falling back to 'median'.")
+      .msg(quiet, verbose, "product_fusion_method = 'meta' but fewer than 2 products retained. Falling back to 'median'.")
       fused <- median_fused()
       method_used <- "median"
 
     } else if (all(is.na(obs$Q))) {
-      .msg(quiet, verbose, "fusion_method = 'meta' but observed Q is unavailable. Falling back to 'median'.")
+      .msg(quiet, verbose, "product_fusion_method = 'meta' but observed Q is unavailable. Falling back to 'median'.")
       fused <- median_fused()
       method_used <- "median"
 
@@ -335,7 +335,7 @@ fuse_products_predictions <- function(
       pred_cols <- pred_cols[vapply(df_tr[, pred_cols, drop = FALSE], is.numeric, logical(1))]
 
       if (nrow(df_tr) < min_data_required || length(pred_cols) < 2) {
-        .msg(quiet, verbose, "fusion_method = 'meta' fallback to 'median' (insufficient training data or predictors).")
+        .msg(quiet, verbose, "product_fusion_method = 'meta' fallback to 'median' (insufficient training data or predictors).")
         fused <- median_fused()
         method_used <- "median"
 
@@ -438,7 +438,7 @@ fuse_products_predictions <- function(
       dplyr::desc(.data$score)
     ),
     all_results = results,
-    fusion_method = method_used
+    product_fusion_method = method_used
   )
 }
 
@@ -1219,7 +1219,7 @@ get_any_Q <- function(data_by_product, basin_id, basin_col = "HYBAS_ID") {
     target = "Q",
     date_col = "YYYY",
     prediction_years = NULL,
-    fusion_method = c("meta", "mean", "median", "weighted_mean"),
+    product_fusion_method = c("meta", "mean", "median", "weighted_mean"),
     final_fuser = "rf",
     grid_levels = 5,
     quiet = TRUE,
@@ -1227,7 +1227,7 @@ get_any_Q <- function(data_by_product, basin_id, basin_col = "HYBAS_ID") {
     allow_par = TRUE,
     target_positive = FALSE
 ) {
-  fusion_method <- match.arg(fusion_method)
+  product_fusion_method <- match.arg(product_fusion_method)
 
   if (!is.data.frame(fused_models)) {
     stop("`fused_models` must be a data.frame.", call. = FALSE)
@@ -1254,7 +1254,7 @@ get_any_Q <- function(data_by_product, basin_id, basin_col = "HYBAS_ID") {
         .wass2s_score_fusion(out[0, , drop = FALSE], basin_id, target = target) %>% dplyr::mutate(split = "train"),
         .wass2s_score_fusion(out, basin_id, target = target) %>% dplyr::mutate(split = "test")
       ),
-      fusion_method = fusion_method,
+      product_fusion_method = product_fusion_method,
       fusion_weights = NULL,
       cv_rs = NULL,
       best_meta_params = NULL
@@ -1278,25 +1278,25 @@ get_any_Q <- function(data_by_product, basin_id, basin_col = "HYBAS_ID") {
   all_constant <- all(constant_cols)
 
   # Fallback to mean if meta cannot reasonably run
-  if (fusion_method == "meta" && (too_short || all_constant)) {
+  if (product_fusion_method == "meta" && (too_short || all_constant)) {
     if (!quiet) {
       message("Meta-fusion fallback to mean: insufficient training information.")
     }
-    fusion_method <- "mean"
+    product_fusion_method <- "mean"
   }
 
   weights <- NULL
   cv_rs <- NULL
   best_meta_params <- NULL
 
-  if (fusion_method == "mean") {
+  if (product_fusion_method == "mean") {
     fused_models$pred_final <- .wass2s_apply_simple_fusion(fused_models, pred_cols, method = "mean")
-  } else if (fusion_method == "median") {
+  } else if (product_fusion_method == "median") {
     fused_models$pred_final <- .wass2s_apply_simple_fusion(fused_models, pred_cols, method = "median")
-  } else if (fusion_method == "weighted_mean") {
+  } else if (product_fusion_method == "weighted_mean") {
     weights <- .wass2s_compute_kge_weights(df_tr, pred_cols, target = target)
     fused_models$pred_final <- .wass2s_apply_weighted_mean(fused_models, pred_cols, weights)
-  } else if (fusion_method == "meta") {
+  } else if (product_fusion_method == "meta") {
     meta_res <- .wass2s_run_meta_fuser(
       df_tr = df_tr,
       df_all = fused_models,
@@ -1315,7 +1315,7 @@ get_any_Q <- function(data_by_product, basin_id, basin_col = "HYBAS_ID") {
       if (!quiet) {
         message("Meta-fusion failed, fallback to mean.")
       }
-      fusion_method <- "mean"
+      product_fusion_method <- "mean"
       fused_models$pred_final <- .wass2s_apply_simple_fusion(fused_models, pred_cols, method = "mean")
     } else {
       fused_models$pred_final <- meta_res$pred_all
@@ -1351,7 +1351,7 @@ get_any_Q <- function(data_by_product, basin_id, basin_col = "HYBAS_ID") {
     scores_train = train_scores,
     scores_test = test_scores,
     scores = scores,
-    fusion_method = fusion_method,
+    product_fusion_method = product_fusion_method,
     fusion_weights = weights,
     cv_rs = cv_rs,
     best_meta_params = best_meta_params

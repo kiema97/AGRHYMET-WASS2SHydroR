@@ -28,7 +28,7 @@
 #' @param min_kge_model Minimum KGE threshold to accept non-zero fusion weight (default: -Inf).
 #' @param prediction_years Optional numeric vector of length 2 (start_year, end_year) defining a holdout
 #'   period excluded from training (for the sub-fuser training step).
-#' @param fusion_method Character string specifying the fusion strategy.
+#' @param product_fusion_method Character string specifying the fusion strategy.
 #'   Supported values are:
 #'   \itemize{
 #'     \item \code{"meta"}: train a second-level learner on retained product predictions;
@@ -81,7 +81,7 @@ wass2s_cons_mods_ml <- function(
     prediction_years = NULL,
 
     # --- fusion options ---
-    fusion_method="median",
+    product_fusion_method="median",
     sub_fuser = "rf",
     sub_grid_levels = 10,
 
@@ -265,7 +265,7 @@ wass2s_cons_mods_ml <- function(
     topK              = topK,
     min_score         = min_kge_model,
     prediction_years  = prediction_years,   # util converts to YYYYMMDD bounds
-    fusion_method     = fusion_method,
+    product_fusion_method     = product_fusion_method,
     sub_fuser         = sub_fuser,
     sub_grid_levels   = sub_grid_levels,
     min_data_required = min_data_required,
