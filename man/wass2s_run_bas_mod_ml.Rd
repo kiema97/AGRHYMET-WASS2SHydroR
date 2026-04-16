@@ -16,6 +16,7 @@ wass2s_run_bas_mod_ml(
   topK = 3,
   min_kge_model = -Inf,
   grid_levels = 5,
+  product_fusion_method = "median",
   fusion_method = c("meta", "mean", "median", "weighted_mean"),
   final_fuser = "rf",
   quiet = TRUE,
@@ -51,6 +52,16 @@ start and end years for a holdout prediction period. These years}
 \item{min_kge_model}{Minimum best KGE required to keep a base model for the basin.}
 
 \item{grid_levels}{Grid density for tuning both base models and meta-learner.}
+
+\item{product_fusion_method}{Character string specifying the fusion strategy.
+Supported values are:
+\itemize{
+  \item \code{"meta"}: train a second-level learner on retained product predictions;
+  \item \code{"mean"}: simple arithmetic mean across retained products;
+  \item \code{"median"}: median across retained products;
+  \item \code{"weighted_mean"}: weighted mean using product performance scores;
+  \item \code{"best"}: keep only the best-ranked product.
+}}
 
 \item{fusion_method}{Character string specifying the final fusion strategy.
 Supported values are:

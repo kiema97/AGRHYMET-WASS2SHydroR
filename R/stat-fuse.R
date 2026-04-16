@@ -83,8 +83,7 @@
 #'     \item \code{"best"}: keep only the best-ranked product.
 #'   }
 #' @param sub_fuser Character; meta-learner model name passed to
-#'   \code{model_spec()} (e.g. \code{"rf"}). Only used when
-#'   \code{use_sub_fuser = TRUE}.
+#'   \code{model_spec()} (e.g. \code{"rf"}).
 #' @param sub_grid_levels Integer; tuning grid "levels" for the sub-fuser, passed
 #'   to \code{model_grid()}.
 #' @param topK Integer, number of products to keep for fusion (default: 3).

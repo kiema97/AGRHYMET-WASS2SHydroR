@@ -16,7 +16,7 @@ wass2s_cons_mods_ml(
   target_positive = TRUE,
   min_kge_model = -Inf,
   prediction_years = NULL,
-  fusion_method = "median",
+  product_fusion_method = "median",
   sub_fuser = "rf",
   sub_grid_levels = 10,
   pretrained = NULL,
@@ -59,7 +59,7 @@ predictions to zero.}
 \item{prediction_years}{Optional numeric vector of length 2 (start_year, end_year) defining a holdout
 period excluded from training (for the sub-fuser training step).}
 
-\item{fusion_method}{Character string specifying the fusion strategy.
+\item{product_fusion_method}{Character string specifying the fusion strategy.
 Supported values are:
 \itemize{
   \item \code{"meta"}: train a second-level learner on retained product predictions;

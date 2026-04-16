@@ -29,14 +29,24 @@
 #'
 #' @param topK Integer. Number of best predictors/products retained per model.
 #'
+#' @param product_fusion_method Character string specifying the fusion strategy.
+#'   Supported values are:
+#'   \itemize{
+#'     \item \code{"meta"}: train a second-level learner on retained product predictions;
+#'     \item \code{"mean"}: simple arithmetic mean across retained products;
+#'     \item \code{"median"}: median across retained products;
+#'     \item \code{"weighted_mean"}: weighted mean using product performance scores;
+#'     \item \code{"best"}: keep only the best-ranked product.
+#'   }
 #' @param fusion_method Character string specifying the final fusion strategy.
 #'   Supported values are:
 #'   \itemize{
-#'     \item \code{"meta"}: train a meta-learner using the consolidated model outputs;
-#'     \item \code{"mean"}: simple arithmetic mean across models;
-#'     \item \code{"median"}: median across models;
-#'     \item \code{"weighted_mean"}: weighted mean using model performance
-#'       (KGE-based weights computed on training data).
+#'     \item \code{"meta"}: train a meta-learner on the consolidated model predictions;
+#'     \item \code{"mean"}: use the simple arithmetic mean across consolidated predictions;
+#'     \item \code{"median"}: use the median across consolidated predictions;
+#'     \item \code{"weighted_mean"}: use a performance-based weighted mean, where
+#'       weights are derived from the Kling-Gupta Efficiency (KGE) computed on the
+#'       training subset.
 #'   }
 #'
 #' @param final_fuser Character. Meta-learner used when
@@ -129,6 +139,7 @@ wass2s_run_basin_mods_stat <- function(
     pred_pattern_by_product = NULL,
     prediction_years = NULL,
     topK = 3,
+    product_fusion_method = "median",
     fusion_method = c("meta", "mean", "median", "weighted_mean"),
     final_fuser = "rf",
     grid_levels = 5,
@@ -170,21 +181,27 @@ wass2s_run_basin_mods_stat <- function(
                                 prediction_years=prediction_years,
                                 impute=impute,
                                 require_variance=require_variance,
-                                max_na_frac=max_na_frac, model = "pcr",...),
+                                max_na_frac=max_na_frac,
+                                product_fusion_method = product_fusion_method,
+                                model = "pcr",...),
     RIDGE = wass2s_cons_mods_stat(data_by_product=data_by_product,
                                   basin_id=basin_id,
                                   pred_pattern_by_product=pred_pattern_by_product,
                                   prediction_years=prediction_years,
                                   impute=impute,
                                   require_variance=require_variance,
-                                  max_na_frac=max_na_frac, model = "ridge",...),
+                                  max_na_frac=max_na_frac,
+                                  product_fusion_method = product_fusion_method,
+                                  model = "ridge",...),
     LASSO = wass2s_cons_mods_stat(data_by_product=data_by_product,
                                   basin_id=basin_id,
                                   pred_pattern_by_product=pred_pattern_by_product,
                                   prediction_years=prediction_years,
                                   impute=impute,
                                   require_variance=require_variance,
-                                  max_na_frac=max_na_frac, model = "lasso",...)
+                                  max_na_frac=max_na_frac,
+                                  product_fusion_method = product_fusion_method,
+                                  model = "lasso",...)
   )
 
   # =========================
@@ -1021,14 +1038,24 @@ wass2s_run_basin_mods_stat <- function(
 #' @param final_fuser Name of the meta-learner to use (subset of \code{SUPPORTED_FUSERS}).
 #' @param grid_levels Integer. Number of levels used to generate hyperparameter grids
 #'   for tuning the meta-learner.
+#' @param product_fusion_method Character string specifying the fusion strategy.
+#'   Supported values are:
+#'   \itemize{
+#'     \item \code{"meta"}: train a second-level learner on retained product predictions;
+#'     \item \code{"mean"}: simple arithmetic mean across retained products;
+#'     \item \code{"median"}: median across retained products;
+#'     \item \code{"weighted_mean"}: weighted mean using product performance scores;
+#'     \item \code{"best"}: keep only the best-ranked product.
+#'   }
 #' @param fusion_method Character string specifying the final fusion strategy.
 #'   Supported values are:
 #'   \itemize{
-#'     \item \code{"meta"}: train a meta-learner using the consolidated model outputs;
-#'     \item \code{"mean"}: simple arithmetic mean across models;
-#'     \item \code{"median"}: median across models;
-#'     \item \code{"weighted_mean"}: weighted mean using model performance
-#'       (KGE-based weights computed on training data).
+#'     \item \code{"meta"}: train a meta-learner on the consolidated model predictions;
+#'     \item \code{"mean"}: use the simple arithmetic mean across consolidated predictions;
+#'     \item \code{"median"}: use the median across consolidated predictions;
+#'     \item \code{"weighted_mean"}: use a performance-based weighted mean, where
+#'       weights are derived from the Kling-Gupta Efficiency (KGE) computed on the
+#'       training subset.
 #'   }
 #' @param basins Optional vector of basin IDs to process; default uses all found.
 #' @param parallel Logical, run basins in parallel using \pkg{furrr}.
@@ -1065,6 +1092,7 @@ wass2s_run_basins_stat <- function(data_by_product,
                                    topK = 3,
                                    final_fuser = "rf",
                                    grid_levels = 5,
+                                   product_fusion_method = "median",
                                    fusion_method = c("meta", "mean", "median", "weighted_mean"),
                                    basins = NULL,
                                    parallel = FALSE,
@@ -1127,7 +1155,8 @@ wass2s_run_basins_stat <- function(data_by_product,
         allow_par=allow_par,
         max_na_frac=max_na_frac,
         impute=impute,
-        require_variance=require_variance,...
+        require_variance=require_variance,
+        product_fusion_method = product_fusion_method,...
       )
     }, error = function(e) {
       warning("Error processing basin ", bid, ": ", e$message)

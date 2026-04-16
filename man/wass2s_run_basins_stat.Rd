@@ -11,6 +11,7 @@ wass2s_run_basins_stat(
   topK = 3,
   final_fuser = "rf",
   grid_levels = 5,
+  product_fusion_method = "median",
   fusion_method = c("meta", "mean", "median", "weighted_mean"),
   basins = NULL,
   parallel = FALSE,
@@ -40,14 +41,25 @@ select predictor columns for that product.}
 \item{grid_levels}{Integer. Number of levels used to generate hyperparameter grids
 for tuning the meta-learner.}
 
+\item{product_fusion_method}{Character string specifying the fusion strategy.
+Supported values are:
+\itemize{
+  \item \code{"meta"}: train a second-level learner on retained product predictions;
+  \item \code{"mean"}: simple arithmetic mean across retained products;
+  \item \code{"median"}: median across retained products;
+  \item \code{"weighted_mean"}: weighted mean using product performance scores;
+  \item \code{"best"}: keep only the best-ranked product.
+}}
+
 \item{fusion_method}{Character string specifying the final fusion strategy.
 Supported values are:
 \itemize{
-  \item \code{"meta"}: train a meta-learner using the consolidated model outputs;
-  \item \code{"mean"}: simple arithmetic mean across models;
-  \item \code{"median"}: median across models;
-  \item \code{"weighted_mean"}: weighted mean using model performance
-    (KGE-based weights computed on training data).
+  \item \code{"meta"}: train a meta-learner on the consolidated model predictions;
+  \item \code{"mean"}: use the simple arithmetic mean across consolidated predictions;
+  \item \code{"median"}: use the median across consolidated predictions;
+  \item \code{"weighted_mean"}: use a performance-based weighted mean, where
+    weights are derived from the Kling-Gupta Efficiency (KGE) computed on the
+    training subset.
 }}
 
 \item{basins}{Optional vector of basin IDs to process; default uses all found.}

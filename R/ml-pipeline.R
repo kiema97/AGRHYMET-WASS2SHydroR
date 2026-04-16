@@ -18,6 +18,15 @@
 #' @param min_kge_model Minimum best KGE required to keep a base model for the basin.
 #' @param final_fuser Name of the meta-learner to use (subset of \code{SUPPORTED_FUSERS}).
 #' @param grid_levels Grid density for tuning both base models and meta-learner.
+#' @param product_fusion_method Character string specifying the fusion strategy.
+#'   Supported values are:
+#'   \itemize{
+#'     \item \code{"meta"}: train a second-level learner on retained product predictions;
+#'     \item \code{"mean"}: simple arithmetic mean across retained products;
+#'     \item \code{"median"}: median across retained products;
+#'     \item \code{"weighted_mean"}: weighted mean using product performance scores;
+#'     \item \code{"best"}: keep only the best-ranked product.
+#'   }
 #' @param fusion_method Character string specifying the final fusion strategy.
 #'   Supported values are:
 #'   \itemize{
@@ -89,6 +98,7 @@ wass2s_run_bas_mod_ml <- function(
     topK = 3,
     min_kge_model = -Inf,
     grid_levels = 5,
+    product_fusion_method = "median",
     fusion_method = c("meta", "mean", "median", "weighted_mean"),
     final_fuser = "rf",
     quiet = TRUE,
@@ -138,6 +148,7 @@ wass2s_run_bas_mod_ml <- function(
         impute = impute,
         require_variance = require_variance,
         prediction_years = prediction_years,
+        product_fusion_method = product_fusion_method,
         ...
       )
 
@@ -1077,6 +1088,25 @@ wass2s_run_bas_mod_ml <- function(
 #' @param parallel Logical; if \code{TRUE}, uses \pkg{furrr} for parallel execution.
 #' @param workers Integer number of workers when \code{parallel = TRUE}.
 #' @param grid_levels Grid density for tuning.
+#' @param product_fusion_method Character string specifying the fusion strategy.
+#'   Supported values are:
+#'   \itemize{
+#'     \item \code{"meta"}: train a second-level learner on retained product predictions;
+#'     \item \code{"mean"}: simple arithmetic mean across retained products;
+#'     \item \code{"median"}: median across retained products;
+#'     \item \code{"weighted_mean"}: weighted mean using product performance scores;
+#'     \item \code{"best"}: keep only the best-ranked product.
+#'   }
+#' @param fusion_method Character string specifying the final fusion strategy.
+#'   Supported values are:
+#'   \itemize{
+#'     \item \code{"meta"}: train a meta-learner on the consolidated model predictions;
+#'     \item \code{"mean"}: use the simple arithmetic mean across consolidated predictions;
+#'     \item \code{"median"}: use the median across consolidated predictions;
+#'     \item \code{"weighted_mean"}: use a performance-based weighted mean, where
+#'       weights are derived from the Kling-Gupta Efficiency (KGE) computed on the
+#'       training subset.
+#'   }
 #' @param final_fuser Name of the meta-learner for final fusion.
 #' @param quiet Logical; if \code{FALSE}, emits informative messages.
 #' @param ... Other parameters passed to \code{wass2s_run_bas_mod_ml}.
@@ -1099,6 +1129,8 @@ wass2s_run_basins_ml <- function(
     parallel = FALSE,
     workers = 4,
     grid_levels = 5,
+    product_fusion_method = "median",
+    fusion_method = c("meta", "mean", "median", "weighted_mean"),
     final_fuser = "rf",
     quiet = TRUE,
     ...
@@ -1145,6 +1177,8 @@ wass2s_run_basins_ml <- function(
         grid_levels = grid_levels,
         final_fuser = final_fuser,
         quiet = quiet,
+        product_fusion_method=product_fusion_method,
+        fusion_method = fusion_method,
         prediction_years=prediction_years,
         ...
       )

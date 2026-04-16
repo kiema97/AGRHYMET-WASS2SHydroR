@@ -10,7 +10,7 @@ fuse_products_predictions(
   topK = 3,
   min_score = 0.2,
   prediction_years = NULL,
-  fusion_method = c("median", "mean", "meta", "weighted_mean", "best"),
+  product_fusion_method = c("median", "mean", "meta", "weighted_mean", "best"),
   sub_fuser = "rf",
   sub_grid_levels = 5,
   min_data_required = 10,
@@ -45,10 +45,10 @@ weights from dominating the weighted fusion.}
 \item{prediction_years}{Optional numeric vector of length 2 specifying the
 prediction period boundaries. Values can be provided as \code{YYYY} or
 \code{YYYYMMDD}. This argument is mainly used when
-\code{fusion_method = "meta"} to define the holdout period excluded from
+\code{product_fusion_method = "meta"} to define the holdout period excluded from
 sub-fuser training.}
 
-\item{fusion_method}{Character string specifying the fusion strategy.
+\item{product_fusion_method}{Character string specifying the fusion strategy.
 Supported values are:
 \itemize{
   \item \code{"meta"}: train a second-level learner on retained product predictions;
@@ -59,7 +59,7 @@ Supported values are:
 }}
 
 \item{sub_fuser}{Character. Meta-model used when
-\code{fusion_method = "meta"}. Must be supported by \code{model_spec()} and
+\code{product_fusion_method = "meta"}. Must be supported by \code{model_spec()} and
 \code{model_grid()}.}
 
 \item{sub_grid_levels}{Integer. Number of levels used to generate the tuning
@@ -89,7 +89,7 @@ A list with the following elements:
   \item \code{leaderboard_products}: a ranked data frame of products with
     their scores and assigned weights;
   \item \code{all_results}: the filtered input results retained internally;
-  \item \code{fusion_method}: the fusion strategy effectively used. This may
+  \item \code{product_fusion_method}: the fusion strategy effectively used. This may
     differ from the requested one if an automatic fallback occurred.
 }
 }
@@ -128,7 +128,7 @@ out <- fuse_products_predictions(
   results = results_std,
   dates_all = dates_all,
   topK = 3,
-  fusion_method = "median"
+  product_fusion_method = "median"
 )
 
 # Weighted mean fusion
@@ -136,7 +136,7 @@ out <- fuse_products_predictions(
   results = results_std,
   dates_all = dates_all,
   topK = 3,
-  fusion_method = "weighted_mean"
+  product_fusion_method = "weighted_mean"
 )
 
 # Best-product strategy
@@ -144,7 +144,7 @@ out <- fuse_products_predictions(
   results = results_std,
   dates_all = dates_all,
   topK = 1,
-  fusion_method = "best"
+  product_fusion_method = "best"
 )
 
 # Meta-fusion
@@ -152,7 +152,7 @@ out <- fuse_products_predictions(
   results = results_std,
   dates_all = dates_all,
   topK = 3,
-  fusion_method = "meta",
+  product_fusion_method = "meta",
   sub_fuser = "rf"
 )
 }

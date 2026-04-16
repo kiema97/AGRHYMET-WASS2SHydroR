@@ -1219,7 +1219,7 @@ get_any_Q <- function(data_by_product, basin_id, basin_col = "HYBAS_ID") {
     target = "Q",
     date_col = "YYYY",
     prediction_years = NULL,
-    product_fusion_method = c("meta", "mean", "median", "weighted_mean"),
+    fusion_method = c("meta", "mean", "median", "weighted_mean"),
     final_fuser = "rf",
     grid_levels = 5,
     quiet = TRUE,
@@ -1227,7 +1227,7 @@ get_any_Q <- function(data_by_product, basin_id, basin_col = "HYBAS_ID") {
     allow_par = TRUE,
     target_positive = FALSE
 ) {
-  product_fusion_method <- match.arg(product_fusion_method)
+  fusion_method <- match.arg(fusion_method)
 
   if (!is.data.frame(fused_models)) {
     stop("`fused_models` must be a data.frame.", call. = FALSE)
@@ -1254,7 +1254,7 @@ get_any_Q <- function(data_by_product, basin_id, basin_col = "HYBAS_ID") {
         .wass2s_score_fusion(out[0, , drop = FALSE], basin_id, target = target) %>% dplyr::mutate(split = "train"),
         .wass2s_score_fusion(out, basin_id, target = target) %>% dplyr::mutate(split = "test")
       ),
-      product_fusion_method = product_fusion_method,
+      fusion_method = fusion_method,
       fusion_weights = NULL,
       cv_rs = NULL,
       best_meta_params = NULL
@@ -1278,25 +1278,25 @@ get_any_Q <- function(data_by_product, basin_id, basin_col = "HYBAS_ID") {
   all_constant <- all(constant_cols)
 
   # Fallback to mean if meta cannot reasonably run
-  if (product_fusion_method == "meta" && (too_short || all_constant)) {
+  if (fusion_method == "meta" && (too_short || all_constant)) {
     if (!quiet) {
       message("Meta-fusion fallback to mean: insufficient training information.")
     }
-    product_fusion_method <- "mean"
+    fusion_method <- "mean"
   }
 
   weights <- NULL
   cv_rs <- NULL
   best_meta_params <- NULL
 
-  if (product_fusion_method == "mean") {
+  if (fusion_method == "mean") {
     fused_models$pred_final <- .wass2s_apply_simple_fusion(fused_models, pred_cols, method = "mean")
-  } else if (product_fusion_method == "median") {
+  } else if (fusion_method == "median") {
     fused_models$pred_final <- .wass2s_apply_simple_fusion(fused_models, pred_cols, method = "median")
-  } else if (product_fusion_method == "weighted_mean") {
+  } else if (fusion_method == "weighted_mean") {
     weights <- .wass2s_compute_kge_weights(df_tr, pred_cols, target = target)
     fused_models$pred_final <- .wass2s_apply_weighted_mean(fused_models, pred_cols, weights)
-  } else if (product_fusion_method == "meta") {
+  } else if (fusion_method == "meta") {
     meta_res <- .wass2s_run_meta_fuser(
       df_tr = df_tr,
       df_all = fused_models,
@@ -1315,7 +1315,7 @@ get_any_Q <- function(data_by_product, basin_id, basin_col = "HYBAS_ID") {
       if (!quiet) {
         message("Meta-fusion failed, fallback to mean.")
       }
-      product_fusion_method <- "mean"
+      fusion_method <- "mean"
       fused_models$pred_final <- .wass2s_apply_simple_fusion(fused_models, pred_cols, method = "mean")
     } else {
       fused_models$pred_final <- meta_res$pred_all
@@ -1351,7 +1351,7 @@ get_any_Q <- function(data_by_product, basin_id, basin_col = "HYBAS_ID") {
     scores_train = train_scores,
     scores_test = test_scores,
     scores = scores,
-    product_fusion_method = product_fusion_method,
+    fusion_method = fusion_method,
     fusion_weights = weights,
     cv_rs = cv_rs,
     best_meta_params = best_meta_params

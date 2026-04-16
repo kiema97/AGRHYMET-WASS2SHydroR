@@ -11,7 +11,7 @@ wass2s_cons_mods_stat(
   pred_pattern_by_product = NULL,
   model = c("pcr", "ridge", "lasso"),
   grid = NULL,
-  fusion_method = "median",
+  product_fusion_method = "median",
   sub_fuser = "rf",
   sub_grid_levels = 10,
   topK = 3,
@@ -58,7 +58,7 @@ If \code{NULL}, defaults to \code{"^pt_"}.}
 \item{grid}{Optional tibble of tuning parameters passed to
 \code{wass2s_tune_pred_stat()}. If \code{NULL}, defaults are used.}
 
-\item{fusion_method}{Character string specifying the fusion strategy.
+\item{product_fusion_method}{Character string specifying the fusion strategy.
 Supported values are:
 \itemize{
   \item \code{"meta"}: train a second-level learner on retained product predictions;
@@ -69,8 +69,7 @@ Supported values are:
 }}
 
 \item{sub_fuser}{Character; meta-learner model name passed to
-\code{model_spec()} (e.g. \code{"rf"}). Only used when
-\code{use_sub_fuser = TRUE}.}
+\code{model_spec()} (e.g. \code{"rf"}).}
 
 \item{sub_grid_levels}{Integer; tuning grid "levels" for the sub-fuser, passed
 to \code{model_grid()}.}
