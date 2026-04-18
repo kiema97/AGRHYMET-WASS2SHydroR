@@ -37,29 +37,85 @@ wass2s_class_probs_norm <- function(mu, sigma, thresholds) {
   tibble::tibble(p_below = p_below, p_normal = p_normal, p_above = p_above)
 }
 
-#' Entropy of class probabilities (uncertainty indicator)
-#' @keywords internal
 
-wass2s_class_entropy <- function(p_below, p_normal, p_above) {
-  p_raw <- cbind(p_below, p_normal, p_above)   # garde les scalaires en matrice n x 3
+#' Compute entropy of class probabilities (uncertainty indicator)
+#'
+#' This function computes the Shannon entropy of class probabilities
+#' (below, normal, above) to quantify forecast uncertainty.
+#'
+#' Entropy is minimal (0) when one class has probability 1 (deterministic forecast),
+#' and maximal when probabilities are evenly distributed.
+#'
+#' @param p_below Numeric vector. Probability of the "below normal" class.
+#' @param p_normal Numeric vector. Probability of the "normal" class.
+#' @param p_above Numeric vector. Probability of the "above normal" class.
+#' @param normalize Logical. If TRUE, entropy is normalized to [0, 1].
+#'
+#' @return Numeric vector of entropy values.
+#'
+#' @details
+#' - Probabilities are automatically cleaned and normalized.
+#' - Non-finite values are treated as zero.
+#' - Rows with invalid probabilities (sum <= 0) return NA.
+#'
+#' @examples
+#' wass2s_class_entropy(
+#'   p_below = c(1, 0.33),
+#'   p_normal = c(0, 0.33),
+#'   p_above = c(0, 0.34)
+#' )
+#'
+#' @export
+wass2s_class_entropy <- function(p_below, p_normal, p_above, normalize = FALSE) {
 
-  # cas exacts : une classe = 1 et les deux autres = 0  -> entropie = 0
-  is_one_hot <- rowSums(p_raw == 1, na.rm = TRUE) == 1 & rowSums(p_raw == 0, na.rm = TRUE) == 2
-  out <- numeric(nrow(p_raw))
-  out[is_one_hot] <- 0
+  p <- cbind(p_below, p_normal, p_above)
 
-  # pour le reste, on sécurise et on calcule
-  if (any(!is_one_hot)) {
-    p <- p_raw
-    p[!is.finite(p)] <- 0
-    p[p < 1e-12] <- 1e-12
-    rs <- rowSums(p)
-    rs[!is.finite(rs) | rs <= 0] <- 1
-    p <- p / rs
-    out[!is_one_hot] <- -rowSums(p[!is_one_hot, , drop = FALSE] * log(p[!is_one_hot, , drop = FALSE]))
+  p[!is.finite(p)] <- 0
+  p[p < 0] <- 0
+
+  rs <- rowSums(p)
+  invalid <- !is.finite(rs) | rs <= 0
+
+  out <- rep(NA_real_, nrow(p))
+
+  if (any(!invalid)) {
+    p_valid <- p[!invalid, , drop = FALSE]
+    p_valid <- p_valid / rowSums(p_valid)
+
+    entropy <- -rowSums(ifelse(p_valid > 0, p_valid * log(p_valid), 0))
+
+    if (normalize) {
+      entropy <- entropy / log(3)
+    }
+
+    out[!invalid] <- entropy
   }
-  as.numeric(out)
+
+  out
 }
+
+# ##' Entropy of class probabilities (uncertainty indicator)
+# ##' @keywords internal
+# wass2s_class_entropy <- function(p_below, p_normal, p_above) {
+#   p_raw <- cbind(p_below, p_normal, p_above)   # garde les scalaires en matrice n x 3
+#
+#   # cas exacts : une classe = 1 et les deux autres = 0  -> entropie = 0
+#   is_one_hot <- rowSums(p_raw == 1, na.rm = TRUE) == 1 & rowSums(p_raw == 0, na.rm = TRUE) == 2
+#   out <- numeric(nrow(p_raw))
+#   out[is_one_hot] <- 0
+#
+#   # pour le reste, on sécurise et on calcule
+#   if (any(!is_one_hot)) {
+#     p <- p_raw
+#     p[!is.finite(p)] <- 0
+#     p[p < 1e-12] <- 1e-12
+#     rs <- rowSums(p)
+#     rs[!is.finite(rs) | rs <= 0] <- 1
+#     p <- p / rs
+#     out[!is_one_hot] <- -rowSums(p[!is_one_hot, , drop = FALSE] * log(p[!is_one_hot, , drop = FALSE]))
+#   }
+#   as.numeric(out)
+# }
 
 
 
