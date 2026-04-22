@@ -37,7 +37,7 @@ plot_class_map <- function(
     basin_col = "HYBAS_ID",
     colors = list(
       above = "#41AB5D",
-      normal = "#A1D937",
+      normal = "#FFFFD4",
       below = "#EC7014",
       climatology = "#BEBEBE"
     ),
