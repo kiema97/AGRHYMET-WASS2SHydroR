@@ -26,4 +26,4 @@ run_method(method, data_by_product, cfg)
 ## Value
 
 Same structure as
-[`run_method.method_hydro()`](https://kiema97.github.io/WASS2SHydroR/reference/run_method.method_hydro.md).
+[`run_method.method_hydro()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/run_method.method_hydro.md).

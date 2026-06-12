@@ -181,7 +181,7 @@ wass2s_tune_pred_ml(
 
   Optional `rsample::rset` object for resampling. If `NULL`, a
   rolling-origin resampling is created via
-  [`make_rolling()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_rolling_cv.md).
+  [`make_rolling()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_rolling_cv.md).
 
 - grid_levels:
 

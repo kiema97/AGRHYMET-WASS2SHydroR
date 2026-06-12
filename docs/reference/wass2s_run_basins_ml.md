@@ -1,7 +1,7 @@
 # Run the Hydro + ML pipeline for all basins
 
 Iterate over all basin IDs, running
-[`wass2s_run_bas_mod_ml()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_run_bas_mod_ml.md)
+[`wass2s_run_bas_mod_ml()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_run_bas_mod_ml.md)
 for each, optionally in parallel. Returns a named list indexed by basin
 ID.
 
@@ -118,6 +118,21 @@ wass2s_run_basins_ml(
 
   Logical; if `FALSE`, emits informative messages.
 
+- target_positive:
+
+  Logical; passed to
+  [`wass2s_run_bas_mod_ml()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_run_bas_mod_ml.md)
+  to truncate negative predictions to zero.
+
+- allow_par:
+
+  Logical; passed to lower-level tuning functions to allow parallel
+  processing.
+
+- selection_metric:
+
+  Character; tuning-selection metric, either `"rmse"` or `"kge"`.
+
 - ...:
 
   Other parameters passed to `wass2s_run_bas_mod_ml`.
@@ -125,7 +140,7 @@ wass2s_run_basins_ml(
 ## Value
 
 A named list: one element per basin, each the list returned by
-[`wass2s_run_bas_mod_ml()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_run_bas_mod_ml.md).
+[`wass2s_run_bas_mod_ml()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_run_bas_mod_ml.md).
 
 ## Examples
 

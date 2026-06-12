@@ -15,7 +15,7 @@ ecmwfr::wf_set_key(user = "ecmwfr")
 ```
 
 Use the same `user` value in
-[`wass2s_download_cds()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_download_cds.md).
+[`wass2s_download_cds()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_download_cds.md).
 
 ## CDS Download Fails Outside RStudio
 
@@ -108,7 +108,7 @@ selection_metric = "rmse"
 - Start with one basin and one model.
 - Use `quiet = FALSE` during setup.
 - Validate CDS files with
-  [`wass2s_prepare_data()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_prepare_data.md)
+  [`wass2s_prepare_data()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_prepare_data.md)
   before modelling.
 - Start with `fusion_method = "median"`.
 - Use `weighted_mean` only when product skill scores are reliable.

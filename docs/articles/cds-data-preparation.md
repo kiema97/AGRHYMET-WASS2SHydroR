@@ -2,7 +2,7 @@
 
 ## CDS Configuration
 
-[`wass2s_download_cds()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_download_cds.md)
+[`wass2s_download_cds()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_download_cds.md)
 uses the `ecmwfr` package. The CDS key must be configured before
 downloading data:
 
@@ -105,7 +105,7 @@ before the `.nc` extension.
 
 ## Prepare NetCDF Data
 
-[`wass2s_prepare_data()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_prepare_data.md)
+[`wass2s_prepare_data()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_prepare_data.md)
 reads NetCDF files or `stars` objects and returns a regular data frame
 with a reconstructed `DATE` column.
 

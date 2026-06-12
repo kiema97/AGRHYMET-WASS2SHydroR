@@ -3,7 +3,7 @@
 For a given basin and ML model, this function:
 
 1.  fits/tunes the model on each product using
-    [`wass2s_tune_pred_ml()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_tune_pred_ml.md),
+    [`wass2s_tune_pred_ml()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_tune_pred_ml.md),
 
 2.  ranks products by cross-validated KGE,
 
@@ -135,7 +135,7 @@ wass2s_cons_mods_ml(
 - grid_levels:
 
   Tuning grid granularity for the base ML model (passed to
-  [`wass2s_tune_pred_ml()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_tune_pred_ml.md)).
+  [`wass2s_tune_pred_ml()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_tune_pred_ml.md)).
 
 - min_data_required:
 
@@ -160,7 +160,7 @@ wass2s_cons_mods_ml(
 - selection_metric:
 
   Character; forwarded to
-  [`wass2s_tune_pred_ml()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_tune_pred_ml.md).
+  [`wass2s_tune_pred_ml()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_tune_pred_ml.md).
   The default `"rmse"` keeps RMSE tuning but reports product KGE for the
   same selected configuration.
 

@@ -71,6 +71,6 @@ Suggests:
 	nnet
 VignetteBuilder: knitr
 Config/testthat/edition: 3
-URL: https://kiema97.github.io/WASS2SHydroR/, https://github.com/kiema97/WASS2SHydroR
-BugReports: https://github.com/kiema97/WASS2SHydroR/issues
+URL: https://kiema97.github.io/AGRHYMET-WASS2SHydroR/, https://github.com/kiema97/AGRHYMET-WASS2SHydroR
+BugReports: https://github.com/kiema97/AGRHYMET-WASS2SHydroR/issues
 

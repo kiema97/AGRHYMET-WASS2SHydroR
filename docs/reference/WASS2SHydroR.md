@@ -16,7 +16,7 @@ Useful links:
 
 ## Author
 
-**Maintainer**: ArsÃ¨ne Kiema <kiema.arsene@cilss.int>
+**Maintainer**: Arsène Kiema <kiema.arsene@cilss.int>
 
 Other contributors:
 

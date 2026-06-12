@@ -16,3 +16,4 @@
 ^_resources$
 ^vignettes/figure$
 ^vignettes/.*\.(html|md|qmd|mdx)$
+^pkgdown$

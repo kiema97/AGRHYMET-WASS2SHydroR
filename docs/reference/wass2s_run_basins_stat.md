@@ -121,6 +121,10 @@ wass2s_run_basins_stat(
   Logical. If `TRUE`, allow parallel execution during hyperparameter
   tuning of the meta-learner.
 
+- min_kge_model:
+
+  Minimum KGE threshold passed to basin-level statistical consolidation.
+
 - max_na_frac:
 
   Numeric. Maximum fraction of missing values allowed per variable.
