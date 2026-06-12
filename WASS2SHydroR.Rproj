@@ -23,4 +23,3 @@ PackageRoxygenize: rd,collate,namespace
 PythonType: system
 PythonVersion: 3.12.6
 PythonPath: C:/Python312/python.exe
-

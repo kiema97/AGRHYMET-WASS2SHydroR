@@ -13,9 +13,9 @@ in West Africa and the Sahel.
 \seealso{
 Useful links:
 \itemize{
-  \item \url{https://kiema97.github.io/WASS2SHydroR/}
-  \item \url{https://github.com/kiema97/WASS2SHydroR}
-  \item Report bugs at \url{https://github.com/kiema97/WASS2SHydroR/issues}
+  \item \url{https://kiema97.github.io/AGRHYMET-WASS2SHydroR/}
+  \item \url{https://github.com/kiema97/AGRHYMET-WASS2SHydroR}
+  \item Report bugs at \url{https://github.com/kiema97/AGRHYMET-WASS2SHydroR/issues}
 }
 
 }

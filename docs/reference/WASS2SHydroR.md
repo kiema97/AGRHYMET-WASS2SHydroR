@@ -8,11 +8,12 @@ the Sahel.
 
 Useful links:
 
-- <https://kiema97.github.io/WASS2SHydroR/>
+- <https://kiema97.github.io/AGRHYMET-WASS2SHydroR/>
 
-- <https://github.com/kiema97/WASS2SHydroR>
+- <https://github.com/kiema97/AGRHYMET-WASS2SHydroR>
 
-- Report bugs at <https://github.com/kiema97/WASS2SHydroR/issues>
+- Report bugs at
+  <https://github.com/kiema97/AGRHYMET-WASS2SHydroR/issues>
 
 ## Author
 
