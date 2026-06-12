@@ -1,0 +1,14 @@
+pandoc: 3.6.3
+pkgdown: 2.2.0
+pkgdown_sha: ~
+articles:
+  cds-data-preparation: cds-data-preparation.html
+  get-started: get-started.html
+  hype-workflow: hype-workflow.html
+  ml-workflow: ml-workflow.html
+  statistical-workflow: statistical-workflow.html
+  troubleshooting: troubleshooting.html
+last_built: 2026-06-11T23:29Z
+urls:
+  reference: https://kiema97.github.io/WASS2SHydroR/reference
+  article: https://kiema97.github.io/WASS2SHydroR/articles

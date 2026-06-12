@@ -1,0 +1,262 @@
+---
+title: "Get Started with WASS2SHydroR"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Get Started with WASS2SHydroR}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  eval = FALSE
+)
+```
+
+## Purpose
+
+WASS2SHydroR is an R toolkit for seasonal and sub-seasonal hydrological
+forecasting in West Africa and the Sahel. It supports the main steps of an
+operational forecasting workflow:
+
+- download climate forecasts from CDS/ECMWF;
+- prepare gridded NetCDF or `stars` objects;
+- assemble product-by-product basin data;
+- fit statistical models such as PCR, ridge, and lasso;
+- fit machine learning models such as random forest, XGBoost, and MLP;
+- rank climate products using cross-validation skill;
+- combine forecasts with median, mean, KGE-weighted mean, or meta-learning;
+- evaluate forecasts with KGE, RMSE, MAE, NSE, and correlation;
+- run and monitor HYPE scenarios.
+
+## Overall Process
+
+```{=html}
+<svg viewBox="0 0 1040 360" role="img" aria-label="WASS2SHydroR end-to-end forecasting process with statistical, machine learning, hydrological and multi-approach consolidation" style="width:100%; max-width:1040px; height:auto;">
+  <defs>
+    <marker id="arrow-main" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#1b6f8f"></path>
+    </marker>
+  </defs>
+  <rect x="20" y="135" width="135" height="75" rx="8" fill="#e8f3f7" stroke="#1b6f8f" stroke-width="2"></rect>
+  <text x="87" y="164" text-anchor="middle" font-size="14" font-weight="700">Download</text>
+  <text x="87" y="185" text-anchor="middle" font-size="12">CDS / climate</text>
+  <text x="87" y="202" text-anchor="middle" font-size="12">products</text>
+
+  <rect x="185" y="135" width="135" height="75" rx="8" fill="#eef7ed" stroke="#4b8b3b" stroke-width="2"></rect>
+  <text x="252" y="164" text-anchor="middle" font-size="14" font-weight="700">Processing</text>
+  <text x="252" y="185" text-anchor="middle" font-size="12">formatting and</text>
+  <text x="252" y="202" text-anchor="middle" font-size="12">basin tables</text>
+
+  <rect x="380" y="25" width="180" height="78" rx="8" fill="#fff4df" stroke="#b66d00" stroke-width="2"></rect>
+  <text x="470" y="53" text-anchor="middle" font-size="14" font-weight="700">Statistical approach</text>
+  <text x="470" y="74" text-anchor="middle" font-size="12">per model: products -></text>
+  <text x="470" y="91" text-anchor="middle" font-size="12">topK consolidation</text>
+
+  <rect x="380" y="136" width="180" height="78" rx="8" fill="#f0ecfb" stroke="#6650a4" stroke-width="2"></rect>
+  <text x="470" y="164" text-anchor="middle" font-size="14" font-weight="700">ML approach</text>
+  <text x="470" y="185" text-anchor="middle" font-size="12">chosen ML models -></text>
+  <text x="470" y="202" text-anchor="middle" font-size="12">topK consolidation</text>
+
+  <rect x="380" y="247" width="180" height="78" rx="8" fill="#edf1f8" stroke="#385f9f" stroke-width="2"></rect>
+  <text x="470" y="275" text-anchor="middle" font-size="14" font-weight="700">Hydrological approach</text>
+  <text x="470" y="296" text-anchor="middle" font-size="12">HYPE forced by</text>
+  <text x="470" y="313" text-anchor="middle" font-size="12">climate forcings</text>
+
+  <rect x="635" y="25" width="160" height="78" rx="8" fill="#fff8ea" stroke="#b66d00" stroke-width="2"></rect>
+  <text x="715" y="53" text-anchor="middle" font-size="14" font-weight="700">Stat seasonal</text>
+  <text x="715" y="74" text-anchor="middle" font-size="12">forecast</text>
+
+  <rect x="635" y="136" width="160" height="78" rx="8" fill="#f5f1ff" stroke="#6650a4" stroke-width="2"></rect>
+  <text x="715" y="164" text-anchor="middle" font-size="14" font-weight="700">ML seasonal</text>
+  <text x="715" y="185" text-anchor="middle" font-size="12">forecast</text>
+
+  <rect x="635" y="247" width="160" height="78" rx="8" fill="#f0f4fb" stroke="#385f9f" stroke-width="2"></rect>
+  <text x="715" y="275" text-anchor="middle" font-size="14" font-weight="700">Hydro seasonal</text>
+  <text x="715" y="296" text-anchor="middle" font-size="12">forecast</text>
+
+  <rect x="860" y="135" width="155" height="85" rx="8" fill="#f8eeee" stroke="#a33d3d" stroke-width="2"></rect>
+  <text x="937" y="164" text-anchor="middle" font-size="14" font-weight="700">Optional</text>
+  <text x="937" y="185" text-anchor="middle" font-size="12">multi-approach</text>
+  <text x="937" y="202" text-anchor="middle" font-size="12">consolidation</text>
+
+  <line x1="155" y1="173" x2="177" y2="173" stroke="#1b6f8f" stroke-width="3" marker-end="url(#arrow-main)"></line>
+  <line x1="320" y1="173" x2="372" y2="64" stroke="#1b6f8f" stroke-width="3" marker-end="url(#arrow-main)"></line>
+  <line x1="320" y1="173" x2="372" y2="175" stroke="#1b6f8f" stroke-width="3" marker-end="url(#arrow-main)"></line>
+  <line x1="320" y1="173" x2="372" y2="286" stroke="#1b6f8f" stroke-width="3" marker-end="url(#arrow-main)"></line>
+  <line x1="560" y1="64" x2="627" y2="64" stroke="#1b6f8f" stroke-width="3" marker-end="url(#arrow-main)"></line>
+  <line x1="560" y1="175" x2="627" y2="175" stroke="#1b6f8f" stroke-width="3" marker-end="url(#arrow-main)"></line>
+  <line x1="560" y1="286" x2="627" y2="286" stroke="#1b6f8f" stroke-width="3" marker-end="url(#arrow-main)"></line>
+  <line x1="795" y1="64" x2="852" y2="176" stroke="#1b6f8f" stroke-width="3" marker-end="url(#arrow-main)"></line>
+  <line x1="795" y1="175" x2="852" y2="176" stroke="#1b6f8f" stroke-width="3" marker-end="url(#arrow-main)"></line>
+  <line x1="795" y1="286" x2="852" y2="176" stroke="#1b6f8f" stroke-width="3" marker-end="url(#arrow-main)"></line>
+</svg>
+```
+
+In WASS2SHydroR, each approach first produces its own seasonal forecast. A final
+multi-approach forecast can then be obtained by consolidating the forecasts from
+the statistical, machine learning, and hydrological modelling approaches.
+
+## Installation
+
+From the package root:
+
+```r
+renv::restore()
+```
+
+During development:
+
+```r
+pkgload::load_all(".")
+```
+
+After installation:
+
+```r
+library(WASS2SHydroR)
+```
+
+Optional features require optional packages:
+
+- `ecmwfr` for CDS/ECMWF data access;
+- `stars`, `ncdf4`, and `units` for NetCDF preparation;
+- `ranger`, `xgboost`, `nnet`, `glmnet`, `earth`, `Cubist`, `kernlab`, or
+  `kknn` depending on the selected modelling engines;
+- `future` and `furrr` for parallel execution.
+
+## Expected Data Structure
+
+Most modelling functions expect a named list of data frames, with one data
+frame per climate product:
+
+```r
+data_by_product <- list(
+  ECMWF = ecmwf_df,
+  MeteoFrance = mf_df,
+  CMCC = cmcc_df
+)
+```
+
+Each product table should contain at least:
+
+- a basin identifier column, by default `HYBAS_ID`;
+- a date or year column, by default `YYYY`;
+- an observed hydrological target, by default `Q`;
+- predictor columns, often selected with a regular expression such as `^pt_`.
+
+Example:
+
+```r
+head(data_by_product[[1]])
+# HYBAS_ID   YYYY       Q     pt_1    pt_2    pt_3
+# 1050915990 19930101   120.4 0.23    1.42    0.91
+```
+
+## Minimal Reproducible Example
+
+The package includes a toy dataset generator:
+
+```r
+data_by_product <- make_toy_data_by_product()
+basin_id <- unique(data_by_product[[1]]$HYBAS_ID)[1]
+```
+
+Run a statistical workflow:
+
+```r
+stat_res <- wass2s_run_basin_mods_stat(
+  basin_id = basin_id,
+  data_by_product = data_by_product,
+  topK = 2,
+  fusion_method = "median",
+  quiet = FALSE
+)
+
+stat_res$scores
+```
+
+Run a machine learning workflow:
+
+```r
+ml_res <- wass2s_run_bas_mod_ml(
+  basin_id = basin_id,
+  data_by_product = data_by_product,
+  models = c("rf"),
+  topK = 2,
+  fusion_method = "median",
+  selection_metric = "rmse",
+  quiet = FALSE
+)
+
+ml_res$scores
+```
+
+## Main User-Facing Functions
+
+| Area | Function | Purpose |
+|---|---|---|
+| Data | `wass2s_download_cds()` | Download climate forecasts from CDS/ECMWF |
+| Data | `wass2s_prepare_data()` | Convert NetCDF or `stars` data to tabular form |
+| Statistics | `wass2s_tune_pred_stat()` | Tune and predict one statistical product model |
+| Statistics | `wass2s_cons_mods_stat()` | Combine products for one statistical model |
+| Statistics | `wass2s_run_basin_mods_stat()` | Full statistical workflow for one basin |
+| Statistics | `wass2s_run_basins_stat()` | Statistical workflow for several basins |
+| ML | `wass2s_tune_pred_ml()` | Tune and predict one ML product model |
+| ML | `wass2s_cons_mods_ml()` | Combine products for one ML model |
+| ML | `wass2s_run_bas_mod_ml()` | Full ML workflow for one basin |
+| ML | `wass2s_run_basins_ml()` | ML workflow for several basins |
+| HYPE | `wass2s_hype_run()` | Run HYPE in standard mode |
+| HYPE | `wass2s_hype_run_watchlog()` | Run HYPE and monitor logs |
+| Metrics | `wass2s_kge()` | Kling-Gupta Efficiency |
+| Interface | `run_wass2s()` | Generic method dispatcher |
+
+## Implemented Model Registry
+
+The model registry is defined in `R/models.R`.
+
+### Base ML models
+
+`SUPPORTED_MODELS` currently contains:
+
+| Key | Model family | parsnip engine | Required package |
+|---|---|---|---|
+| `rf` | Random forest | `ranger` | `ranger` |
+| `xgb` | Gradient boosted trees | `xgboost` | `xgboost` |
+| `mlp` | Multilayer perceptron | `nnet` | `nnet` |
+| `kknn` | k-nearest neighbors | `kknn` | `kknn` |
+| `svmlinear` | Linear support vector machine | `kernlab` | `kernlab` |
+| `mars` | Multivariate adaptive regression splines | `earth` | `earth` |
+| `cubist` | Cubist rule-based regression | `Cubist` | `Cubist` |
+| `glmnet` | Elastic-net linear regression | `glmnet` | `glmnet` |
+
+### Meta-fusers
+
+`SUPPORTED_FUSERS` currently contains:
+
+```r
+c("rf", "xgb", "glmnet", "kknn", "svmlinear", "mars", "cubist", "mlp")
+```
+
+The same modelling factory, `model_spec()`, is used for ML base learners and
+meta-fusers.
+
+## Generic Interface
+
+Available methods can be listed with:
+
+```r
+list_methods()
+```
+
+The generic interface is:
+
+```r
+run_wass2s("stat", data_by_product, cfg)
+run_wass2s("hydro", data_by_product, cfg)
+run_wass2s("ml", data_by_product, cfg)
+```
+
+`"ml"` is an alias for the hydro/ML pipeline.

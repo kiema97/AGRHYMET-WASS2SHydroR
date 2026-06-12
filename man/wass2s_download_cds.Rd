@@ -15,7 +15,7 @@ wass2s_download_cds(
   leadtime_hour,
   area = c(28.5, -25.5, 4, 26.6),
   out_dir = ".",
-  user = "ecmwf",
+  user = "ecmwfr",
   service = c("cds", "ads", "cems"),
   filename_tpl = NULL,
   tries = 3,
@@ -24,7 +24,7 @@ wass2s_download_cds(
   force_download = FALSE,
   parallel = FALSE,
   workers = 2,
-  job_name = "default",
+  job_name = NULL,
   verbose = TRUE,
   ...
 )
@@ -78,7 +78,9 @@ Falls back to sequential mode if batch is unavailable.}
 
 \item{workers}{Integer. Number of parallel workers for batch submission. Default \code{2}.}
 
-\item{job_name}{Optional string passed to \code{wf_request()} (sequential mode).}
+\item{job_name}{Optional string passed to \code{wf_request()} (sequential mode).
+Leave \code{NULL} outside RStudio; non-NULL values trigger RStudio Jobs in
+\pkg{ecmwfr}.}
 
 \item{verbose}{Logical. Verbose logging. Default \code{TRUE}.}
 

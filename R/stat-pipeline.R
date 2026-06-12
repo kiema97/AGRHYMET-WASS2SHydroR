@@ -55,6 +55,9 @@
 #' @param grid_levels Integer. Number of levels used to generate hyperparameter grids
 #'   for tuning the meta-learner.
 #'
+#' @param sub_fuser Optional meta-learner used to consolidate top-K products within each statistical model. Defaults to \code{final_fuser}.
+#' @param sub_grid_levels Optional grid size for the within-model product fuser. Defaults to \code{grid_levels}.
+#' @param min_kge_model Minimum KGE threshold used when selecting products/models for consolidation.
 #' @param quiet Logical. If \code{TRUE}, suppress informational messages.
 #'
 #' @param verbose_tune Logical. If \code{TRUE}, print tuning progress.
@@ -143,10 +146,13 @@ wass2s_run_basin_mods_stat <- function(
     fusion_method = c("meta", "mean", "median", "weighted_mean"),
     final_fuser = "rf",
     grid_levels = 5,
+    sub_fuser = NULL,
+    sub_grid_levels = NULL,
     quiet = TRUE,
     verbose_tune = TRUE,
     target_positive = TRUE,
     allow_par = TRUE,
+    min_kge_model = 0.2,
     max_na_frac = 0.3,
     impute = "median",
     require_variance = TRUE,
@@ -154,6 +160,8 @@ wass2s_run_basin_mods_stat <- function(
 ) {
 
   fusion_method <- match.arg(fusion_method)
+  if (is.null(sub_fuser)) sub_fuser <- final_fuser
+  if (is.null(sub_grid_levels)) sub_grid_levels <- grid_levels
 
   if (length(data_by_product) == 0) {
     stop("data_by_product cannot be empty", call. = FALSE)
@@ -168,7 +176,8 @@ wass2s_run_basin_mods_stat <- function(
   }
 
   final_fuser <- match.arg(final_fuser, SUPPORTED_FUSERS)
-  .require_pkg(engine_pkg[final_fuser])
+  sub_fuser <- match.arg(sub_fuser, SUPPORTED_FUSERS)
+  .require_pkg(engine_pkg[c(final_fuser, sub_fuser)])
 
   # =========================
   # 1) Consolidation modèles
@@ -177,30 +186,63 @@ wass2s_run_basin_mods_stat <- function(
   models <- list(
     PCR = wass2s_cons_mods_stat(data_by_product=data_by_product,
                                 basin_id=basin_id,
+                                basin_col=hybas_id,
+                                target=target,
+                                date_col=date_col,
                                 pred_pattern_by_product=pred_pattern_by_product,
+                                topK=topK,
+                                min_kge_model=min_kge_model,
                                 prediction_years=prediction_years,
+                                target_positive=target_positive,
+                                quiet=quiet,
+                                verbose_tune=verbose_tune,
+                                allow_par=allow_par,
                                 impute=impute,
                                 require_variance=require_variance,
                                 max_na_frac=max_na_frac,
                                 product_fusion_method = product_fusion_method,
+                                sub_fuser = sub_fuser,
+                                sub_grid_levels = sub_grid_levels,
                                 model = "pcr",...),
     RIDGE = wass2s_cons_mods_stat(data_by_product=data_by_product,
                                   basin_id=basin_id,
+                                  basin_col=hybas_id,
+                                  target=target,
+                                  date_col=date_col,
                                   pred_pattern_by_product=pred_pattern_by_product,
+                                  topK=topK,
+                                  min_kge_model=min_kge_model,
                                   prediction_years=prediction_years,
+                                  target_positive=target_positive,
+                                  quiet=quiet,
+                                  verbose_tune=verbose_tune,
+                                  allow_par=allow_par,
                                   impute=impute,
                                   require_variance=require_variance,
                                   max_na_frac=max_na_frac,
                                   product_fusion_method = product_fusion_method,
+                                  sub_fuser = sub_fuser,
+                                  sub_grid_levels = sub_grid_levels,
                                   model = "ridge",...),
     LASSO = wass2s_cons_mods_stat(data_by_product=data_by_product,
                                   basin_id=basin_id,
+                                  basin_col=hybas_id,
+                                  target=target,
+                                  date_col=date_col,
                                   pred_pattern_by_product=pred_pattern_by_product,
+                                  topK=topK,
+                                  min_kge_model=min_kge_model,
                                   prediction_years=prediction_years,
+                                  target_positive=target_positive,
+                                  quiet=quiet,
+                                  verbose_tune=verbose_tune,
+                                  allow_par=allow_par,
                                   impute=impute,
                                   require_variance=require_variance,
                                   max_na_frac=max_na_frac,
                                   product_fusion_method = product_fusion_method,
+                                  sub_fuser = sub_fuser,
+                                  sub_grid_levels = sub_grid_levels,
                                   model = "lasso",...)
   )
 
@@ -215,16 +257,26 @@ wass2s_run_basin_mods_stat <- function(
     tibble::tibble(YYYY = integer(), Q = numeric())
   })
 
-  any_df <- .sanitize_numeric_columns(
-    df = any_df,
-    cols = target,
-    max_na_frac = max_na_frac,
-    impute = impute,
-    require_variance = require_variance
-  )
+  if (nrow(any_df) > 0) {
+    if (date_col %in% names(any_df) && !"YYYY" %in% names(any_df)) {
+      any_df <- dplyr::rename(any_df, YYYY = !!rlang::sym(date_col))
+    }
+    if (target %in% names(any_df) && !"Q" %in% names(any_df)) {
+      any_df <- dplyr::rename(any_df, Q = !!rlang::sym(target))
+    }
 
-  if (nrow(any_df) > 0 && "YYYY" %in% names(any_df)) {
-    any_df$YYYY <- .ensure_yyyymmdd(any_df$YYYY)
+    if (!"YYYY" %in% names(any_df) || !"Q" %in% names(any_df)) {
+      any_df <- tibble::tibble(YYYY = integer(), Q = numeric())
+    } else {
+      any_df <- .sanitize_numeric_columns(
+        df = any_df,
+        cols = "Q",
+        max_na_frac = max_na_frac,
+        impute = impute,
+        require_variance = require_variance
+      )
+      any_df$YYYY <- .ensure_yyyymmdd(any_df$YYYY)
+    }
   }
 
   # =========================
@@ -283,8 +335,8 @@ wass2s_run_basin_mods_stat <- function(
   fusion_res <- .wass2s_fuse_predictions(
     fused_models = fused_models,
     basin_id = basin_id,
-    target = target,
-    date_col = date_col,
+    target = "Q",
+    date_col = "YYYY",
     prediction_years = prediction_years,
     fusion_method = fusion_method,
     final_fuser = final_fuser,
@@ -1035,6 +1087,7 @@ wass2s_run_basin_mods_stat <- function(
 #' @param pred_pattern_by_product Named character vector: product -> regex to
 #'   select predictor columns for that product.
 #' @param topK Integer, number of top products to keep in the fusion (by KGE).
+#' @param min_kge_model Minimum KGE threshold passed to basin-level statistical consolidation.
 #' @param final_fuser Name of the meta-learner to use (subset of \code{SUPPORTED_FUSERS}).
 #' @param grid_levels Integer. Number of levels used to generate hyperparameter grids
 #'   for tuning the meta-learner.
@@ -1101,6 +1154,7 @@ wass2s_run_basins_stat <- function(data_by_product,
                                    verbose_tune = TRUE,
                                    target_positive=TRUE,
                                    allow_par = TRUE,
+                                   min_kge_model = 0.2,
                                    max_na_frac = 0.3,
                                    impute = "median",
                                    require_variance = TRUE,
@@ -1153,6 +1207,7 @@ wass2s_run_basins_stat <- function(data_by_product,
         verbose_tune=verbose_tune,
         target_positive=target_positive,
         allow_par=allow_par,
+        min_kge_model=min_kge_model,
         max_na_frac=max_na_frac,
         impute=impute,
         require_variance=require_variance,

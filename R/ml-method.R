@@ -13,6 +13,19 @@ run_method.method_hydro <- function(method, data_by_product, cfg) {
   wass2s_run_pipeline_hydro(data_by_product, cfg)
 }
 
+#' S3 entrypoint for method "ml"
+#'
+#' \code{method_id("ml")} is an alias of the hydro/ML pipeline.
+#'
+#' @param method object created by method_id("ml")
+#' @param data_by_product named list of data.frames (one per product)
+#' @param cfg list with configuration
+#' @return Same structure as \code{run_method.method_hydro()}.
+#' @keywords internal
+run_method.method_ml <- function(method, data_by_product, cfg) {
+  wass2s_run_pipeline_hydro(data_by_product, cfg)
+}
+
 #' Wrapper function called by the core (run_method) for hydro (ML) pipeline
 #'
 #' This function reads useful parameters from `cfg` (YAML) and delegates to `wass2s_run_basins_ml()`.
@@ -44,6 +57,7 @@ wass2s_run_pipeline_hydro <- function(data_by_product, cfg) {
   parallel <- cfg$parallel %||% FALSE
   workers <- cfg$workers %||% 4
   quiet <- cfg$quiet %||% TRUE
+  allow_par <- cfg$allow_par %||% cfg$train$allow_par %||% TRUE
 
   # Additional parameters for wass2s_run_basins_ml
   prediction_years <- cfg$prediction_years %||% NULL
@@ -52,6 +66,8 @@ wass2s_run_pipeline_hydro <- function(data_by_product, cfg) {
   assess_frac <- cfg$assess_frac %||% 0.20
   n_splits <- cfg$n_splits %||% 3
   cumulative <- cfg$cumulative %||% TRUE
+  selection_metric <- cfg$selection_metric %||% cfg$train$selection_metric %||% "rmse"
+  selection_metric <- match.arg(selection_metric, c("rmse", "kge"))
 
   # Validate parameters
   if (!is.numeric(topK) || topK < 1) {
@@ -115,10 +131,12 @@ wass2s_run_pipeline_hydro <- function(data_by_product, cfg) {
       final_fuser = fuser,
       prediction_years = prediction_years,
       target_positive = target_positive,
+      allow_par = allow_par,
       init_frac = init_frac,
       assess_frac = assess_frac,
       n_splits = n_splits,
       cumulative = cumulative,
+      selection_metric = selection_metric,
       quiet = quiet
     )
   }, error = function(e) {
@@ -128,3 +146,4 @@ wass2s_run_pipeline_hydro <- function(data_by_product, cfg) {
   # Return results
   result
 }
+

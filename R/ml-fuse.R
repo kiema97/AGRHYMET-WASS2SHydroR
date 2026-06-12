@@ -41,6 +41,8 @@
 #'   \code{fusion_method = "meta"}. Must be supported by \code{model_spec()} and
 #'   \code{model_grid()}.
 #' @param sub_grid_levels Integer; grid levels for the sub-fuser via \code{model_grid()}.
+#' @param use_sub_fuser Logical; backward-compatible switch for enabling
+#'   meta-fusion behavior in downstream fusion helpers.
 #' @param pretrained Optional list of pre-trained workflows (indexed by \code{model} then \code{product}).
 #' @param grid_levels Tuning grid granularity for the base ML model (passed to \code{wass2s_tune_pred_ml()}).
 #' @param min_data_required Minimum number of rows required to train.
@@ -48,6 +50,9 @@
 #' @param quiet Logical; if FALSE, emits informative messages (default: TRUE).
 #' @param verbose Logical; if TRUE, emits diagnostic messages (default: TRUE).
 #' @param allow_par Logical; forwarded to tuning controls where applicable.
+#' @param selection_metric Character; forwarded to \code{wass2s_tune_pred_ml()}.
+#'   The default \code{"rmse"} keeps RMSE tuning but reports product KGE for the
+#'   same selected configuration.
 #' @param max_na_frac Numeric in [0,1]; maximum allowed missingness per guarded column (default: 0.3).
 #' @param impute Character; one of "median", "mean", "none" (default: "median").
 #' @param require_variance Logical; if TRUE, requires non-zero variance after guard (default: TRUE).
@@ -84,6 +89,7 @@ wass2s_cons_mods_ml <- function(
     product_fusion_method="median",
     sub_fuser = "rf",
     sub_grid_levels = 10,
+    use_sub_fuser = TRUE,
 
     # --- tuning options ---
     pretrained = NULL,
@@ -93,6 +99,7 @@ wass2s_cons_mods_ml <- function(
     quiet = TRUE,
     verbose = TRUE,
     allow_par = TRUE,
+    selection_metric = c("rmse", "kge"),
 
     # --- data quality guards ---
     max_na_frac = 0.3,
@@ -102,6 +109,7 @@ wass2s_cons_mods_ml <- function(
     ...
 ) {
   model <- match.arg(model, SUPPORTED_MODELS)
+  selection_metric <- match.arg(selection_metric)
 
   # ---------------------------
   # Input checks
@@ -216,6 +224,7 @@ wass2s_cons_mods_ml <- function(
         pretrained_wflow = pre_wf,
         quiet            = quiet,
         allow_par        = allow_par,
+        selection_metric = selection_metric,
         max_na_frac      = max_na_frac,
         impute           = impute,
         require_variance = require_variance,
@@ -243,6 +252,10 @@ wass2s_cons_mods_ml <- function(
       preds   = preds,
       # optional extra info (kept for debugging / downstream)
       leaderboard_cfg = out$leaderboard_cfg,
+      selected_config = out$selected_config,
+      selection_metric = out$selection_metric,
+      rmse_cv_mean = out$rmse_cv_mean,
+      mae_cv_mean = out$mae_cv_mean,
       fitted_model    = out$fit
     )
   }) |>
@@ -272,6 +285,7 @@ wass2s_cons_mods_ml <- function(
     target_positive   = target_positive,
     quiet             = quiet,
     verbose           = verbose,
+    use_sub_fuser     = use_sub_fuser,
     seed = seed
   )
 

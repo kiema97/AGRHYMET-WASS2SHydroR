@@ -92,6 +92,10 @@
 #' @param quiet Logical; if \code{FALSE}, emits informative messages.
 #' @param allow_par A logical to allow parallel processing (if a parallel backend is registered).
 #' @param verbose_tune A logical for logging results (other than warnings and errors, which are always shown) as they are generated during training in a single R process.
+#' @param selection_metric Character; \code{"kge"} keeps the historical behavior
+#'   and selects the configuration with the best cross-validated KGE.
+#'   \code{"rmse"} selects by RMSE while reporting KGE/RMSE/MAE for that same
+#'   configuration.
 #' @param max_na_frac Numeric in \eqn{[0, 1]}: maximum allowed fraction of missing
 #'   values per column before stopping (default \code{0.20} = 20\%).
 #' @param impute Character, one of \code{"median"}, \code{"mean"}, or \code{"none"}.
@@ -140,12 +144,14 @@ wass2s_tune_pred_stat <- function(
     quiet = TRUE,
     allow_par = TRUE,
     verbose_tune = TRUE,
+    selection_metric = c("kge", "rmse"),
     max_na_frac = 0.3,
     impute = "median",
     require_variance = TRUE
 ) {
   # ---- Input validation ----
   model <- match.arg(model)
+  selection_metric <- match.arg(selection_metric)
 
   required_cols <- c(target, date_col)
   missing_cols <- setdiff(required_cols, names(df_basin_product))
@@ -265,8 +271,12 @@ wass2s_tune_pred_stat <- function(
     return(list(
       kge_cv_mean = NA_real_,
       rsq_cv_mean = NA_real_,
+      rmse_cv_mean = NA_real_,
+      mae_cv_mean = NA_real_,
       preds = preds_final,
-      leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric(), rsq_mean = numeric())
+      leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric(), rsq_mean = numeric()),
+      selected_config = NA_character_,
+      selection_metric = selection_metric
     ))
   }
 
@@ -286,13 +296,40 @@ wass2s_tune_pred_stat <- function(
     return(list(
       kge_cv_mean = NA_real_,
       rsq_cv_mean = NA_real_,
+      rmse_cv_mean = NA_real_,
+      mae_cv_mean = NA_real_,
       preds = preds_empty,
-      leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric(), rsq_mean = numeric())
+      leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric(), rsq_mean = numeric()),
+      selected_config = NA_character_,
+      selection_metric = selection_metric
     ))
   }
 
   # ---- Filter non-informative predictors ----
   predictors <- usable_predictors(df_basin_product, predictors)
+  if (length(predictors) < min_predictors) {
+    if (!quiet) message("[", model, "] : skipped (no usable predictors after filtering).")
+
+    all_data <- if (!is.null(holdout_data)) dplyr::bind_rows(df_basin_product, holdout_data) else df_basin_product
+    all_data <- if (!is.null(id_col)) dplyr::arrange(all_data, ID, YYYY) else dplyr::arrange(all_data, YYYY)
+
+    preds_empty <- if (!is.null(id_col)) {
+      dplyr::distinct(all_data, ID, YYYY) %>% dplyr::mutate(pred = NA_real_)
+    } else {
+      tibble::tibble(YYYY = unique(all_data$YYYY), pred = NA_real_)
+    }
+
+    return(list(
+      kge_cv_mean = NA_real_,
+      rsq_cv_mean = NA_real_,
+      rmse_cv_mean = NA_real_,
+      mae_cv_mean = NA_real_,
+      preds = preds_empty,
+      leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric(), rsq_mean = numeric()),
+      selected_config = NA_character_,
+      selection_metric = selection_metric
+    ))
+  }
   # Q : contrôle qualité uniquement
   df_basin_product <- .sanitize_numeric_columns(
     df = df_basin_product,
@@ -349,8 +386,12 @@ wass2s_tune_pred_stat <- function(
     return(list(
       kge_cv_mean = NA_real_,
       rsq_cv_mean = NA_real_,
+      rmse_cv_mean = NA_real_,
+      mae_cv_mean = NA_real_,
       preds = preds_empty,
-      leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric(), rsq_mean = numeric())
+      leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric(), rsq_mean = numeric()),
+      selected_config = NA_character_,
+      selection_metric = selection_metric
     ))
   }
 
@@ -385,8 +426,12 @@ wass2s_tune_pred_stat <- function(
       return(list(
         kge_cv_mean = NA_real_,
         rsq_cv_mean = NA_real_,
+        rmse_cv_mean = NA_real_,
+        mae_cv_mean = NA_real_,
         preds = preds_na,
-        leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric(), rsq_mean = numeric())
+        leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric(), rsq_mean = numeric()),
+        selected_config = NA_character_,
+        selection_metric = selection_metric
       ))
     }
   }
@@ -421,8 +466,12 @@ wass2s_tune_pred_stat <- function(
     return(list(
       kge_cv_mean = NA_real_,
       rsq_cv_mean = NA_real_,
+      rmse_cv_mean = NA_real_,
+      mae_cv_mean = NA_real_,
       preds = preds_empty,
-      leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric(), rsq_mean = numeric())
+      leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric(), rsq_mean = numeric()),
+      selected_config = NA_character_,
+      selection_metric = selection_metric
     ))
   }
 
@@ -453,8 +502,12 @@ wass2s_tune_pred_stat <- function(
     return(list(
       kge_cv_mean = NA_real_,
       rsq_cv_mean = NA_real_,
+      rmse_cv_mean = NA_real_,
+      mae_cv_mean = NA_real_,
       preds = preds_final,
-      leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric(), rsq_mean = numeric())
+      leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric(), rsq_mean = numeric()),
+      selected_config = NA_character_,
+      selection_metric = selection_metric
     ))
   }
   # ---- Grid ----
@@ -485,8 +538,12 @@ wass2s_tune_pred_stat <- function(
     return(list(
       kge_cv_mean = NA_real_,
       rsq_cv_mean = NA_real_,
+      rmse_cv_mean = NA_real_,
+      mae_cv_mean = NA_real_,
       preds = preds_empty,
-      leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric(), rsq_mean = numeric())
+      leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric(), rsq_mean = numeric()),
+      selected_config = NA_character_,
+      selection_metric = selection_metric
     ))
   }
 
@@ -526,8 +583,12 @@ wass2s_tune_pred_stat <- function(
     return(list(
       kge_cv_mean = NA_real_,
       rsq_cv_mean = NA_real_,
+      rmse_cv_mean = NA_real_,
+      mae_cv_mean = NA_real_,
       preds = preds_empty,
-      leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric(), rsq_mean = numeric())
+      leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric(), rsq_mean = numeric()),
+      selected_config = NA_character_,
+      selection_metric = selection_metric
     ))
   }
 
@@ -549,8 +610,12 @@ wass2s_tune_pred_stat <- function(
     return(list(
       kge_cv_mean = NA_real_,
       rsq_cv_mean = NA_real_,
+      rmse_cv_mean = NA_real_,
+      mae_cv_mean = NA_real_,
       preds = preds_empty,
-      leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric(), rsq_mean = numeric())
+      leaderboard_cfg = tibble::tibble(.config = character(), kge_mean = numeric(), rsq_mean = numeric()),
+      selected_config = NA_character_,
+      selection_metric = selection_metric
     ))
   }
 
@@ -583,20 +648,27 @@ wass2s_tune_pred_stat <- function(
     tibble::tibble(.config = character(), kge_mean = numeric(), rsq_mean = numeric())
   })
 
-  # ---- Select best configuration ----
-  best_params <- tryCatch({
-    if (nrow(kge_by_cfg) == 0L || all(is.na(kge_by_cfg$kge_mean))) {
-      tune::select_best(res, metric = "rmse")
-    } else {
-      best_cfg <- kge_by_cfg$.config[1]
-      cand <- tune::show_best(res, metric = "rmse", n = Inf)
-      best_row <- cand %>% dplyr::filter(.config == best_cfg)
-      if (nrow(best_row) == 0L) tune::select_best(res, metric = "rmse") else best_row %>% dplyr::slice(1)
-    }
+  cv_leaderboard <- tryCatch({
+    compute_leaderboard_cv(res, truth_col = "Q")
   }, error = function(e) {
-    if (!quiet) message("Error selecting best parameters: ", e$message)
-    NULL
+    if (!quiet) message("Error calculating CV leaderboard: ", e$message)
+    tibble::tibble(.config = character(), kge_mean = numeric(), rmse_mean = numeric(), mae_mean = numeric(), n_splits = integer())
   })
+
+  kge_by_cfg <- kge_by_cfg %>%
+    dplyr::left_join(
+      dplyr::select(cv_leaderboard, dplyr::all_of(c(".config", "rmse_mean", "mae_mean", "n_splits"))),
+      by = ".config"
+    )
+
+  # ---- Select best configuration ----
+  selected <- .wass2s_select_tuned_config(
+    tuned = res,
+    leaderboard = kge_by_cfg,
+    selection_metric = selection_metric,
+    quiet = quiet
+  )
+  best_params <- selected$params
 
   if (is.null(best_params)) {
     all_data <- if (!is.null(holdout_data)) dplyr::bind_rows(df_basin_product, holdout_data) else df_basin_product
@@ -609,10 +681,14 @@ wass2s_tune_pred_stat <- function(
     }
 
     return(list(
-      kge_cv_mean = if (nrow(kge_by_cfg) > 0) kge_by_cfg$kge_mean[1] else NA_real_,
-      rsq_cv_mean = if (nrow(kge_by_cfg) > 0) kge_by_cfg$rsq_mean[1] else NA_real_,
+      kge_cv_mean = selected$selected_score$kge_mean[[1]],
+      rsq_cv_mean = if ("rsq_mean" %in% names(selected$selected_score)) selected$selected_score$rsq_mean[[1]] else NA_real_,
+      rmse_cv_mean = if ("rmse_mean" %in% names(selected$selected_score)) selected$selected_score$rmse_mean[[1]] else NA_real_,
+      mae_cv_mean = if ("mae_mean" %in% names(selected$selected_score)) selected$selected_score$mae_mean[[1]] else NA_real_,
       preds = preds_empty,
-      leaderboard_cfg = kge_by_cfg
+      leaderboard_cfg = kge_by_cfg,
+      selected_config = selected$selected_config,
+      selection_metric = selection_metric
     ))
   }
 
@@ -636,10 +712,14 @@ wass2s_tune_pred_stat <- function(
     }
 
     return(list(
-      kge_cv_mean = if (nrow(kge_by_cfg) > 0) kge_by_cfg$kge_mean[1] else NA_real_,
-      rsq_cv_mean = if (nrow(kge_by_cfg) > 0) kge_by_cfg$rsq_mean[1] else NA_real_,
+      kge_cv_mean = selected$selected_score$kge_mean[[1]],
+      rsq_cv_mean = if ("rsq_mean" %in% names(selected$selected_score)) selected$selected_score$rsq_mean[[1]] else NA_real_,
+      rmse_cv_mean = if ("rmse_mean" %in% names(selected$selected_score)) selected$selected_score$rmse_mean[[1]] else NA_real_,
+      mae_cv_mean = if ("mae_mean" %in% names(selected$selected_score)) selected$selected_score$mae_mean[[1]] else NA_real_,
       preds = preds_empty,
-      leaderboard_cfg = kge_by_cfg
+      leaderboard_cfg = kge_by_cfg,
+      selected_config = selected$selected_config,
+      selection_metric = selection_metric
     ))
   }
 
@@ -669,10 +749,14 @@ wass2s_tune_pred_stat <- function(
   })
 
   list(
-    kge_cv_mean = if (nrow(kge_by_cfg) > 0) kge_by_cfg$kge_mean[1] else NA_real_,
-    rsq_cv_mean = if (nrow(kge_by_cfg) > 0) kge_by_cfg$rsq_mean[1] else NA_real_,
+    kge_cv_mean = selected$selected_score$kge_mean[[1]],
+    rsq_cv_mean = if ("rsq_mean" %in% names(selected$selected_score)) selected$selected_score$rsq_mean[[1]] else NA_real_,
+    rmse_cv_mean = if ("rmse_mean" %in% names(selected$selected_score)) selected$selected_score$rmse_mean[[1]] else NA_real_,
+    mae_cv_mean = if ("mae_mean" %in% names(selected$selected_score)) selected$selected_score$mae_mean[[1]] else NA_real_,
     preds = preds_final,
-    leaderboard_cfg = kge_by_cfg
+    leaderboard_cfg = kge_by_cfg,
+    selected_config = selected$selected_config,
+    selection_metric = selection_metric
   )
 }
 

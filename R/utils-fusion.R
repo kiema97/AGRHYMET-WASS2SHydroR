@@ -184,18 +184,35 @@ fuse_products_predictions <- function(
     ))
   }
 
-  # Keep best topK products
-  keep_names <- head(lb_ok$product, n = min(topK, nrow(lb_ok)))
+  # Keep best topK products above threshold; if none pass, retain the best one.
+  lb_keep <- lb_ok
+  if (is.finite(min_score)) {
+    lb_keep <- dplyr::filter(lb_ok, .data$score >= min_score)
+    if (nrow(lb_keep) == 0L) {
+      .msg(quiet, verbose, "No product met min_score; retaining the best available product.")
+      lb_keep <- dplyr::slice(lb_ok, 1)
+    }
+  }
+
+  keep_names <- head(lb_keep$product, n = min(topK, nrow(lb_keep)))
   results_top <- results[match(keep_names, purrr::map_chr(results, "product"))]
 
   # Weights from scores
-  scores_keep <- lb_ok$score[match(keep_names, lb_ok$product)]
-  w <- pmax(scores_keep, min_score)
-
-  if (all(w == 0) || anyNA(w) || !all(is.finite(w))) {
-    w <- rep(1, length(keep_names))
+  scores_keep <- lb_keep$score[match(keep_names, lb_keep$product)]
+  w <- scores_keep
+  w[!is.finite(w)] <- NA_real_
+  if (is.finite(min_score)) {
+    w[w < min_score] <- 0
   }
-  w <- w / sum(w)
+  w <- pmax(w, 0)
+
+  if (!any(is.finite(w) & w > 0)) {
+    w <- rep(0, length(keep_names))
+    w[1] <- 1
+  } else {
+    w[!is.finite(w)] <- 0
+    w <- w / sum(w)
+  }
 
   leaderboard <- dplyr::mutate(lb, weight = 0)
   leaderboard$weight[match(keep_names, leaderboard$product)] <- w
@@ -330,6 +347,7 @@ fuse_products_predictions <- function(
       if (!is.null(bounds)) {
         df_tr <- dplyr::filter(dat, !(.data$YYYY >= bounds[1] & .data$YYYY <= bounds[2]))
       }
+      df_tr <- dplyr::filter(df_tr, is.finite(.data$Q))
 
       pred_cols <- setdiff(names(df_tr), c("YYYY", "Q"))
       pred_cols <- pred_cols[vapply(df_tr[, pred_cols, drop = FALSE], is.numeric, logical(1))]

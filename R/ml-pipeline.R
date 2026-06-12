@@ -39,6 +39,7 @@
 #'   }
 #' @param quiet Logical; if \code{FALSE}, emits informative messages.
 #' @param verbose_tune A logical for logging results (other than warnings and errors, which are always shown) as they are generated during training in a single R process.
+#' @param selection_metric Character; tuning-selection metric, either \code{"rmse"} or \code{"kge"}.
 #' @param target_positive Logical. If \code{TRUE}, final fused predictions are
 #'   constrained to be non-negative using \code{pmax(pred, 0)}. This is useful
 #'   for hydrological targets such as streamflow, which are physically non-negative.
@@ -105,12 +106,14 @@ wass2s_run_bas_mod_ml <- function(
     verbose_tune = TRUE,
     target_positive = TRUE,
     allow_par = TRUE,
+    selection_metric = c("rmse", "kge"),
     max_na_frac = 0.3,
     impute = "median",
     require_variance = TRUE,
     ...
 ) {
   fusion_method <- match.arg(fusion_method)
+  selection_metric <- match.arg(selection_metric)
 
   # ----------------------------
   # Validate models & packages
@@ -143,7 +146,11 @@ wass2s_run_bas_mod_ml <- function(
         min_kge_model = min_kge_model,
         grid_levels = grid_levels,
         quiet = quiet,
+        verbose = !quiet,
         verbose_tune = verbose_tune,
+        target_positive = target_positive,
+        allow_par = allow_par,
+        selection_metric = selection_metric,
         max_na_frac = max_na_frac,
         impute = impute,
         require_variance = require_variance,
@@ -1109,6 +1116,9 @@ wass2s_run_bas_mod_ml <- function(
 #'   }
 #' @param final_fuser Name of the meta-learner for final fusion.
 #' @param quiet Logical; if \code{FALSE}, emits informative messages.
+#' @param target_positive Logical; passed to \code{wass2s_run_bas_mod_ml()} to truncate negative predictions to zero.
+#' @param allow_par Logical; passed to lower-level tuning functions to allow parallel processing.
+#' @param selection_metric Character; tuning-selection metric, either \code{"rmse"} or \code{"kge"}.
 #' @param ... Other parameters passed to \code{wass2s_run_bas_mod_ml}.
 #'
 #' @return A named list: one element per basin, each the list returned by
@@ -1133,8 +1143,12 @@ wass2s_run_basins_ml <- function(
     fusion_method = c("meta", "mean", "median", "weighted_mean"),
     final_fuser = "rf",
     quiet = TRUE,
+    target_positive = TRUE,
+    allow_par = TRUE,
+    selection_metric = c("rmse", "kge"),
     ...
 ) {
+  selection_metric <- match.arg(selection_metric)
 
   .require_pkg(engine_pkg[c(final_fuser, models)])
 
@@ -1177,6 +1191,9 @@ wass2s_run_basins_ml <- function(
         grid_levels = grid_levels,
         final_fuser = final_fuser,
         quiet = quiet,
+        target_positive = target_positive,
+        allow_par = allow_par,
+        selection_metric = selection_metric,
         product_fusion_method=product_fusion_method,
         fusion_method = fusion_method,
         prediction_years=prediction_years,

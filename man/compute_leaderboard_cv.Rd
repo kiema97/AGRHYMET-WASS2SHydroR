@@ -2,19 +2,21 @@
 % Please edit documentation in R/tune_helpers.R
 \name{compute_leaderboard_cv}
 \alias{compute_leaderboard_cv}
-\title{Leaderboard by KGE from collect_predictions()}
+\title{Leaderboard by cross-validation configuration}
 \usage{
-compute_leaderboard_cv(tuned, truth_col = "Q")
+compute_leaderboard_cv(tuned, truth_col = "Q", estimate_col = ".pred")
 }
 \arguments{
 \item{tuned}{A tune_grid() result or object accepted by tune::collect_predictions.}
 
 \item{truth_col}{Name of the truth column in collect_predictions() (default "Q").}
+
+\item{estimate_col}{Name of the prediction column in collect_predictions() (default ".pred").}
 }
 \value{
-Tibble with columns .config and kge_mean (descending).
+Tibble with columns .config, kge_mean, rmse_mean, mae_mean and n_splits.
 }
 \description{
-Leaderboard by KGE from collect_predictions()
+Leaderboard by cross-validation configuration
 }
 \keyword{internal}

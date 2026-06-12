@@ -1,0 +1,200 @@
+---
+title: "Statistical Forecasting Workflow"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Statistical Forecasting Workflow}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", eval = FALSE)
+```
+
+## Overview
+
+The statistical workflow uses three model families:
+
+- `pcr`: principal component regression;
+- `ridge`: ridge regression;
+- `lasso`: lasso regression.
+
+The workflow is hierarchical and has two consolidation levels:
+
+1. for each statistical model, train the model on several climate products;
+2. rank the product-specific forecasts and retain the top `K`;
+3. consolidate the top-`K` product forecasts into one final forecast for that
+   statistical model;
+4. repeat the same process for all statistical models;
+5. consolidate the final forecasts from PCR, ridge, and lasso into one seasonal
+   forecast for the statistical approach.
+
+## Statistical Process Schema
+
+```{=html}
+<svg viewBox="0 0 1080 330" role="img" aria-label="Statistical workflow with product-level and model-level consolidation" style="width:100%; max-width:1080px; height:auto;">
+  <defs>
+    <marker id="arrow-stat" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#1b6f8f"></path>
+    </marker>
+  </defs>
+  <rect x="20" y="125" width="130" height="80" rx="8" fill="#e8f3f7" stroke="#1b6f8f" stroke-width="2"></rect>
+  <text x="85" y="154" text-anchor="middle" font-size="14" font-weight="700">Prepared data</text>
+  <text x="85" y="176" text-anchor="middle" font-size="12">multiple climate</text>
+  <text x="85" y="193" text-anchor="middle" font-size="12">products</text>
+
+  <rect x="210" y="30" width="175" height="70" rx="8" fill="#fff4df" stroke="#b66d00" stroke-width="2"></rect>
+  <text x="297" y="57" text-anchor="middle" font-size="14" font-weight="700">PCR per product</text>
+  <text x="297" y="78" text-anchor="middle" font-size="12">forecast for each product</text>
+
+  <rect x="210" y="130" width="175" height="70" rx="8" fill="#fff4df" stroke="#b66d00" stroke-width="2"></rect>
+  <text x="297" y="157" text-anchor="middle" font-size="14" font-weight="700">Ridge per product</text>
+  <text x="297" y="178" text-anchor="middle" font-size="12">forecast for each product</text>
+
+  <rect x="210" y="230" width="175" height="70" rx="8" fill="#fff4df" stroke="#b66d00" stroke-width="2"></rect>
+  <text x="297" y="257" text-anchor="middle" font-size="14" font-weight="700">Lasso per product</text>
+  <text x="297" y="278" text-anchor="middle" font-size="12">forecast for each product</text>
+
+  <rect x="455" y="30" width="155" height="70" rx="8" fill="#eef7ed" stroke="#4b8b3b" stroke-width="2"></rect>
+  <text x="532" y="57" text-anchor="middle" font-size="14" font-weight="700">TopK + fusion</text>
+  <text x="532" y="78" text-anchor="middle" font-size="12">PCR forecast</text>
+
+  <rect x="455" y="130" width="155" height="70" rx="8" fill="#eef7ed" stroke="#4b8b3b" stroke-width="2"></rect>
+  <text x="532" y="157" text-anchor="middle" font-size="14" font-weight="700">TopK + fusion</text>
+  <text x="532" y="178" text-anchor="middle" font-size="12">Ridge forecast</text>
+
+  <rect x="455" y="230" width="155" height="70" rx="8" fill="#eef7ed" stroke="#4b8b3b" stroke-width="2"></rect>
+  <text x="532" y="257" text-anchor="middle" font-size="14" font-weight="700">TopK + fusion</text>
+  <text x="532" y="278" text-anchor="middle" font-size="12">Lasso forecast</text>
+
+  <rect x="690" y="125" width="160" height="80" rx="8" fill="#f8eeee" stroke="#a33d3d" stroke-width="2"></rect>
+  <text x="770" y="154" text-anchor="middle" font-size="14" font-weight="700">Model-level</text>
+  <text x="770" y="176" text-anchor="middle" font-size="12">consolidation of</text>
+  <text x="770" y="193" text-anchor="middle" font-size="12">PCR/Ridge/Lasso</text>
+
+  <rect x="920" y="125" width="135" height="80" rx="8" fill="#edf1f8" stroke="#385f9f" stroke-width="2"></rect>
+  <text x="987" y="154" text-anchor="middle" font-size="14" font-weight="700">Statistical</text>
+  <text x="987" y="176" text-anchor="middle" font-size="12">seasonal</text>
+  <text x="987" y="193" text-anchor="middle" font-size="12">forecast</text>
+
+  <line x1="150" y1="165" x2="202" y2="65" stroke="#1b6f8f" stroke-width="3" marker-end="url(#arrow-stat)"></line>
+  <line x1="150" y1="165" x2="202" y2="165" stroke="#1b6f8f" stroke-width="3" marker-end="url(#arrow-stat)"></line>
+  <line x1="150" y1="165" x2="202" y2="265" stroke="#1b6f8f" stroke-width="3" marker-end="url(#arrow-stat)"></line>
+  <line x1="385" y1="65" x2="447" y2="65" stroke="#1b6f8f" stroke-width="3" marker-end="url(#arrow-stat)"></line>
+  <line x1="385" y1="165" x2="447" y2="165" stroke="#1b6f8f" stroke-width="3" marker-end="url(#arrow-stat)"></line>
+  <line x1="385" y1="265" x2="447" y2="265" stroke="#1b6f8f" stroke-width="3" marker-end="url(#arrow-stat)"></line>
+  <line x1="610" y1="65" x2="682" y2="165" stroke="#1b6f8f" stroke-width="3" marker-end="url(#arrow-stat)"></line>
+  <line x1="610" y1="165" x2="682" y2="165" stroke="#1b6f8f" stroke-width="3" marker-end="url(#arrow-stat)"></line>
+  <line x1="610" y1="265" x2="682" y2="165" stroke="#1b6f8f" stroke-width="3" marker-end="url(#arrow-stat)"></line>
+  <line x1="850" y1="165" x2="912" y2="165" stroke="#1b6f8f" stroke-width="3" marker-end="url(#arrow-stat)"></line>
+</svg>
+```
+
+## Tune One Product
+
+```r
+data_by_product <- make_toy_data_by_product()
+df <- data_by_product[[1]]
+basin_id <- unique(df$HYBAS_ID)[1]
+
+df_basin <- subset(df, HYBAS_ID == basin_id)
+predictors <- grep("^pt_", names(df_basin), value = TRUE)
+
+res_stat <- wass2s_tune_pred_stat(
+  df_basin_product = df_basin,
+  predictors = predictors,
+  model = "ridge",
+  target = "Q",
+  date_col = "YYYY",
+  selection_metric = "kge",
+  quiet = FALSE
+)
+```
+
+The statistical tuner defaults to `selection_metric = "kge"`, preserving the
+hydrological objective. Use `selection_metric = "rmse"` when a smoother numeric
+optimization criterion is needed.
+
+## Consolidate Products for One Model
+
+```r
+res_cons_stat <- wass2s_cons_mods_stat(
+  basin_id = basin_id,
+  data_by_product = data_by_product,
+  model = "ridge",
+  topK = 3,
+  product_fusion_method = "median",
+  min_kge_model = 0.2,
+  quiet = FALSE
+)
+
+res_cons_stat$leaderboard_products
+res_cons_stat$fused
+```
+
+Product fusion methods include:
+
+- `median`: robust median across retained products;
+- `mean`: arithmetic mean;
+- `weighted_mean`: KGE-based weighted mean;
+- `meta`: second-level learner trained on product predictions;
+- `best`: keep the best-ranked product.
+
+## Full Statistical Workflow for One Basin
+
+```r
+res_basin_stat <- wass2s_run_basin_mods_stat(
+  basin_id = basin_id,
+  data_by_product = data_by_product,
+  topK = 3,
+  product_fusion_method = "median",
+  fusion_method = "weighted_mean",
+  final_fuser = "rf",
+  target_positive = TRUE,
+  quiet = FALSE
+)
+
+res_basin_stat$scores
+res_basin_stat$fused_by_model
+```
+
+This function runs PCR, ridge, and lasso, then applies a final fusion step.
+
+## Several Basins
+
+```r
+res_all_stat <- wass2s_run_basins_stat(
+  data_by_product = data_by_product,
+  topK = 3,
+  fusion_method = "median",
+  parallel = FALSE,
+  quiet = FALSE
+)
+
+names(res_all_stat)
+```
+
+Use `parallel = TRUE` only after validating the workflow sequentially.
+
+## Prediction Period
+
+Use `prediction_years` to hold out a period from training:
+
+```r
+res <- wass2s_run_basin_mods_stat(
+  basin_id = basin_id,
+  data_by_product = data_by_product,
+  prediction_years = c(2018, 2020),
+  fusion_method = "median"
+)
+```
+
+## Data Quality Controls
+
+Important controls are:
+
+- `max_na_frac`: maximum accepted missingness per guarded column;
+- `impute`: `median`, `mean`, or `none`;
+- `require_variance`: reject zero-variance variables;
+- `min_data_required`: minimum sample size;
+- `target_positive`: enforce non-negative predictions.

@@ -95,6 +95,10 @@ min_analysis_n <- function(rset) {
 #' @param target_positive Logical; if TRUE, force negative predictions to zero.
 #' @param allow_par A logical to allow parallel processing (if a parallel backend is registered).
 #' @param verbose_tune A logical for logging results (other than warnings and errors, which are always shown) as they are generated during training in a single R process.
+#' @param selection_metric Character; \code{"rmse"} keeps the RMSE-selected
+#'   configuration while reporting the KGE of that same configuration.
+#'   \code{"kge"} selects the configuration with the best cross-validated KGE
+#'   and uses RMSE only to retrieve the corresponding tuned parameters.
 #' @param max_na_frac Numeric in \eqn{[0, 1]}: maximum allowed fraction of missing
 #'   values per column before stopping (default \code{0.20} = 20\%).
 #' @param impute Character, one of \code{"median"}, \code{"mean"}, or \code{"none"}.
@@ -117,8 +121,9 @@ min_analysis_n <- function(rset) {
 #'   and the date column to \code{YYYY} before modeling.
 #' - If \code{prediction_years} is given, those years are removed from
 #'   the training data and used as an out-of-sample prediction set.
-#' - Model configurations are tuned using RMSE as the optimization metric
-#'   but are ranked by KGE for reporting.
+#' - By default, model configurations are selected using RMSE because direct
+#'   KGE optimization may be unstable for some ML learners. The reported KGE is
+#'   always the KGE of the selected configuration.
 #'
 #' @examples
 #' \dontrun{
@@ -173,6 +178,7 @@ wass2s_tune_pred_ml <- function(
     target_positive = TRUE,
     allow_par = TRUE,
     verbose_tune = TRUE,
+    selection_metric = c("rmse", "kge"),
     max_na_frac = 0.3,
     impute = "median",
     require_variance = TRUE,
@@ -181,7 +187,16 @@ wass2s_tune_pred_ml <- function(
   set.seed(seed)
 
   model <- match.arg(model, SUPPORTED_MODELS)
+  y_transform <- match.arg(y_transform)
+  selection_metric <- match.arg(selection_metric)
 
+  if (!identical(y_transform, "none")) {
+    stop(
+      "wass2s_tune_pred_ml(): y_transform != 'none' is not currently safe because predictions are not back-transformed. ",
+      "Use y_transform = 'none' until inverse transformations are implemented.",
+      call. = FALSE
+    )
+  }
 
   # ---- validation ----
   if (!is.data.frame(df_basin_product)) {
@@ -271,7 +286,7 @@ wass2s_tune_pred_ml <- function(
   # Q : contrôle qualité uniquement
   df_basin_product <- .sanitize_numeric_columns(
     df = df_basin_product,
-    cols = target,
+    cols = "Q",
     max_na_frac = max_na_frac,
     impute = "none",
     require_variance = TRUE
@@ -333,12 +348,25 @@ wass2s_tune_pred_ml <- function(
   # If no valid splits remain -> fallback to direct fit (no tuning)
   if (is.null(resamples) || length(resamples$splits) == 0) {
 
-    fitted <- parsnip::fit(
-      workflows::workflow() |>
-        workflows::add_model(spec) |>
-        workflows::add_recipe(rec),
-      df_basin_product
-    )
+    wf_nt <- workflows::workflow() |>
+      workflows::add_model(spec) |>
+      workflows::add_recipe(rec)
+
+    fitted <- tryCatch({
+      grid0 <- model_grid(
+        model,
+        p = min(15, length(predictors)),
+        levels = 1,
+        n_min = nrow(df_basin_product)
+      )
+      if (nrow(grid0) > 0L) {
+        wf_nt <- tune::finalize_workflow(wf_nt, dplyr::slice(grid0, 1))
+      }
+      parsnip::fit(wf_nt, df_basin_product)
+    }, error = function(e) {
+      if (!quiet) message("Direct ML fit failed: ", e$message)
+      NULL
+    })
 
     all_data <- dplyr::bind_rows(df_basin_product, holdout_data)
 
@@ -348,18 +376,25 @@ wass2s_tune_pred_ml <- function(
       all_data <- dplyr::arrange(all_data, .data$YYYY)
     }
 
-    pred_values <- predict(fitted, new_data = all_data)$.pred
-    if (target_positive) pred_values <- pmax(pred_values, 0)
-
-    preds <- dplyr::mutate(all_data, pred = pred_values)
+    preds <- if (is.null(fitted)) {
+      dplyr::mutate(all_data, pred = NA_real_)
+    } else {
+      pred_values <- predict(fitted, new_data = all_data)$.pred
+      if (target_positive) pred_values <- pmax(pred_values, 0)
+      dplyr::mutate(all_data, pred = pred_values)
+    }
     keep_cols <- c(if (!is.null(id_col)) "ID", "YYYY", "Q", "pred")
 
     return(list(
       kge_cv_mean     = NA_real_,
+      rmse_cv_mean    = NA_real_,
+      mae_cv_mean     = NA_real_,
       preds           = dplyr::select(preds, dplyr::all_of(keep_cols)),
       fit             = fitted,
       leaderboard_cfg = tibble::tibble(),
-      param_grid      = tibble::tibble()
+      param_grid      = tibble::tibble(),
+      selected_config = NA_character_,
+      selection_metric = selection_metric
     ))
   }
 
@@ -385,8 +420,12 @@ wass2s_tune_pred_ml <- function(
 
     return(list(
       kge_cv_mean = NA_real_,
+      rmse_cv_mean = NA_real_,
+      mae_cv_mean = NA_real_,
       preds = dplyr::select(preds, dplyr::all_of(keep_cols)),
-      fit = fitted
+      fit = fitted,
+      selected_config = NA_character_,
+      selection_metric = selection_metric
     ))
   }
 
@@ -403,20 +442,74 @@ wass2s_tune_pred_ml <- function(
     allow_par = allow_par
   )
 
-  rs <- tune::tune_grid(
+  rs <- tryCatch({
+    tune::tune_grid(
     object    = wflow,
     resamples = resamples,
     grid      = grid,
     metrics   = yardstick::metric_set(yardstick::rmse),
     control   = ctrl
-  )
+    )
+  }, error = function(e) {
+    if (!quiet) message("ML tuning failed: ", e$message)
+    NULL
+  })
+
+  if (is.null(rs)) {
+    all_data <- dplyr::bind_rows(df_basin_product, holdout_data)
+    if (!is.null(id_col)) {
+      all_data <- dplyr::arrange(all_data, .data$ID, .data$YYYY)
+    } else {
+      all_data <- dplyr::arrange(all_data, .data$YYYY)
+    }
+
+    keep_cols <- c(if (!is.null(id_col)) "ID", "YYYY","Q", "pred")
+    preds <- dplyr::mutate(all_data, pred = NA_real_)
+
+    return(list(
+      kge_cv_mean = NA_real_,
+      rmse_cv_mean = NA_real_,
+      mae_cv_mean = NA_real_,
+      preds = dplyr::select(preds, dplyr::all_of(keep_cols)),
+      fit = NULL,
+      leaderboard_cfg = tibble::tibble(),
+      param_grid = grid,
+      selected_config = NA_character_,
+      selection_metric = selection_metric
+    ))
+  }
 
   pred_cv  <- compute_leaderboard_cv(rs, truth_col = "Q")
-  kge_mean <- if (nrow(pred_cv) == 0) NA_real_ else pred_cv$kge_mean[[1]]
+  selected <- .wass2s_select_tuned_config(
+    tuned = rs,
+    leaderboard = pred_cv,
+    selection_metric = selection_metric,
+    quiet = quiet
+  )
 
-  best_config <- tune::select_best(rs, metric = "rmse")
-  best_wf <- tune::finalize_workflow(wflow, best_config)
-  fitted  <- parsnip::fit(best_wf, df_basin_product)
+  if (is.null(selected$params)) {
+    all_data <- dplyr::bind_rows(df_basin_product, holdout_data)
+    keep_cols <- c(if (!is.null(id_col)) "ID", "YYYY","Q", "pred")
+    preds <- dplyr::mutate(all_data, pred = NA_real_)
+
+    return(list(
+      kge_cv_mean = NA_real_,
+      rmse_cv_mean = NA_real_,
+      mae_cv_mean = NA_real_,
+      preds = dplyr::select(preds, dplyr::all_of(keep_cols)),
+      fit = NULL,
+      leaderboard_cfg = pred_cv,
+      param_grid = grid,
+      selected_config = NA_character_,
+      selection_metric = selection_metric
+    ))
+  }
+
+  best_wf <- tune::finalize_workflow(wflow, selected$params)
+  fitted  <- tryCatch(parsnip::fit(best_wf, df_basin_product), error = function(e) {
+    if (!quiet) message("Final ML fit failed: ", e$message)
+    NULL
+  })
 
   all_data <- dplyr::bind_rows(df_basin_product, holdout_data)
   if (!is.null(id_col)) {
@@ -425,18 +518,26 @@ wass2s_tune_pred_ml <- function(
     all_data <- dplyr::arrange(all_data, .data$YYYY)
   }
 
-  pred_values <- predict(fitted, new_data = all_data)$.pred
-  if (target_positive) pred_values <- pmax(pred_values, 0)
-
-  preds <- dplyr::mutate(all_data, pred = pred_values)
+  preds <- if (is.null(fitted)) {
+    dplyr::mutate(all_data, pred = NA_real_)
+  } else {
+    pred_values <- predict(fitted, new_data = all_data)$.pred
+    if (target_positive) pred_values <- pmax(pred_values, 0)
+    dplyr::mutate(all_data, pred = pred_values)
+  }
   keep_cols <- c(if (!is.null(id_col)) "ID", "YYYY","Q", "pred")
+  selected_score <- selected$selected_score
 
   list(
-    kge_cv_mean     = kge_mean,
+    kge_cv_mean     = selected_score$kge_mean[[1]],
+    rmse_cv_mean    = selected_score$rmse_mean[[1]],
+    mae_cv_mean     = selected_score$mae_mean[[1]],
     preds           = dplyr::select(preds, dplyr::all_of(keep_cols)),
     fit             = fitted,
     leaderboard_cfg = pred_cv,
-    param_grid      = grid
+    param_grid      = grid,
+    selected_config = selected$selected_config,
+    selection_metric = selection_metric
   )
 }
 

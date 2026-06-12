@@ -2,22 +2,17 @@
 ^renv\.lock$
 ^.*\.Rproj$
 ^\.Rproj\.user$
+^\.RData$
+^\.RData_backup$
+^\.Rhistory$
+^\.Rprofile$
 ^LICENSE\.md$
-
-# Quarto / site
+^docs$
+^_pkgdown\.yml$
 ^README\.qmd$
 ^_quarto\.yml$
 ^quarto\.yml$
 ^_site$
 ^_resources$
-^docs/$
-
-# NEW tout residu de vignettes rendues
-^inst/doc$                      # NEW
-^vignettes/figure$              # NEW
-^vignettes/.*\.(html|md|qmd|mdx)$   # NEW
-
-# (optionnel) si tu n’as pas de README Rmd :
-# ^README\.Rmd$                 # NEW
-# ^README\.html$                # NEW
-# ^README_files$                # NEW
+^vignettes/figure$
+^vignettes/.*\.(html|md|qmd|mdx)$

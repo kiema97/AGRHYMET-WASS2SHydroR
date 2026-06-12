@@ -1,0 +1,72 @@
+# Robust rolling-origin CV with target number of splits
+
+Builds cumulative rolling-origin resamples with safe sizing and an
+optional target number of splits. Internally, the function computes
+\`initial\` and \`assess\` from fractions, then chooses \`skip\` so that
+the number of splits is (approximately) equal to \`n_splits\`. When
+\`n_splits\` is larger than the maximum achievable, it falls back to the
+maximum.
+
+## Usage
+
+``` r
+wass2s_rolling_cv(
+  df,
+  year_col = "YYYY",
+  init_frac = 0.6,
+  assess_frac = 0.2,
+  n_splits = NULL,
+  cumulative = TRUE,
+  quiet = TRUE
+)
+
+make_rolling(...)
+```
+
+## Arguments
+
+- df:
+
+  A data frame sorted by the time column.
+
+- year_col:
+
+  Name of the time column (default: \`"YYYY"\`).
+
+- init_frac:
+
+  Fraction of rows used for the initial training window (default 0.60).
+  A hard minimum of 8 rows is enforced when possible.
+
+- assess_frac:
+
+  Fraction of rows used for the assessment window (default 0.20). A hard
+  minimum of 3 rows is enforced when possible.
+
+- n_splits:
+
+  Optional integer, desired number of resamples (splits). If \`NULL\`
+  (default), every possible split is produced (\`skip = 0\`).
+
+- cumulative:
+
+  Logical; passed to \`rsample::rolling_origin()\` (default \`TRUE\`).
+
+- quiet:
+
+  Logical; if \`FALSE\`, emits informative messages when the requested
+  \`n_splits\` cannot be reached (default \`TRUE\`).
+
+## Value
+
+An \`rsample::rset\` created by \`rsample::rolling_origin()\`.
+
+## Examples
+
+``` r
+df <- tibble::tibble(YYYY = 1990:2010, Q = rnorm(21))
+# All possible splits
+rs1 <- wass2s_rolling_cv(df)
+# About 5 splits
+rs2 <- wass2s_rolling_cv(df, n_splits = 5)
+```

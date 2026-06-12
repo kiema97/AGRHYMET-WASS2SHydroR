@@ -1,0 +1,134 @@
+# Statistical Forecasting Workflow
+
+## Overview
+
+The statistical workflow uses three model families:
+
+- `pcr`: principal component regression;
+- `ridge`: ridge regression;
+- `lasso`: lasso regression.
+
+The workflow is hierarchical and has two consolidation levels:
+
+1.  for each statistical model, train the model on several climate
+    products;
+2.  rank the product-specific forecasts and retain the top `K`;
+3.  consolidate the top-`K` product forecasts into one final forecast
+    for that statistical model;
+4.  repeat the same process for all statistical models;
+5.  consolidate the final forecasts from PCR, ridge, and lasso into one
+    seasonal forecast for the statistical approach.
+
+## Statistical Process Schema
+
+![](data:image/svg+xml;base64,PHN2ZyB2aWV3Ym94PSIwIDAgMTA4MCAzMzAiIHJvbGU9ImltZyIgYXJpYS1sYWJlbD0iU3RhdGlzdGljYWwgd29ya2Zsb3cgd2l0aCBwcm9kdWN0LWxldmVsIGFuZCBtb2RlbC1sZXZlbCBjb25zb2xpZGF0aW9uIiBzdHlsZT0id2lkdGg6MTAwJTsgbWF4LXdpZHRoOjEwODBweDsgaGVpZ2h0OmF1dG87Ij48ZGVmcz48bWFya2VyIGlkPSJhcnJvdy1zdGF0IiBtYXJrZXJ3aWR0aD0iMTAiIG1hcmtlcmhlaWdodD0iMTAiIHJlZng9IjgiIHJlZnk9IjMiIG9yaWVudD0iYXV0byIgbWFya2VydW5pdHM9InN0cm9rZVdpZHRoIj48cGF0aCBkPSJNMCwwIEwwLDYgTDksMyB6IiBmaWxsPSIjMWI2ZjhmIiAvPjwvbWFya2VyPjwvZGVmcz48cmVjdCB4PSIyMCIgeT0iMTI1IiB3aWR0aD0iMTMwIiBoZWlnaHQ9IjgwIiByeD0iOCIgZmlsbD0iI2U4ZjNmNyIgc3Ryb2tlPSIjMWI2ZjhmIiBzdHJva2Utd2lkdGg9IjIiIC8+PHRleHQgeD0iODUiIHk9IjE1NCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1zaXplPSIxNCIgZm9udC13ZWlnaHQ9IjcwMCI+UHJlcGFyZWQgZGF0YTwvdGV4dD48dGV4dCB4PSI4NSIgeT0iMTc2IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXNpemU9IjEyIj5tdWx0aXBsZSBjbGltYXRlPC90ZXh0Pjx0ZXh0IHg9Ijg1IiB5PSIxOTMiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtc2l6ZT0iMTIiPnByb2R1Y3RzPC90ZXh0PjxyZWN0IHg9IjIxMCIgeT0iMzAiIHdpZHRoPSIxNzUiIGhlaWdodD0iNzAiIHJ4PSI4IiBmaWxsPSIjZmZmNGRmIiBzdHJva2U9IiNiNjZkMDAiIHN0cm9rZS13aWR0aD0iMiIgLz48dGV4dCB4PSIyOTciIHk9IjU3IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXNpemU9IjE0IiBmb250LXdlaWdodD0iNzAwIj5QQ1IgcGVyIHByb2R1Y3Q8L3RleHQ+PHRleHQgeD0iMjk3IiB5PSI3OCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1zaXplPSIxMiI+Zm9yZWNhc3QgZm9yIGVhY2ggcHJvZHVjdDwvdGV4dD48cmVjdCB4PSIyMTAiIHk9IjEzMCIgd2lkdGg9IjE3NSIgaGVpZ2h0PSI3MCIgcng9IjgiIGZpbGw9IiNmZmY0ZGYiIHN0cm9rZT0iI2I2NmQwMCIgc3Ryb2tlLXdpZHRoPSIyIiAvPjx0ZXh0IHg9IjI5NyIgeT0iMTU3IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXNpemU9IjE0IiBmb250LXdlaWdodD0iNzAwIj5SaWRnZSBwZXIgcHJvZHVjdDwvdGV4dD48dGV4dCB4PSIyOTciIHk9IjE3OCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1zaXplPSIxMiI+Zm9yZWNhc3QgZm9yIGVhY2ggcHJvZHVjdDwvdGV4dD48cmVjdCB4PSIyMTAiIHk9IjIzMCIgd2lkdGg9IjE3NSIgaGVpZ2h0PSI3MCIgcng9IjgiIGZpbGw9IiNmZmY0ZGYiIHN0cm9rZT0iI2I2NmQwMCIgc3Ryb2tlLXdpZHRoPSIyIiAvPjx0ZXh0IHg9IjI5NyIgeT0iMjU3IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXNpemU9IjE0IiBmb250LXdlaWdodD0iNzAwIj5MYXNzbyBwZXIgcHJvZHVjdDwvdGV4dD48dGV4dCB4PSIyOTciIHk9IjI3OCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1zaXplPSIxMiI+Zm9yZWNhc3QgZm9yIGVhY2ggcHJvZHVjdDwvdGV4dD48cmVjdCB4PSI0NTUiIHk9IjMwIiB3aWR0aD0iMTU1IiBoZWlnaHQ9IjcwIiByeD0iOCIgZmlsbD0iI2VlZjdlZCIgc3Ryb2tlPSIjNGI4YjNiIiBzdHJva2Utd2lkdGg9IjIiIC8+PHRleHQgeD0iNTMyIiB5PSI1NyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1zaXplPSIxNCIgZm9udC13ZWlnaHQ9IjcwMCI+VG9wSyArIGZ1c2lvbjwvdGV4dD48dGV4dCB4PSI1MzIiIHk9Ijc4IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXNpemU9IjEyIj5QQ1IgZm9yZWNhc3Q8L3RleHQ+PHJlY3QgeD0iNDU1IiB5PSIxMzAiIHdpZHRoPSIxNTUiIGhlaWdodD0iNzAiIHJ4PSI4IiBmaWxsPSIjZWVmN2VkIiBzdHJva2U9IiM0YjhiM2IiIHN0cm9rZS13aWR0aD0iMiIgLz48dGV4dCB4PSI1MzIiIHk9IjE1NyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1zaXplPSIxNCIgZm9udC13ZWlnaHQ9IjcwMCI+VG9wSyArIGZ1c2lvbjwvdGV4dD48dGV4dCB4PSI1MzIiIHk9IjE3OCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1zaXplPSIxMiI+UmlkZ2UgZm9yZWNhc3Q8L3RleHQ+PHJlY3QgeD0iNDU1IiB5PSIyMzAiIHdpZHRoPSIxNTUiIGhlaWdodD0iNzAiIHJ4PSI4IiBmaWxsPSIjZWVmN2VkIiBzdHJva2U9IiM0YjhiM2IiIHN0cm9rZS13aWR0aD0iMiIgLz48dGV4dCB4PSI1MzIiIHk9IjI1NyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1zaXplPSIxNCIgZm9udC13ZWlnaHQ9IjcwMCI+VG9wSyArIGZ1c2lvbjwvdGV4dD48dGV4dCB4PSI1MzIiIHk9IjI3OCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1zaXplPSIxMiI+TGFzc28gZm9yZWNhc3Q8L3RleHQ+PHJlY3QgeD0iNjkwIiB5PSIxMjUiIHdpZHRoPSIxNjAiIGhlaWdodD0iODAiIHJ4PSI4IiBmaWxsPSIjZjhlZWVlIiBzdHJva2U9IiNhMzNkM2QiIHN0cm9rZS13aWR0aD0iMiIgLz48dGV4dCB4PSI3NzAiIHk9IjE1NCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1zaXplPSIxNCIgZm9udC13ZWlnaHQ9IjcwMCI+TW9kZWwtbGV2ZWw8L3RleHQ+PHRleHQgeD0iNzcwIiB5PSIxNzYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtc2l6ZT0iMTIiPmNvbnNvbGlkYXRpb24gb2Y8L3RleHQ+PHRleHQgeD0iNzcwIiB5PSIxOTMiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtc2l6ZT0iMTIiPlBDUi9SaWRnZS9MYXNzbzwvdGV4dD48cmVjdCB4PSI5MjAiIHk9IjEyNSIgd2lkdGg9IjEzNSIgaGVpZ2h0PSI4MCIgcng9IjgiIGZpbGw9IiNlZGYxZjgiIHN0cm9rZT0iIzM4NWY5ZiIgc3Ryb2tlLXdpZHRoPSIyIiAvPjx0ZXh0IHg9Ijk4NyIgeT0iMTU0IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXNpemU9IjE0IiBmb250LXdlaWdodD0iNzAwIj5TdGF0aXN0aWNhbDwvdGV4dD48dGV4dCB4PSI5ODciIHk9IjE3NiIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1zaXplPSIxMiI+c2Vhc29uYWw8L3RleHQ+PHRleHQgeD0iOTg3IiB5PSIxOTMiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtc2l6ZT0iMTIiPmZvcmVjYXN0PC90ZXh0PjxsaW5lIHgxPSIxNTAiIHkxPSIxNjUiIHgyPSIyMDIiIHkyPSI2NSIgc3Ryb2tlPSIjMWI2ZjhmIiBzdHJva2Utd2lkdGg9IjMiIG1hcmtlci1lbmQ9InVybCgjYXJyb3ctc3RhdCkiPjwvbGluZT48bGluZSB4MT0iMTUwIiB5MT0iMTY1IiB4Mj0iMjAyIiB5Mj0iMTY1IiBzdHJva2U9IiMxYjZmOGYiIHN0cm9rZS13aWR0aD0iMyIgbWFya2VyLWVuZD0idXJsKCNhcnJvdy1zdGF0KSI+PC9saW5lPjxsaW5lIHgxPSIxNTAiIHkxPSIxNjUiIHgyPSIyMDIiIHkyPSIyNjUiIHN0cm9rZT0iIzFiNmY4ZiIgc3Ryb2tlLXdpZHRoPSIzIiBtYXJrZXItZW5kPSJ1cmwoI2Fycm93LXN0YXQpIj48L2xpbmU+PGxpbmUgeDE9IjM4NSIgeTE9IjY1IiB4Mj0iNDQ3IiB5Mj0iNjUiIHN0cm9rZT0iIzFiNmY4ZiIgc3Ryb2tlLXdpZHRoPSIzIiBtYXJrZXItZW5kPSJ1cmwoI2Fycm93LXN0YXQpIj48L2xpbmU+PGxpbmUgeDE9IjM4NSIgeTE9IjE2NSIgeDI9IjQ0NyIgeTI9IjE2NSIgc3Ryb2tlPSIjMWI2ZjhmIiBzdHJva2Utd2lkdGg9IjMiIG1hcmtlci1lbmQ9InVybCgjYXJyb3ctc3RhdCkiPjwvbGluZT48bGluZSB4MT0iMzg1IiB5MT0iMjY1IiB4Mj0iNDQ3IiB5Mj0iMjY1IiBzdHJva2U9IiMxYjZmOGYiIHN0cm9rZS13aWR0aD0iMyIgbWFya2VyLWVuZD0idXJsKCNhcnJvdy1zdGF0KSI+PC9saW5lPjxsaW5lIHgxPSI2MTAiIHkxPSI2NSIgeDI9IjY4MiIgeTI9IjE2NSIgc3Ryb2tlPSIjMWI2ZjhmIiBzdHJva2Utd2lkdGg9IjMiIG1hcmtlci1lbmQ9InVybCgjYXJyb3ctc3RhdCkiPjwvbGluZT48bGluZSB4MT0iNjEwIiB5MT0iMTY1IiB4Mj0iNjgyIiB5Mj0iMTY1IiBzdHJva2U9IiMxYjZmOGYiIHN0cm9rZS13aWR0aD0iMyIgbWFya2VyLWVuZD0idXJsKCNhcnJvdy1zdGF0KSI+PC9saW5lPjxsaW5lIHgxPSI2MTAiIHkxPSIyNjUiIHgyPSI2ODIiIHkyPSIxNjUiIHN0cm9rZT0iIzFiNmY4ZiIgc3Ryb2tlLXdpZHRoPSIzIiBtYXJrZXItZW5kPSJ1cmwoI2Fycm93LXN0YXQpIj48L2xpbmU+PGxpbmUgeDE9Ijg1MCIgeTE9IjE2NSIgeDI9IjkxMiIgeTI9IjE2NSIgc3Ryb2tlPSIjMWI2ZjhmIiBzdHJva2Utd2lkdGg9IjMiIG1hcmtlci1lbmQ9InVybCgjYXJyb3ctc3RhdCkiPjwvbGluZT48L3N2Zz4=)
+
+## Tune One Product
+
+``` r
+data_by_product <- make_toy_data_by_product()
+df <- data_by_product[[1]]
+basin_id <- unique(df$HYBAS_ID)[1]
+
+df_basin <- subset(df, HYBAS_ID == basin_id)
+predictors <- grep("^pt_", names(df_basin), value = TRUE)
+
+res_stat <- wass2s_tune_pred_stat(
+  df_basin_product = df_basin,
+  predictors = predictors,
+  model = "ridge",
+  target = "Q",
+  date_col = "YYYY",
+  selection_metric = "kge",
+  quiet = FALSE
+)
+```
+
+The statistical tuner defaults to `selection_metric = "kge"`, preserving
+the hydrological objective. Use `selection_metric = "rmse"` when a
+smoother numeric optimization criterion is needed.
+
+## Consolidate Products for One Model
+
+``` r
+res_cons_stat <- wass2s_cons_mods_stat(
+  basin_id = basin_id,
+  data_by_product = data_by_product,
+  model = "ridge",
+  topK = 3,
+  product_fusion_method = "median",
+  min_kge_model = 0.2,
+  quiet = FALSE
+)
+
+res_cons_stat$leaderboard_products
+res_cons_stat$fused
+```
+
+Product fusion methods include:
+
+- `median`: robust median across retained products;
+- `mean`: arithmetic mean;
+- `weighted_mean`: KGE-based weighted mean;
+- `meta`: second-level learner trained on product predictions;
+- `best`: keep the best-ranked product.
+
+## Full Statistical Workflow for One Basin
+
+``` r
+res_basin_stat <- wass2s_run_basin_mods_stat(
+  basin_id = basin_id,
+  data_by_product = data_by_product,
+  topK = 3,
+  product_fusion_method = "median",
+  fusion_method = "weighted_mean",
+  final_fuser = "rf",
+  target_positive = TRUE,
+  quiet = FALSE
+)
+
+res_basin_stat$scores
+res_basin_stat$fused_by_model
+```
+
+This function runs PCR, ridge, and lasso, then applies a final fusion
+step.
+
+## Several Basins
+
+``` r
+res_all_stat <- wass2s_run_basins_stat(
+  data_by_product = data_by_product,
+  topK = 3,
+  fusion_method = "median",
+  parallel = FALSE,
+  quiet = FALSE
+)
+
+names(res_all_stat)
+```
+
+Use `parallel = TRUE` only after validating the workflow sequentially.
+
+## Prediction Period
+
+Use `prediction_years` to hold out a period from training:
+
+``` r
+res <- wass2s_run_basin_mods_stat(
+  basin_id = basin_id,
+  data_by_product = data_by_product,
+  prediction_years = c(2018, 2020),
+  fusion_method = "median"
+)
+```
+
+## Data Quality Controls
+
+Important controls are:
+
+- `max_na_frac`: maximum accepted missingness per guarded column;
+- `impute`: `median`, `mean`, or `none`;
+- `require_variance`: reject zero-variance variables;
+- `min_data_required`: minimum sample size;
+- `target_positive`: enforce non-negative predictions.

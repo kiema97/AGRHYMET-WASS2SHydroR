@@ -46,6 +46,8 @@
 #'   Falls back to sequential mode if batch is unavailable.
 #' @param workers Integer. Number of parallel workers for batch submission. Default \code{2}.
 #' @param job_name Optional string passed to \code{wf_request()} (sequential mode).
+#'   Leave \code{NULL} outside RStudio; non-NULL values trigger RStudio Jobs in
+#'   \pkg{ecmwfr}.
 #' @param verbose Logical. Verbose logging. Default \code{TRUE}.
 #' @param ... Additional arguments forwarded to \code{ecmwfr::wf_request()}.
 #'
@@ -94,7 +96,7 @@ wass2s_download_cds <- function(
     leadtime_hour,
     area = c(28.5, -25.5, 4.0, 26.6),
     out_dir = ".",
-    user = "ecmwf",
+    user = "ecmwfr",
     service = c("cds", "ads", "cems"),
     filename_tpl = NULL,
     tries = 3,
@@ -103,7 +105,7 @@ wass2s_download_cds <- function(
     force_download = FALSE,
     parallel = FALSE,
     workers = 2,
-    job_name = "default",
+    job_name = NULL,
     verbose = TRUE,
     ...
 ) {
@@ -287,10 +289,13 @@ wass2s_download_cds <- function(
                                      j$model, j$system, j$variable, j$year,
                                      attempt, max(1L, as.integer(tries)), basename(j$target)))
         ok <- tryCatch({
-          ecmwfr::wf_request(
+          wf_args <- c(list(
             user = user, request = j$req, transfer = TRUE, path = out_dir,
-            verbose = verbose, time_out = timeout_sec, job_name = job_name, ...
-          ); TRUE
+            verbose = verbose, time_out = timeout_sec
+          ), list(...))
+          if (!is.null(job_name)) wf_args$job_name <- job_name
+          do.call(ecmwfr::wf_request, wf_args)
+          TRUE
         }, error = function(e) {
           if (verbose) message(sprintf("Error: %s", e$message))
           last_err <<- e$message; FALSE

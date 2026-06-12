@@ -32,6 +32,7 @@ wass2s_tune_pred_stat(
   quiet = TRUE,
   allow_par = TRUE,
   verbose_tune = TRUE,
+  selection_metric = c("kge", "rmse"),
   max_na_frac = 0.3,
   impute = "median",
   require_variance = TRUE
@@ -129,6 +130,11 @@ is used instead of the default grid for the specified model.}
 \item{allow_par}{A logical to allow parallel processing (if a parallel backend is registered).}
 
 \item{verbose_tune}{A logical for logging results (other than warnings and errors, which are always shown) as they are generated during training in a single R process.}
+
+\item{selection_metric}{Character; \code{"kge"} keeps the historical behavior
+and selects the configuration with the best cross-validated KGE.
+\code{"rmse"} selects by RMSE while reporting KGE/RMSE/MAE for that same
+configuration.}
 
 \item{max_na_frac}{Numeric in \eqn{[0, 1]}: maximum allowed fraction of missing
 values per column before stopping (default \code{0.20} = 20\%).}

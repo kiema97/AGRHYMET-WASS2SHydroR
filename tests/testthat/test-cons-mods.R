@@ -58,8 +58,8 @@ test_that("wass2s_cons_mods_stat fusion should not be all NA on toy data (simple
   )
 
   expect_true(nrow(out$fused) > 0)
-  expect_false(sum(!is.na(out$fused$pred_fused)) > 0)
-  expect_true(all(is.na(out$fused$pred_fused)))
+  expect_true(sum(!is.na(out$fused$pred_fused)) > 0)
+  expect_false(all(is.na(out$fused$pred_fused)))
 })
 
 test_that("wass2s_cons_mods_ml returns correct structure and non-NA fusion (simple fuser)", {
@@ -88,5 +88,5 @@ test_that("wass2s_cons_mods_ml returns correct structure and non-NA fusion (simp
   expect_true(all(c("fused", "leaderboard_products") %in% names(out)))
   expect_s3_class(out$fused, "tbl_df")
   expect_true(all(c("YYYY", "pred_fused") %in% names(out$fused)))
-  expect_false(sum(!is.na(out$fused$pred_fused)) > 0)
+  expect_true(sum(!is.na(out$fused$pred_fused)) > 0)
 })

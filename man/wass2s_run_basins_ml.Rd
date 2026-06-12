@@ -20,6 +20,9 @@ wass2s_run_basins_ml(
   fusion_method = c("meta", "mean", "median", "weighted_mean"),
   final_fuser = "rf",
   quiet = TRUE,
+  target_positive = TRUE,
+  allow_par = TRUE,
+  selection_metric = c("rmse", "kge"),
   ...
 )
 }
@@ -71,6 +74,12 @@ Supported values are:
 \item{final_fuser}{Name of the meta-learner for final fusion.}
 
 \item{quiet}{Logical; if \code{FALSE}, emits informative messages.}
+
+\item{target_positive}{Logical; passed to \code{wass2s_run_bas_mod_ml()} to truncate negative predictions to zero.}
+
+\item{allow_par}{Logical; passed to lower-level tuning functions to allow parallel processing.}
+
+\item{selection_metric}{Character; tuning-selection metric, either \code{"rmse"} or \code{"kge"}.}
 
 \item{...}{Other parameters passed to \code{wass2s_run_bas_mod_ml}.}
 }

@@ -321,7 +321,7 @@ wass2s_hype_run_watchlog <- function(run_dir,
     (length(expected_files) == 0 || all(fs::file_exists(fs::path(run_dir, expected_files))))
 
   list(
-    success = !success,
+    success = success,
     exit_status = as.integer(exit_status),
     duration_sec = duration,
     run_dir = run_dir,

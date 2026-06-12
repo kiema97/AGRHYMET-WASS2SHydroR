@@ -19,6 +19,7 @@ wass2s_cons_mods_ml(
   product_fusion_method = "median",
   sub_fuser = "rf",
   sub_grid_levels = 10,
+  use_sub_fuser = TRUE,
   pretrained = NULL,
   grid_levels = 5,
   min_data_required = 10,
@@ -26,6 +27,7 @@ wass2s_cons_mods_ml(
   quiet = TRUE,
   verbose = TRUE,
   allow_par = TRUE,
+  selection_metric = c("rmse", "kge"),
   max_na_frac = 0.3,
   impute = "median",
   require_variance = TRUE,
@@ -75,6 +77,9 @@ Supported values are:
 
 \item{sub_grid_levels}{Integer; grid levels for the sub-fuser via \code{model_grid()}.}
 
+\item{use_sub_fuser}{Logical; backward-compatible switch for enabling
+meta-fusion behavior in downstream fusion helpers.}
+
 \item{pretrained}{Optional list of pre-trained workflows (indexed by \code{model} then \code{product}).}
 
 \item{grid_levels}{Tuning grid granularity for the base ML model (passed to \code{wass2s_tune_pred_ml()}).}
@@ -88,6 +93,10 @@ Supported values are:
 \item{verbose}{Logical; if TRUE, emits diagnostic messages (default: TRUE).}
 
 \item{allow_par}{Logical; forwarded to tuning controls where applicable.}
+
+\item{selection_metric}{Character; forwarded to \code{wass2s_tune_pred_ml()}.
+The default \code{"rmse"} keeps RMSE tuning but reports product KGE for the
+same selected configuration.}
 
 \item{max_na_frac}{Numeric in [0,1]; maximum allowed missingness per guarded column (default: 0.3).}
 

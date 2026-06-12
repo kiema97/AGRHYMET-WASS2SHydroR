@@ -63,6 +63,8 @@
 #'   frame must contain at least \code{basin_col}, \code{YYYY} (dates), \code{Q}
 #'   (target), and predictor columns (typically prefixed, e.g. \code{pt_*}).
 #' @param basin_col Column name for basin IDs (default: \code{"HYBAS_ID"}).
+#' @param target Name of the target column (default: \code{"Q"}).
+#' @param date_col Name of the date column (default: \code{"YYYY"}).
 #' @param pred_pattern_by_product Optional. Either:
 #'   \itemize{
 #'     \item a named character vector/list mapping \code{product -> regex} used to
@@ -86,6 +88,8 @@
 #'   \code{model_spec()} (e.g. \code{"rf"}).
 #' @param sub_grid_levels Integer; tuning grid "levels" for the sub-fuser, passed
 #'   to \code{model_grid()}.
+#' @param use_sub_fuser Logical; backward-compatible switch for enabling
+#'   meta-fusion behavior in downstream fusion helpers.
 #' @param topK Integer, number of products to keep for fusion (default: 3).
 #' @param min_kge_model Numeric; minimum KGE threshold for products to receive
 #'   non-zero fusion weight (default: 0.2).
@@ -119,6 +123,11 @@
 #'   processing and failures (default: \code{TRUE}).
 #' @param allow_par Logical. If \code{TRUE}, allow parallel execution during
 #'   hyperparameter tuning of the meta-learner.
+#' @param verbose_tune Logical; forwarded to \code{wass2s_tune_pred_stat()} to
+#'   control tuning verbosity.
+#' @param selection_metric Character; forwarded to \code{wass2s_tune_pred_stat()}.
+#'   The default \code{"kge"} keeps the historical statistical-model selection
+#'   behavior.
 #' @param seed Integer; random seed for reproducibility.
 #' @param max_na_frac Numeric in \eqn{[0, 1]}; maximum allowed fraction of
 #'   missing values per guarded column before stopping (default: 0.3).
@@ -170,6 +179,8 @@ wass2s_cons_mods_stat <- function(
     basin_id,
     data_by_product,
     basin_col = "HYBAS_ID",
+    target = "Q",
+    date_col = "YYYY",
     pred_pattern_by_product = NULL,
     model = c("pcr", "ridge", "lasso"),
     grid = NULL,
@@ -178,6 +189,7 @@ wass2s_cons_mods_stat <- function(
     product_fusion_method="median",
     sub_fuser = "rf",
     sub_grid_levels = 10,
+    use_sub_fuser = TRUE,
 
     # --- selection options ---
     topK = 3,
@@ -199,6 +211,8 @@ wass2s_cons_mods_stat <- function(
     quiet = TRUE,
     verbose = TRUE,
     allow_par=TRUE,
+    verbose_tune = TRUE,
+    selection_metric = c("kge", "rmse"),
     seed = 123,
 
     # --- data quality guards ---
@@ -209,6 +223,7 @@ wass2s_cons_mods_stat <- function(
 ) {
   set.seed(seed)
   model <- match.arg(model)
+  selection_metric <- match.arg(selection_metric)
 
   # ---------------------------
   # Input checks
@@ -244,9 +259,9 @@ wass2s_cons_mods_stat <- function(
     if (!basin_col %in% names(dfp)) return(integer())
 
     dfp <- dplyr::filter(dfp, .data[[basin_col]] == basin_id)
-    if (!"YYYY" %in% names(dfp)) return(integer())
+    if (!date_col %in% names(dfp)) return(integer())
 
-    .ensure_yyyymmdd(dfp$YYYY)
+    .ensure_yyyymmdd(dfp[[date_col]])
   }))))
 
   if (length(dates_all) == 0) {
@@ -265,11 +280,11 @@ wass2s_cons_mods_stat <- function(
 
     dfp <- data_by_product[[p]]
     if (!is.data.frame(dfp)) {
-      if (verbose) message("[", model, "] ", p, " : skipped (not a data.frame).")
+      .msg(quiet, verbose, "[", model, "] ", p, " : skipped (not a data.frame).")
       return(NULL)
     }
     if (!basin_col %in% names(dfp)) {
-      if (verbose) message("[", model, "] ", p, " : skipped (missing basin_col='", basin_col, "').")
+      .msg(quiet, verbose, "[", model, "] ", p, " : skipped (missing basin_col='", basin_col, "').")
       return(NULL)
     }
 
@@ -277,13 +292,19 @@ wass2s_cons_mods_stat <- function(
       dplyr::filter(.data[[basin_col]] == basin_id) |>
       dplyr::ungroup()
 
-    if (!all(c("YYYY", "Q") %in% names(dfp))) {
-      if (verbose) message("[", model, "] ", p, " : skipped (missing YYYY/Q).")
+    missing_cols <- setdiff(c(date_col, target), names(dfp))
+    if (length(missing_cols) > 0L) {
+      .msg(quiet, verbose, "[", model, "] ", p, " : skipped (missing ",
+           paste(missing_cols, collapse = ", "), ").")
       return(NULL)
     }
 
     # Ensure YYYYMMDD int + stable ordering
     dfp <- dfp |>
+      dplyr::rename(
+        YYYY = !!rlang::sym(date_col),
+        Q = !!rlang::sym(target)
+      ) |>
       dplyr::mutate(YYYY = .ensure_yyyymmdd(.data$YYYY)) |>
       dplyr::arrange(.data$YYYY)
 
@@ -306,10 +327,8 @@ wass2s_cons_mods_stat <- function(
       exclude = c(basin_col, "YYYY", "Q")
     )
 
-    if (verbose) {
-      message("[", model, "] ", p, " : ", length(predictors),
-              " predictors using pattern '", pat, "'")
-    }
+    .msg(quiet, verbose, "[", model, "] ", p, " : ", length(predictors),
+         " predictors using pattern '", pat, "'")
 
     if (length(predictors) < min_predictors) {
       return(list(
@@ -349,14 +368,15 @@ wass2s_cons_mods_stat <- function(
         cumulative       = cumulative,
         quiet            = quiet,
         allow_par        = allow_par,
-        verbose_tune     = TRUE,
+        verbose_tune     = verbose_tune,
+        selection_metric = selection_metric,
         max_na_frac      = max_na_frac,
         impute           = impute,
         require_variance = require_variance,
         ...
       )
     }, error = function(e) {
-      if (verbose) message(glue::glue("Error training product '{p}' for basin {basin_id}: {e$message}"))
+      .msg(quiet, verbose, glue::glue("Error training product '{p}' for basin {basin_id}: {e$message}"))
       NULL
     })
 
@@ -373,7 +393,7 @@ wass2s_cons_mods_stat <- function(
 
     # preds must contain YYYY and pred
     if (!all(c("YYYY", "pred") %in% names(out$preds))) {
-      if (verbose) message("[", model, "] ", p, " : skipped (preds missing YYYY/pred).")
+      .msg(quiet, verbose, "[", model, "] ", p, " : skipped (preds missing YYYY/pred).")
       return(list(
         product = p,
         score   = NA_real_,
@@ -395,7 +415,11 @@ wass2s_cons_mods_stat <- function(
       rsq     = out$rsq_cv_mean,
       preds   = preds,
       n_pred  = length(predictors),
-      sd_pred = stats::sd(preds$pred, na.rm = TRUE)
+      sd_pred = stats::sd(preds$pred, na.rm = TRUE),
+      selected_config = out$selected_config,
+      selection_metric = out$selection_metric,
+      rmse_cv_mean = out$rmse_cv_mean,
+      mae_cv_mean = out$mae_cv_mean
     )
   }) |>
     purrr::compact()
@@ -425,6 +449,7 @@ wass2s_cons_mods_stat <- function(
     target_positive    = target_positive,
     quiet              = quiet,
     verbose            = verbose,
+    use_sub_fuser      = use_sub_fuser,
     seed               = seed
   )
 

@@ -23,6 +23,7 @@ wass2s_run_bas_mod_ml(
   verbose_tune = TRUE,
   target_positive = TRUE,
   allow_par = TRUE,
+  selection_metric = c("rmse", "kge"),
   max_na_frac = 0.3,
   impute = "median",
   require_variance = TRUE,
@@ -87,6 +88,8 @@ for hydrological targets such as streamflow, which are physically non-negative.}
 \item{allow_par}{Logical. If \code{TRUE}, parallel execution is allowed during
 hyperparameter tuning of the meta-learner when \code{fusion_method = "meta"}.
 If \code{FALSE}, tuning is forced to run sequentially.}
+
+\item{selection_metric}{Character; tuning-selection metric, either \code{"rmse"} or \code{"kge"}.}
 
 \item{max_na_frac}{Numeric in \eqn{[0, 1]}: maximum allowed fraction of missing
 values per column before stopping (default \code{0.20} = 20\%).}

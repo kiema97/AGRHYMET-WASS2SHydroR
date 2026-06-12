@@ -138,12 +138,13 @@ wass2s_prepare_data <- function(
   cell_layout <- match.arg(cell_layout)
   ensemble_reduce <- match.arg(ensemble_reduce)
   extra_dims_action <- match.arg(extra_dims_action)
+  is_stars_input <- inherits(x, "stars")
 
   if (!requireNamespace("stars", quietly = TRUE)) {
     stop("Package 'stars' is required.")
   }
-  if (!requireNamespace("ncdf4", quietly = TRUE)) {
-    stop("Package 'ncdf4' is required.")
+  if (!is_stars_input && !requireNamespace("ncdf4", quietly = TRUE)) {
+    stop("Package 'ncdf4' is required to read NetCDF files.")
   }
   if (!requireNamespace("data.table", quietly = TRUE)) {
     stop("Package 'data.table' is required.")
@@ -155,8 +156,6 @@ wass2s_prepare_data <- function(
   # ---------------------------------------------------------------------------
   # Read stars object
   # ---------------------------------------------------------------------------
-
-  is_stars_input <- inherits(x, "stars")
 
   obj <- if (is_stars_input) {
     x

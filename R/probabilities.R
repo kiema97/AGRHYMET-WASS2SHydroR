@@ -94,29 +94,6 @@ wass2s_class_entropy <- function(p_below, p_normal, p_above, normalize = FALSE) 
   out
 }
 
-# ##' Entropy of class probabilities (uncertainty indicator)
-# ##' @keywords internal
-# wass2s_class_entropy <- function(p_below, p_normal, p_above) {
-#   p_raw <- cbind(p_below, p_normal, p_above)   # garde les scalaires en matrice n x 3
-#
-#   # cas exacts : une classe = 1 et les deux autres = 0  -> entropie = 0
-#   is_one_hot <- rowSums(p_raw == 1, na.rm = TRUE) == 1 & rowSums(p_raw == 0, na.rm = TRUE) == 2
-#   out <- numeric(nrow(p_raw))
-#   out[is_one_hot] <- 0
-#
-#   # pour le reste, on sécurise et on calcule
-#   if (any(!is_one_hot)) {
-#     p <- p_raw
-#     p[!is.finite(p)] <- 0
-#     p[p < 1e-12] <- 1e-12
-#     rs <- rowSums(p)
-#     rs[!is.finite(rs) | rs <= 0] <- 1
-#     p <- p / rs
-#     out[!is_one_hot] <- -rowSums(p[!is_one_hot, , drop = FALSE] * log(p[!is_one_hot, , drop = FALSE]))
-#   }
-#   as.numeric(out)
-# }
-
 
 
 #' From forecast to class probabilities (Q1/Q3 classes by default)

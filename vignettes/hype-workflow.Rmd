@@ -1,0 +1,155 @@
+---
+title: "HYPE Execution Workflow"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{HYPE Execution Workflow}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", eval = FALSE)
+```
+
+## Overview
+
+WASS2SHydroR includes wrappers to run HYPE scenarios from R. The wrappers are
+designed for operational workflows where several model directories must be run,
+monitored, and checked for expected outputs.
+
+In the hydrological modelling approach, the hydrological model, for example
+HYPE, is forced with several climate forcings. For each basin, one forecast is
+obtained for each forcing. The top-`K` forcing-based forecasts are then
+consolidated with one of the available consolidation methods to produce the
+final hydrological seasonal forecast.
+
+## Hydrological Modelling Process Schema
+
+```{=html}
+<svg viewBox="0 0 1080 300" role="img" aria-label="Hydrological modelling workflow with climate forcings, HYPE simulations and top-K consolidation" style="width:100%; max-width:1080px; height:auto;">
+  <defs>
+    <marker id="arrow-hype" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#1b6f8f"></path>
+    </marker>
+  </defs>
+  <rect x="20" y="110" width="145" height="80" rx="8" fill="#e8f3f7" stroke="#1b6f8f" stroke-width="2"></rect>
+  <text x="92" y="139" text-anchor="middle" font-size="14" font-weight="700">Climate forcings</text>
+  <text x="92" y="161" text-anchor="middle" font-size="12">multiple products</text>
+  <text x="92" y="178" text-anchor="middle" font-size="12">or scenarios</text>
+
+  <rect x="225" y="25" width="155" height="68" rx="8" fill="#edf1f8" stroke="#385f9f" stroke-width="2"></rect>
+  <text x="302" y="52" text-anchor="middle" font-size="14" font-weight="700">HYPE run</text>
+  <text x="302" y="73" text-anchor="middle" font-size="12">forcing 1</text>
+
+  <rect x="225" y="116" width="155" height="68" rx="8" fill="#edf1f8" stroke="#385f9f" stroke-width="2"></rect>
+  <text x="302" y="143" text-anchor="middle" font-size="14" font-weight="700">HYPE run</text>
+  <text x="302" y="164" text-anchor="middle" font-size="12">forcing 2</text>
+
+  <rect x="225" y="207" width="155" height="68" rx="8" fill="#edf1f8" stroke="#385f9f" stroke-width="2"></rect>
+  <text x="302" y="234" text-anchor="middle" font-size="14" font-weight="700">HYPE run</text>
+  <text x="302" y="255" text-anchor="middle" font-size="12">forcing n</text>
+
+  <rect x="455" y="25" width="155" height="68" rx="8" fill="#eef7ed" stroke="#4b8b3b" stroke-width="2"></rect>
+  <text x="532" y="52" text-anchor="middle" font-size="14" font-weight="700">Basin forecast</text>
+  <text x="532" y="73" text-anchor="middle" font-size="12">from forcing 1</text>
+
+  <rect x="455" y="116" width="155" height="68" rx="8" fill="#eef7ed" stroke="#4b8b3b" stroke-width="2"></rect>
+  <text x="532" y="143" text-anchor="middle" font-size="14" font-weight="700">Basin forecast</text>
+  <text x="532" y="164" text-anchor="middle" font-size="12">from forcing 2</text>
+
+  <rect x="455" y="207" width="155" height="68" rx="8" fill="#eef7ed" stroke="#4b8b3b" stroke-width="2"></rect>
+  <text x="532" y="234" text-anchor="middle" font-size="14" font-weight="700">Basin forecast</text>
+  <text x="532" y="255" text-anchor="middle" font-size="12">from forcing n</text>
+
+  <rect x="690" y="110" width="160" height="80" rx="8" fill="#f8eeee" stroke="#a33d3d" stroke-width="2"></rect>
+  <text x="770" y="139" text-anchor="middle" font-size="14" font-weight="700">TopK forcing</text>
+  <text x="770" y="161" text-anchor="middle" font-size="12">selection and</text>
+  <text x="770" y="178" text-anchor="middle" font-size="12">consolidation</text>
+
+  <rect x="920" y="110" width="135" height="80" rx="8" fill="#fff4df" stroke="#b66d00" stroke-width="2"></rect>
+  <text x="987" y="139" text-anchor="middle" font-size="14" font-weight="700">Hydrological</text>
+  <text x="987" y="161" text-anchor="middle" font-size="12">seasonal</text>
+  <text x="987" y="178" text-anchor="middle" font-size="12">forecast</text>
+
+  <line x1="165" y1="150" x2="217" y2="59" stroke="#1b6f8f" stroke-width="3" marker-end="url(#arrow-hype)"></line>
+  <line x1="165" y1="150" x2="217" y2="150" stroke="#1b6f8f" stroke-width="3" marker-end="url(#arrow-hype)"></line>
+  <line x1="165" y1="150" x2="217" y2="241" stroke="#1b6f8f" stroke-width="3" marker-end="url(#arrow-hype)"></line>
+  <line x1="380" y1="59" x2="447" y2="59" stroke="#1b6f8f" stroke-width="3" marker-end="url(#arrow-hype)"></line>
+  <line x1="380" y1="150" x2="447" y2="150" stroke="#1b6f8f" stroke-width="3" marker-end="url(#arrow-hype)"></line>
+  <line x1="380" y1="241" x2="447" y2="241" stroke="#1b6f8f" stroke-width="3" marker-end="url(#arrow-hype)"></line>
+  <line x1="610" y1="59" x2="682" y2="150" stroke="#1b6f8f" stroke-width="3" marker-end="url(#arrow-hype)"></line>
+  <line x1="610" y1="150" x2="682" y2="150" stroke="#1b6f8f" stroke-width="3" marker-end="url(#arrow-hype)"></line>
+  <line x1="610" y1="241" x2="682" y2="150" stroke="#1b6f8f" stroke-width="3" marker-end="url(#arrow-hype)"></line>
+  <line x1="850" y1="150" x2="912" y2="150" stroke="#1b6f8f" stroke-width="3" marker-end="url(#arrow-hype)"></line>
+</svg>
+```
+
+The execution helpers documented below are the operational tools used to run and
+monitor the hydrological model simulations that feed this approach.
+
+## Required Scenario Files
+
+A HYPE run directory should contain the required HYPE input files, including
+files such as:
+
+- `info.txt`;
+- `GeoData.txt`;
+- `GeoClass.txt`;
+- `Pobs.txt`;
+- `Tobs.txt`;
+- `TMAXobs.txt`;
+- `TMINobs.txt`.
+
+The exact list depends on the HYPE configuration.
+
+## Standard Non-GUI Execution
+
+```r
+res_hype <- wass2s_hype_run(
+  run_dir = "path/to/hype_scenario",
+  exe_path = "path/to/hype.exe",
+  timeout_sec = 300,
+  expected_files = c("results/0000001.txt")
+)
+
+res_hype$success
+res_hype$outputs
+```
+
+The function captures standard output and standard error into log files and can
+check whether expected output files were created.
+
+## Watch-Log Mode for Windows GUI Executables
+
+Some Windows HYPE builds keep a window open after the simulation is complete.
+`wass2s_hype_run_watchlog()` starts the executable, waits for a log file to
+appear and stabilize, then attempts to close the process gracefully.
+
+```r
+res_hype <- wass2s_hype_run_watchlog(
+  run_dir = "path/to/hype_scenario",
+  exe_path = "path/to/hype.exe",
+  log_regex = "hyss_.*\\.log$",
+  timeout_sec = 600
+)
+
+res_hype$success
+```
+
+## Batch Execution
+
+```r
+res_batch <- wass2s_hype_run_batch(
+  run_dirs = c("scenario_1", "scenario_2"),
+  mode = "watchlog"
+)
+
+res_batch
+```
+
+## Practical Advice
+
+- Test one scenario before running batches.
+- Use `expected_files` to make success criteria explicit.
+- Keep `timeout_sec` conservative for operational runs.
+- Use `clean_regex` carefully to remove only known temporary or output files.

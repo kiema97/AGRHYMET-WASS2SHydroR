@@ -173,17 +173,11 @@ run_wass2s <- function(method, data_by_product, cfg) {
   })
 }
 
-# Register available methods when the package is loaded
-.onLoad <- function(libname, pkgname) {
-  # Register statistical method
-  register_method("stat", function() method_id("stat"))
-
-  # Register hydro (ML) method
+register_default_methods <- function() {
+  register_method("stat",  function() method_id("stat"))
   register_method("hydro", function() method_id("hydro"))
-
-  # Add more methods as they become available
-  # register_method("ml", function() method_id("ml"))
-  # register_method("ai", function() method_id("ai"))
+  register_method("ml",    function() method_id("ml"))
+  invisible(TRUE)
 }
 
 # Optional: Provide a function to list available methods

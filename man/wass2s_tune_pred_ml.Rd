@@ -36,6 +36,7 @@ wass2s_tune_pred_ml(
   target_positive = TRUE,
   allow_par = TRUE,
   verbose_tune = TRUE,
+  selection_metric = c("rmse", "kge"),
   max_na_frac = 0.3,
   impute = "median",
   require_variance = TRUE,
@@ -156,6 +157,11 @@ requested \code{n_splits} cannot be reached (default \code{TRUE}).}
 
 \item{verbose_tune}{A logical for logging results (other than warnings and errors, which are always shown) as they are generated during training in a single R process.}
 
+\item{selection_metric}{Character; \code{"rmse"} keeps the RMSE-selected
+configuration while reporting the KGE of that same configuration.
+\code{"kge"} selects the configuration with the best cross-validated KGE
+and uses RMSE only to retrieve the corresponding tuned parameters.}
+
 \item{max_na_frac}{Numeric in \eqn{[0, 1]}: maximum allowed fraction of missing
 values per column before stopping (default \code{0.20} = 20\%).}
 
@@ -190,8 +196,9 @@ predictions for both training and optional holdout (prediction) years.
   and the date column to \code{YYYY} before modeling.
 - If \code{prediction_years} is given, those years are removed from
   the training data and used as an out-of-sample prediction set.
-- Model configurations are tuned using RMSE as the optimization metric
-  but are ranked by KGE for reporting.
+- By default, model configurations are selected using RMSE because direct
+  KGE optimization may be unstable for some ML learners. The reported KGE is
+  always the KGE of the selected configuration.
 }
 \examples{
 \dontrun{

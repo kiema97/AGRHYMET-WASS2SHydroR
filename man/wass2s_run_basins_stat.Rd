@@ -20,6 +20,7 @@ wass2s_run_basins_stat(
   verbose_tune = TRUE,
   target_positive = TRUE,
   allow_par = TRUE,
+  min_kge_model = 0.2,
   max_na_frac = 0.3,
   impute = "median",
   require_variance = TRUE,
@@ -77,6 +78,8 @@ to be non-negative using \code{pmax(pred, 0)}.}
 
 \item{allow_par}{Logical. If \code{TRUE}, allow parallel execution during
 hyperparameter tuning of the meta-learner.}
+
+\item{min_kge_model}{Minimum KGE threshold passed to basin-level statistical consolidation.}
 
 \item{max_na_frac}{Numeric. Maximum fraction of missing values allowed per variable.}
 

@@ -27,10 +27,19 @@ test_that("wass2s_tune_pred_stat returns expected structure and non-empty preds"
   )
 
   expect_type(out, "list")
-  expect_true(all(c("kge_cv_mean", "rsq_cv_mean", "preds", "leaderboard_cfg") %in% names(out)))
+  expect_true(all(c(
+    "kge_cv_mean", "rsq_cv_mean", "rmse_cv_mean", "mae_cv_mean",
+    "preds", "leaderboard_cfg", "selected_config", "selection_metric"
+  ) %in% names(out)))
   expect_s3_class(out$preds, "tbl_df")
   expect_true(all(c("YYYY", "pred") %in% names(out$preds)))
   expect_true(nrow(out$preds) > 0)
+
+  if (!is.na(out$selected_config) && nrow(out$leaderboard_cfg) > 0) {
+    selected_row <- out$leaderboard_cfg[out$leaderboard_cfg$.config == out$selected_config, , drop = FALSE]
+    expect_equal(nrow(selected_row), 1L)
+    expect_equal(out$kge_cv_mean, selected_row$kge_mean[[1]], tolerance = 1e-10)
+  }
 })
 
 test_that("wass2s_tune_pred_stat respects target_positive", {

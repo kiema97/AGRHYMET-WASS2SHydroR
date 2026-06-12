@@ -8,12 +8,15 @@ wass2s_cons_mods_stat(
   basin_id,
   data_by_product,
   basin_col = "HYBAS_ID",
+  target = "Q",
+  date_col = "YYYY",
   pred_pattern_by_product = NULL,
   model = c("pcr", "ridge", "lasso"),
   grid = NULL,
   product_fusion_method = "median",
   sub_fuser = "rf",
   sub_grid_levels = 10,
+  use_sub_fuser = TRUE,
   topK = 3,
   min_kge_model = 0.2,
   min_predictors = 1,
@@ -29,6 +32,8 @@ wass2s_cons_mods_stat(
   quiet = TRUE,
   verbose = TRUE,
   allow_par = TRUE,
+  verbose_tune = TRUE,
+  selection_metric = c("kge", "rmse"),
   seed = 123,
   max_na_frac = 0.3,
   impute = "median",
@@ -44,6 +49,10 @@ frame must contain at least \code{basin_col}, \code{YYYY} (dates), \code{Q}
 (target), and predictor columns (typically prefixed, e.g. \code{pt_*}).}
 
 \item{basin_col}{Column name for basin IDs (default: \code{"HYBAS_ID"}).}
+
+\item{target}{Name of the target column (default: \code{"Q"}).}
+
+\item{date_col}{Name of the date column (default: \code{"YYYY"}).}
 
 \item{pred_pattern_by_product}{Optional. Either:
 \itemize{
@@ -73,6 +82,9 @@ Supported values are:
 
 \item{sub_grid_levels}{Integer; tuning grid "levels" for the sub-fuser, passed
 to \code{model_grid()}.}
+
+\item{use_sub_fuser}{Logical; backward-compatible switch for enabling
+meta-fusion behavior in downstream fusion helpers.}
 
 \item{topK}{Integer, number of products to keep for fusion (default: 3).}
 
@@ -121,6 +133,13 @@ processing and failures (default: \code{TRUE}).}
 
 \item{allow_par}{Logical. If \code{TRUE}, allow parallel execution during
 hyperparameter tuning of the meta-learner.}
+
+\item{verbose_tune}{Logical; forwarded to \code{wass2s_tune_pred_stat()} to
+control tuning verbosity.}
+
+\item{selection_metric}{Character; forwarded to \code{wass2s_tune_pred_stat()}.
+The default \code{"kge"} keeps the historical statistical-model selection
+behavior.}
 
 \item{seed}{Integer; random seed for reproducibility.}
 

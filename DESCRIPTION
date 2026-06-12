@@ -69,6 +69,8 @@ Suggests:
 	earth,
 	Cubist,
 	nnet
+VignetteBuilder: knitr
 Config/testthat/edition: 3
-URL: https://github.com/kiema97/WASS2SHydroR
+URL: https://kiema97.github.io/WASS2SHydroR/, https://github.com/kiema97/WASS2SHydroR
 BugReports: https://github.com/kiema97/WASS2SHydroR/issues
+
