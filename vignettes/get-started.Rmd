@@ -101,23 +101,59 @@ the statistical, machine learning, and hydrological modelling approaches.
 
 ## Installation
 
-From the package root:
+For regular use, install WASS2SHydroR directly from the `staging` branch on
+GitHub:
+
+```r
+install.packages("remotes")
+
+remotes::install_github(
+  "kiema97/AGRHYMET-WASS2SHydroR",
+  ref = "staging",
+  build_vignettes = FALSE,
+  upgrade = "never",
+  dependencies = c("Depends", "Imports", "LinkingTo")
+)
+```
+
+This recommended installation keeps the setup lightweight and reproducible:
+`build_vignettes = FALSE` avoids rebuilding local vignettes during installation,
+`upgrade = "never"` avoids changing packages that are already installed, and
+`dependencies = c("Depends", "Imports", "LinkingTo")` installs only the core
+runtime dependencies.
+
+For a fuller installation including optional packages used by CDS access,
+NetCDF processing, mapping, parallel execution, and additional ML engines, use:
+
+```r
+remotes::install_github(
+  "kiema97/AGRHYMET-WASS2SHydroR",
+  ref = "staging",
+  build_vignettes = FALSE,
+  upgrade = "never",
+  dependencies = TRUE
+)
+```
+
+Then load the package:
+
+```r
+library(WASS2SHydroR)
+```
+
+For local development from a cloned repository, restore the project environment
+from the package root:
 
 ```r
 renv::restore()
 ```
 
-During development:
+During development, load the package without reinstalling it:
 
 ```r
 pkgload::load_all(".")
 ```
 
-After installation:
-
-```r
-library(WASS2SHydroR)
-```
 
 Optional features require optional packages:
 
