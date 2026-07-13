@@ -37,7 +37,7 @@
 #'   \code{{modelsys}}, \code{{model}}, \code{{system}}, \code{{var}},
 #'   \code{{init}}, \code{{period}}, \code{{lead}}, \code{{dataset}},
 #'   \code{{year}}, \code{{year_start}}, \code{{year_end}}, \code{{chunk}}.
-#' @param tries Integer. Retry attempts per request in sequential mode.
+#' @param tries Integer. Retry attempts per request in sequential mode, and per batch group for missing files in batch mode.
 #' @param sleep_sec Numeric. Seconds between retry attempts in sequential mode.
 #' @param timeout_sec Numeric. Timeout per request in seconds.
 #' @param force_download Logical. If \code{FALSE}, existing chunk files are skipped.
@@ -333,34 +333,61 @@ wass2s_download_cds <- function(
       request_list <- lapply(group_jobs, `[[`, "req")
       target_list <- vapply(group_jobs, `[[`, "", "target")
       err <- NULL
-      ok_batch <- tryCatch({
-        ecmwfr::wf_request_batch(
-          request_list = request_list,
-          workers = workers,
-          user = user,
-          path = out_dir,
-          time_out = timeout_sec,
-          retry = 30,
-          total_timeout = length(request_list) * timeout_sec / max(1, workers)
-        )
-        TRUE
-      }, error = function(e) {
-        err <<- e$message
-        FALSE
-      })
+      remaining_jobs <- group_jobs
+      remaining_targets <- target_list
+      batch_tries <- max(1L, as.integer(tries))
+      attempt <- 1L
+      while (length(remaining_jobs) > 0L && attempt <= batch_tries) {
+        if (verbose && batch_tries > 1L) {
+          message("Batch group ", g, " attempt ", attempt, "/", batch_tries,
+                  " for ", length(remaining_jobs), " pending request(s)...")
+        }
+        ok_batch <- tryCatch({
+          ecmwfr::wf_request_batch(
+            request_list = lapply(remaining_jobs, `[[`, "req"),
+            workers = workers,
+            user = user,
+            path = out_dir,
+            time_out = timeout_sec,
+            retry = 30,
+            total_timeout = length(remaining_jobs) * timeout_sec / max(1, workers)
+          )
+          TRUE
+        }, error = function(e) {
+          err <<- e$message
+          FALSE
+        })
 
-      if (!ok_batch && isTRUE(stop_on_error)) {
-        stop("CDS batch group failed: ", err %||% "unknown error", call. = FALSE)
+        missing <- !file.exists(remaining_targets)
+        if (!any(missing)) break
+
+        if (!ok_batch && attempt >= batch_tries && isTRUE(stop_on_error)) {
+          stop("CDS batch group failed after ", batch_tries, " attempt(s): ",
+               err %||% "unknown error", call. = FALSE)
+        }
+        if (ok_batch && attempt >= batch_tries && isTRUE(stop_on_error)) {
+          stop("CDS batch group finished but some files are missing after ",
+               batch_tries, " attempt(s).", call. = FALSE)
+        }
+        if (attempt < batch_tries) {
+          if (verbose) message("Batch group ", g, " has ", sum(missing),
+                               " missing file(s); retrying after ", sleep_sec, " second(s)...")
+          Sys.sleep(sleep_sec)
+          remaining_jobs <- remaining_jobs[missing]
+          remaining_targets <- remaining_targets[missing]
+        }
+        attempt <- attempt + 1L
       }
 
+      group_out <- vector("list", length(group_jobs))
       for (i in seq_along(group_jobs)) {
         ok_file <- file.exists(target_list[i])
-        status <- if (ok_batch && ok_file) "ok" else "fail"
+        status <- if (ok_file) "ok" else "fail"
         error <- if (status == "ok") NA_character_ else (err %||% "File missing after batch")
-        out[[length(out) + 1L]] <- wass2s__job_row(group_jobs[[i]], status, error)
+        group_out[[i]] <- wass2s__job_row(group_jobs[[i]], status, error)
+        out[[length(out) + 1L]] <- group_out[[i]]
       }
-      wass2s__append_job_log(do.call(rbind, out), job_log, stage = paste0("batch_", g))
-
+      wass2s__append_job_log(do.call(rbind, group_out), job_log, stage = paste0("batch_", g))
       if (g < length(groups) && cooldown_sec > 0) {
         if (verbose) message("Cooling down for ", cooldown_sec, " second(s) before next batch group...")
         Sys.sleep(cooldown_sec)
@@ -522,13 +549,20 @@ wass2s__jobs_to_df <- function(jobs, status = "planned") {
 
 wass2s__append_job_log <- function(df, job_log, stage) {
   if (is.null(job_log) || !length(job_log) || !nzchar(job_log)) return(invisible(FALSE))
+  log_cols <- c(
+    "logged_at", "stage", "status", "file", "error", "model", "system",
+    "variable", "variable_api", "year", "year_start", "year_end", "chunk",
+    "combined_file", "combine_status", "combine_error"
+  )
   log_df <- df
   log_df$stage <- stage
   log_df$logged_at <- format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z")
-  log_df <- log_df[, intersect(c("logged_at", "stage", "status", "file", "error", "model", "system", "variable", "variable_api", "year", "year_start", "year_end", "chunk", "combined_file", "combine_status", "combine_error"), names(log_df)), drop = FALSE]
+  missing_cols <- setdiff(log_cols, names(log_df))
+  for (nm in missing_cols) log_df[[nm]] <- NA_character_
+  log_df <- log_df[, log_cols, drop = FALSE]
   dir.create(dirname(job_log), recursive = TRUE, showWarnings = FALSE)
   utils::write.table(log_df, file = job_log, sep = ",", row.names = FALSE,
-              col.names = !file.exists(job_log), append = file.exists(job_log), qmethod = "double")
+                     col.names = !file.exists(job_log), append = file.exists(job_log), qmethod = "double")
   invisible(TRUE)
 }
 

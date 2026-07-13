@@ -77,7 +77,7 @@ Only one variable per entry is supported.}
 \code{{init}}, \code{{period}}, \code{{lead}}, \code{{dataset}},
 \code{{year}}, \code{{year_start}}, \code{{year_end}}, \code{{chunk}}.}
 
-\item{tries}{Integer. Retry attempts per request in sequential mode.}
+\item{tries}{Integer. Retry attempts per request in sequential mode, and per batch group for missing files in batch mode.}
 
 \item{sleep_sec}{Numeric. Seconds between retry attempts in sequential mode.}
 

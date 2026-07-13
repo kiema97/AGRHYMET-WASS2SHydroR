@@ -249,6 +249,62 @@ test_that("NetCDF combine handles NCEP-like files with scalar number variable", 
   expect_equal(dim(ncdf4::ncvar_get(nc, "tp", collapse_degen = FALSE)), c(2L, 2L, 2L, 4L))
 })
 
+
+test_that("wass2s_download_cds retries missing files after a batch failure", {
+  skip_if_not_installed("ecmwfr")
+
+  out_dir <- withr::local_tempdir()
+  job_log <- file.path(out_dir, "jobs.csv")
+  calls <- new.env(parent = emptyenv())
+  calls$n <- 0L
+  calls$sizes <- integer()
+
+  testthat::local_mocked_bindings(
+    wf_get_key = function(user = "ecmwfr", service = "cds") "dummy-key",
+    wf_request_batch = function(request_list, workers = 1, user = "ecmwfr", path = tempdir(),
+                                time_out = 3600, retry = 30, total_timeout = 3600) {
+      calls$n <- calls$n + 1L
+      calls$sizes <- c(calls$sizes, length(request_list))
+      if (calls$n == 1L) {
+        file.create(file.path(path, request_list[[1]]$target))
+        stop("simulated partial transfer")
+      }
+      for (req in request_list) file.create(file.path(path, req$target))
+      invisible(TRUE)
+    },
+    .package = "ecmwfr"
+  )
+
+  res <- wass2s_download_cds(
+    dataset_short_name = "seasonal-original-single-levels",
+    base_query = list(data_format = "netcdf"),
+    center_variables = "ecmwf_51.T2M",
+    years = 2020:2021,
+    months = 1,
+    days = "01",
+    times = "00:00",
+    leadtime_hour = 24,
+    area = c(15, -2, 14, -1),
+    out_dir = out_dir,
+    user = "ecmwfr",
+    parallel = TRUE,
+    workers = 2,
+    max_requests_per_batch = 2,
+    tries = 2,
+    sleep_sec = 0,
+    job_log = job_log,
+    verbose = FALSE
+  )
+
+  expect_equal(calls$n, 2L)
+  expect_equal(calls$sizes, c(2L, 1L))
+  expect_equal(res$status, c("ok", "ok"))
+
+  logged <- utils::read.csv(job_log)
+  batch_rows <- logged[logged$stage == "batch_1", ]
+  expect_equal(nrow(batch_rows), 2L)
+  expect_equal(batch_rows$status, c("ok", "ok"))
+})
 test_that("wass2s_download_cds continues after a sequential request failure", {
   skip_if_not_installed("ecmwfr")
 
