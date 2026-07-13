@@ -1,9 +1,9 @@
-# Robust Parallel Downloader for CDS/ECMWF (via ecmwfr) with Year Chunking
+# Robust Downloader for CDS/ECMWF Data with Chunking and Optional NetCDF Merge
 
 Downloads climate/meteorological data from CDS/ADS/CEMS using ecmwfr,
-with support for multiple variables and models, robust retries, optional
-batch-parallel submission, resume-on-existing files, and clear status
-reporting.
+with support for multiple variables and models, year chunking, optional
+batch-parallel submission, request pacing, resume-on-existing files,
+dry-run inspection, status logging, and optional NetCDF consolidation.
 
 ## Usage
 
@@ -30,6 +30,19 @@ wass2s_download_cds(
   workers = 2,
   job_name = NULL,
   verbose = TRUE,
+  chunk_years = 1L,
+  max_requests_per_batch = NULL,
+  cooldown_sec = 0,
+  request_delay_sec = 0,
+  dry_run = FALSE,
+  stop_on_error = FALSE,
+  return_requests = FALSE,
+  job_log = file.path(out_dir, "_wass2s_cds_jobs.csv"),
+  combine = FALSE,
+  combine_dir = out_dir,
+  combine_filename_tpl = NULL,
+  combine_dim = "auto",
+  keep_chunks = TRUE,
   ...
 )
 ```
@@ -44,8 +57,8 @@ wass2s_download_cds(
 - base_query:
 
   Named list. Static part of the query (e.g., `product_type`,
-  `pressure_level`, `format`). Time-varying fields like `year`, `month`,
-  `day`, `leadtime_hour` are set by this function.
+  `pressure_level`, `data_format`). Time-varying fields like `year`,
+  `month`, `day`, `leadtime_hour` are set by this function.
 
 - center_variables:
 
@@ -55,24 +68,23 @@ wass2s_download_cds(
 
 - years:
 
-  Integer/character vector. \*\*Required.\*\* Years to request. When
-  multiple years are provided, requests are split one-per-year.
+  Integer/character vector. Years to request.
 
 - months:
 
-  Integer/character vector in `1..12`. \*\*Required.\*\*
+  Integer/character vector in `1..12`.
 
 - days:
 
-  Character/integer vector (e.g., `c("01","02")`). \*\*Required.\*\*
+  Character/integer vector (e.g., `c("01","02")`).
 
 - times:
 
-  Character vector (e.g., `c("00:00","12:00")`). \*\*Required.\*\*
+  Character vector (e.g., `c("00:00","12:00")`).
 
 - leadtime_hour:
 
-  Character/integer vector (e.g., `c("24","48",...)`). \*\*Required.\*\*
+  Character/integer vector (e.g., `c("24","48",...)`).
 
 - area:
 
@@ -89,94 +101,151 @@ wass2s_download_cds(
 
 - service:
 
-  One of `"cds"`, `"ads"`, `"cems"` (case-insensitive). Default `"cds"`.
+  One of `"cds"`, `"ads"`, `"cems"`. Default `"cds"`.
 
 - filename_tpl:
 
-  Glue-like template for filenames. Placeholders available:
-  `{modelsys}`, `{var}`, `{init}`, `{period}`, `{lead}`, `{dataset}`,
-  `{year}`. Default: `"{modelsys}_{var}_{init}_{period}_{lead}.nc"`.
+  Template for chunk filenames. Placeholders available: `{modelsys}`,
+  `{model}`, `{system}`, `{var}`, `{init}`, `{period}`, `{lead}`,
+  `{dataset}`, `{year}`, `{year_start}`, `{year_end}`, `{chunk}`.
 
 - tries:
 
-  Integer. Number of retry attempts per request (sequential mode).
-  Default `3`.
+  Integer. Retry attempts per request in sequential mode.
 
 - sleep_sec:
 
-  Numeric. Seconds between retries (sequential mode). Default `15`.
+  Numeric. Seconds between retry attempts in sequential mode.
 
 - timeout_sec:
 
-  Numeric. Timeout per request (seconds). Default `3600`. Passed to
-  `wf_request()` or `wf_request_batch()` as `time_out`.
+  Numeric. Timeout per request in seconds.
 
 - force_download:
 
-  Logical. If `FALSE` (default), existing files are skipped.
+  Logical. If `FALSE`, existing chunk files are skipped.
 
 - parallel:
 
-  Logical. If `TRUE`, use `wf_request_batch()` to submit requests in
-  parallel. Falls back to sequential mode if batch is unavailable.
+  Logical. If `TRUE`, use `wf_request_batch()` when available.
 
 - workers:
 
-  Integer. Number of parallel workers for batch submission. Default `2`.
+  Integer. Number of workers for `wf_request_batch()`.
 
 - job_name:
 
-  Optional string passed to `wf_request()` (sequential mode). Leave
-  `NULL` outside RStudio; non-NULL values trigger RStudio Jobs in
-  ecmwfr.
+  Optional string passed to `wf_request()` in sequential mode.
 
 - verbose:
 
-  Logical. Verbose logging. Default `TRUE`.
+  Logical. Verbose logging.
+
+- chunk_years:
+
+  Integer. Number of years per CDS request. Default `1`.
+
+- max_requests_per_batch:
+
+  Integer or `NULL`. Maximum number of requests submitted in one
+  `wf_request_batch()` call. `NULL` uses `workers`.
+
+- cooldown_sec:
+
+  Numeric. Seconds to wait between batch groups.
+
+- request_delay_sec:
+
+  Numeric. Seconds to wait between sequential requests.
+
+- dry_run:
+
+  Logical. If `TRUE`, build and return the request plan without
+  submitting anything to CDS.
+
+- stop_on_error:
+
+  Logical. If `FALSE` (default), failed downloads are recorded with
+  `status = "fail"` and the remaining requests continue. If `TRUE`, the
+  function stops at the first failed request or batch group.
+
+- return_requests:
+
+  Logical. If `TRUE`, include a list-column containing the generated CDS
+  requests in the returned data frame.
+
+- job_log:
+
+  Optional CSV path used to record planned/submitted/finished jobs. Set
+  to `NULL` to disable logging.
+
+- combine:
+
+  Logical. If `TRUE`, combine successful chunk NetCDF files into one
+  file per model/system/variable after download.
+
+- combine_dir:
+
+  Directory for combined files. Defaults to `out_dir`.
+
+- combine_filename_tpl:
+
+  Template for combined filenames. Defaults to
+  `"{modelsys}_{var}_{init}_{period}_{lead}.nc"`. Use
+  `"{modelsys}_{var}_{period}.nc"` for names like
+  `ecmwf_51_PRCP_1993_2026.nc`.
+
+- combine_dim:
+
+  Character. NetCDF dimension used for concatenation. Default `"auto"`,
+  which tries `forecast_reference_time`, `time`, `valid_time`, then the
+  unlimited dimension.
+
+- keep_chunks:
+
+  Logical. If `FALSE`, delete chunk files after a successful combine.
 
 - ...:
 
   Additional arguments forwarded to
-  [`ecmwfr::wf_request()`](https://rdrr.io/pkg/ecmwfr/man/wf_request.html).
+  [`ecmwfr::wf_request()`](https://rdrr.io/pkg/ecmwfr/man/wf_request.html)
+  in sequential mode.
 
 ## Value
 
-(Invisibly) a `data.frame` with columns:
-
-- `file` : full path to the output file
-
-- `status` : one of `"ok"`, `"skip"`, `"fail"`
-
-- `error` : last error message (if any)
-
-- `model`, `system`, `variable`, `year`
+Invisibly, a `data.frame` with one row per chunk request and columns
+describing the chunk file, status, metadata, and optional combined
+output.
 
 ## Details
 
-To comply with CDS request-size limits, when multiple years are provided
-the function automatically \*\*splits requests per year\*\* (internal
-year chunking). This yields one output file per year. If your
-`filename_tpl` does not contain `{year}`, a `_{year}` suffix is appended
-before the extension to avoid overwriting.
+CDS requests over long periods can be rejected or remain queued for a
+long time. By default, the function splits multi-year requests into
+one-year chunks. Increase `chunk_years` cautiously (for example 2 or 3)
+after testing the dataset, variables, area, and lead times.
 
 File naming follows by default:
 
-    ModelSystem_Variable_InitDate_Period_Leadtime.nc
+    model_system_VARIABLE_InitDate_Chunk_Leadtime.nc
 
-e.g., `meteo_france9_TMAX_Apr01_1993_2016_24-5160.nc` When year-chunking
-is active and `{year}` is not present in the template, files will be
-named like `..._1993.nc`, `..._1994.nc`, etc.
+for downloaded chunks. When `combine = TRUE`, successfully downloaded
+chunks are merged into one file per model/system/variable using
+`combine_filename_tpl`.
 
-## Notes
+## Operational notes
 
-- Unknown models (not listed in internal `VALID_MODELS`) trigger a
-  warning but do not stop execution.
+- Use small `chunk_years` values for large domains, many lead times, or
+  multi-variable downloads.
 
-- `retry` in `wf_request_batch()` is a polling interval (seconds), not a
-  count.
+- Use `max_requests_per_batch`, `cooldown_sec`, and `request_delay_sec`
+  to avoid submitting too many jobs to CDS at once.
 
-- Include `{year}` in `filename_tpl` if you prefer to control where the
-  year appears.
+- With `parallel = TRUE`, CDS can report that requests have been
+  submitted and are still being processed server-side. This is normal;
+  ecmwfr downloads each file once the corresponding job is ready.
+
+- `combine = TRUE` requires ncdf4 and currently combines along a single
+  detected NetCDF dimension, usually `forecast_reference_time`.
 
 ## See also
 
@@ -187,17 +256,22 @@ named like `..._1993.nc`, `..._1994.nc`, etc.
 
 ``` r
 if (FALSE) { # \dontrun{
-center_variables <- c("meteo_france_9.TMAX","ecmwf_51.TMAX")
+center_variables <- c("meteo_france_9.TMAX", "ecmwf_51.TMAX")
 res <- wass2s_download_cds(
   dataset_short_name = "seasonal-original-single-levels",
-  base_query = list(format = "netcdf"),
+  base_query = list(data_format = "netcdf"),
   center_variables = center_variables,
   years = 1993:1995,
   months = 4, days = "01",
   times = "00:00",
-  leadtime_hour = seq(24,240,24),
+  leadtime_hour = seq(24, 240, 24),
   out_dir = "out",
+  chunk_years = 1,
   parallel = TRUE, workers = 4,
+  max_requests_per_batch = 4,
+  cooldown_sec = 30,
+  combine = TRUE,
+  combine_filename_tpl = "{modelsys}_{var}_{period}.nc",
   service = "cds", verbose = TRUE
 )
 } # }

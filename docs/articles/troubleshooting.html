@@ -96,7 +96,7 @@ RStudio but not in command-line R sessions.</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/wass2s_download_cds.html">wass2s_download_cds</a></span><span class="op">(</span></span>
 <span>  dataset_short_name <span class="op">=</span> <span class="st">"seasonal-original-single-levels"</span>,</span>
-<span>  base_query <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>format <span class="op">=</span> <span class="st">"netcdf"</span><span class="op">)</span>,</span>
+<span>  base_query <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>data_format <span class="op">=</span> <span class="st">"netcdf"</span><span class="op">)</span>,</span>
 <span>  center_variables <span class="op">=</span> <span class="st">"ecmwf_51.T2M"</span>,</span>
 <span>  years <span class="op">=</span> <span class="fl">2020</span>,</span>
 <span>  months <span class="op">=</span> <span class="fl">1</span>,</span>
@@ -107,10 +107,54 @@ RStudio but not in command-line R sessions.</p>
 <span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
-<h2 id="netcdf-dimensions-are-not-detected">NetCDF Dimensions Are Not Detected<a class="anchor" aria-label="anchor" href="#netcdf-dimensions-are-not-detected"></a>
+<h2 id="large-cds-downloads-and-server-side-queues">Large CDS Downloads and Server-Side Queues<a class="anchor" aria-label="anchor" href="#large-cds-downloads-and-server-side-queues"></a>
 </h2>
-<p>Provide dimension names explicitly:</p>
+<p>For long periods such as 1993–2026, avoid sending one very large
+request to CDS. Use year chunks and request pacing:</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">res_cds</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/wass2s_download_cds.html">wass2s_download_cds</a></span><span class="op">(</span></span>
+<span>  dataset_short_name <span class="op">=</span> <span class="st">"seasonal-original-single-levels"</span>,</span>
+<span>  base_query <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>data_format <span class="op">=</span> <span class="st">"netcdf"</span><span class="op">)</span>,</span>
+<span>  center_variables <span class="op">=</span> <span class="st">"ecmwf_51.PRCP"</span>,</span>
+<span>  years <span class="op">=</span> <span class="fl">1993</span><span class="op">:</span><span class="fl">2026</span>,</span>
+<span>  months <span class="op">=</span> <span class="fl">5</span>,</span>
+<span>  days <span class="op">=</span> <span class="st">"01"</span>,</span>
+<span>  times <span class="op">=</span> <span class="st">"00:00"</span>,</span>
+<span>  leadtime_hour <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="fl">24</span>, <span class="fl">4416</span>, <span class="fl">24</span><span class="op">)</span>,</span>
+<span>  out_dir <span class="op">=</span> <span class="st">"data/cds"</span>,</span>
+<span>  chunk_years <span class="op">=</span> <span class="fl">1</span>,</span>
+<span>  parallel <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  workers <span class="op">=</span> <span class="fl">4</span>,</span>
+<span>  max_requests_per_batch <span class="op">=</span> <span class="fl">4</span>,</span>
+<span>  cooldown_sec <span class="op">=</span> <span class="fl">30</span>,</span>
+<span>  job_log <span class="op">=</span> <span class="st">"data/cds/_wass2s_cds_jobs.csv"</span>,</span>
+<span>  combine <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  combine_filename_tpl <span class="op">=</span> <span class="st">"{modelsys}_{var}_{period}.nc"</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<p>Useful safeguards:</p>
+<ul>
+<li>run first with <code>dry_run = TRUE</code> and
+<code>return_requests = TRUE</code>;</li>
+<li>keep <code>chunk_years = 1</code> for very large domains or long
+lead-time vectors;</li>
+<li>use <code>max_requests_per_batch</code> and
+<code>cooldown_sec</code> to avoid submitting too many jobs in a short
+time window;</li>
+<li>keep <code>job_log</code> enabled to retain a local audit
+trail;</li>
+<li>keep the default <code>stop_on_error = FALSE</code> so one failed
+CDS request is recorded as <code>status = "fail"</code> without stopping
+the remaining downloads;</li>
+<li>keep <code>keep_chunks = TRUE</code> until the combined NetCDF file
+has been validated.</li>
+</ul>
+<p>Messages saying that a CDS request has been submitted and is still
+being processed are normal. Leave the R session open when possible;
+otherwise use the <code>wf_transfer()</code> command printed by
+<code>ecmwfr</code> to retrieve completed jobs later. ## NetCDF
+Dimensions Are Not Detected</p>
+<p>Provide dimension names explicitly:</p>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/wass2s_prepare_data.html">wass2s_prepare_data</a></span><span class="op">(</span></span>
 <span>  x <span class="op">=</span> <span class="st">"file.nc"</span>,</span>
 <span>  dim_lon <span class="op">=</span> <span class="st">"longitude"</span>,</span>
@@ -123,10 +167,10 @@ RStudio but not in command-line R sessions.</p>
 <h2 id="no-predictors-are-selected">No Predictors Are Selected<a class="anchor" aria-label="anchor" href="#no-predictors-are-selected"></a>
 </h2>
 <p>Check the predictor names:</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/grep.html" class="external-link">grep</a></span><span class="op">(</span><span class="st">"^pt_"</span>, <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">data_by_product</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span><span class="op">)</span>, value <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
 <p>Then provide the appropriate regular expression:</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">pred_pattern_by_product</span> <span class="op">=</span> <span class="st">"^precip_|^temp_"</span></span></code></pre></div>
 </div>
 <div class="section level2">
@@ -141,7 +185,7 @@ RStudio but not in command-line R sessions.</p>
 <li>too many values are missing.</li>
 </ul>
 <p>During debugging, use:</p>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">max_na_frac</span> <span class="op">=</span> <span class="fl">0.5</span></span>
 <span><span class="va">require_variance</span> <span class="op">=</span> <span class="cn">FALSE</span></span>
 <span><span class="va">quiet</span> <span class="op">=</span> <span class="cn">FALSE</span></span></code></pre></div>
@@ -159,7 +203,7 @@ on small samples or nearly constant series. For this reason:</p>
 the selected configuration.</li>
 </ul>
 <p>You can override the behavior with:</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">selection_metric</span> <span class="op">=</span> <span class="st">"kge"</span></span>
 <span><span class="va">selection_metric</span> <span class="op">=</span> <span class="st">"rmse"</span></span></code></pre></div>
 </div>

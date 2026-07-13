@@ -92,8 +92,8 @@ c("rf", "xgb", "glmnet", "kknn", "svmlinear", "mars", "cubist", "mlp")
 ## Data Acquisition and Preparation
 
 - [`wass2s_download_cds()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_download_cds.md)
-  : Robust Parallel Downloader for CDS/ECMWF (via ecmwfr) with Year
-  Chunking
+  : Robust Downloader for CDS/ECMWF Data with Chunking and Optional
+  NetCDF Merge
 - [`wass2s_prepare_data()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_prepare_data.md)
   : Prepare gridded hydro-climatic data from NetCDF or stars objects
 - [`make_toy_data_by_product()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/make_toy_data_by_product.md)
