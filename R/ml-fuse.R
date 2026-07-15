@@ -292,7 +292,7 @@ wass2s_cons_mods_ml <- function(
   # Keep old name "kge" expected elsewhere
   if (nrow(fusion$leaderboard_products) > 0 && "score" %in% names(fusion$leaderboard_products)) {
     fusion$leaderboard_products <- fusion$leaderboard_products |>
-      dplyr::rename(kge = .data$score)
+      dplyr::rename(kge = "score")
   }
 
   # Preserve original all_results semantics if you want:
@@ -564,7 +564,7 @@ wass2s_cons_mods_ml <- function(
 #     # Wide table: each product is a column (predictors for sub-fuser)
 #     lst_wide <- purrr::map(results_top, ~{
 #       dplyr::transmute(.x$preds, YYYY = .ensure_yyyymmdd(.data$YYYY), pred = .data$pred) %>%
-#         dplyr::rename(!!.x$product := .data$pred)
+#         dplyr::rename(!!.x$product := pred)
 #     })
 #     prods_wide <- Reduce(function(a, b) dplyr::full_join(a, b, by = "YYYY"), lst_wide)
 #

@@ -52,6 +52,10 @@
 #' @param request_delay_sec Numeric. Seconds to wait between sequential requests.
 #' @param dry_run Logical. If \code{TRUE}, build and return the request plan without
 #'   submitting anything to CDS.
+#' @param retry_failed_batches Logical. If \code{TRUE}, missing files after a
+#'   failed \code{wf_request_batch()} call are resubmitted up to \code{tries}
+#'   times. Default \code{FALSE} avoids creating duplicate CDS server jobs when
+#'   ecmwfr reports partial transfers or still-running requests.
 #' @param stop_on_error Logical. If \code{FALSE} (default), failed downloads are
 #'   recorded with \code{status = "fail"} and the remaining requests continue.
 #'   If \code{TRUE}, the function stops at the first failed request or batch group.
@@ -141,10 +145,11 @@ wass2s_download_cds <- function(
     cooldown_sec = 0,
     request_delay_sec = 0,
     dry_run = FALSE,
+    retry_failed_batches = FALSE,
     stop_on_error = FALSE,
     return_requests = FALSE,
     job_log = file.path(out_dir, "_wass2s_cds_jobs.csv"),
-    combine = FALSE,
+    combine = TRUE,
     combine_dir = out_dir,
     combine_filename_tpl = NULL,
     combine_dim = "auto",
@@ -303,6 +308,7 @@ wass2s_download_cds <- function(
   if (isTRUE(dry_run)) return(invisible(plan_df))
 
   out <- list()
+  retry_failed_batches <- isTRUE(retry_failed_batches)
   for (j in jobs) {
     if (isTRUE(j$skip)) {
       out[[length(out) + 1L]] <- wass2s__job_row(j, "skip", NA_character_)
@@ -335,7 +341,7 @@ wass2s_download_cds <- function(
       err <- NULL
       remaining_jobs <- group_jobs
       remaining_targets <- target_list
-      batch_tries <- max(1L, as.integer(tries))
+      batch_tries <- if (retry_failed_batches) max(1L, as.integer(tries)) else 1L
       attempt <- 1L
       while (length(remaining_jobs) > 0L && attempt <= batch_tries) {
         if (verbose && batch_tries > 1L) {

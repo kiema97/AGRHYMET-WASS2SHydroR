@@ -464,7 +464,7 @@ wass2s_cons_mods_stat <- function(
   # If your package expects "kge" column name, map it back:
   if (nrow(fusion$leaderboard_products) > 0 && "score" %in% names(fusion$leaderboard_products)) {
     fusion$leaderboard_products <- fusion$leaderboard_products |>
-      dplyr::rename(kge = .data$score)
+      dplyr::rename(kge = "score")
   }
 
   fusion$all_results <- results_std
@@ -787,7 +787,7 @@ wass2s_cons_mods_stat <- function(
 #           YYYY = .ensure_yyyymmdd(.data$YYYY),
 #           pred = .data$pred
 #         ) %>%
-#           dplyr::rename(!!.x$product := .data$pred)
+#           dplyr::rename(!!.x$product := pred)
 #       })
 #
 #       prods_wide <- Reduce(function(a, b) dplyr::full_join(a, b, by = "YYYY"), lst_wide)

@@ -335,7 +335,7 @@ fuse_products_predictions <- function(
       # Wide matrix of retained product predictions
       lst_wide <- purrr::map(results_top, ~ {
         dplyr::transmute(.x$preds, YYYY = .ensure_yyyymmdd(.data$YYYY), pred = .data$pred) |>
-          dplyr::rename(!!.x$product := .data$pred)
+          dplyr::rename(!!.x$product := pred)
       })
 
       prods_wide <- Reduce(function(a, b) dplyr::full_join(a, b, by = "YYYY"), lst_wide)
@@ -572,7 +572,7 @@ fuse_products_predictions_ <- function(
       # wide matrix of product preds
       lst_wide <- purrr::map(results_top, ~{
         dplyr::transmute(.x$preds, YYYY = .ensure_yyyymmdd(.data$YYYY), pred = .data$pred) |>
-          dplyr::rename(!!.x$product := .data$pred)
+          dplyr::rename(!!.x$product := pred)
       })
       prods_wide <- Reduce(function(a, b) dplyr::full_join(a, b, by = "YYYY"), lst_wide)
 
@@ -710,7 +710,7 @@ safe_full_join_preds <- function(lst) {
       dplyr::mutate(YYYY = .ensure_yyyymmdd(.data$YYYY)) |>
       dplyr::group_by(.data$YYYY) |>
       dplyr::summarise(pred = mean(.data$pred, na.rm = TRUE), .groups = "drop") |>
-      dplyr::rename(!!.nm := .data$pred)
+      dplyr::rename(!!.nm := pred)
   })
 
   Reduce(function(a, b) dplyr::full_join(a, b, by = "YYYY"), lst2)

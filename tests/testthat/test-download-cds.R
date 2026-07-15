@@ -213,6 +213,65 @@ test_that("wass2s_download_cds limits batch submission size", {
   expect_true(all(res$status == "ok"))
 })
 
+
+test_that("wass2s_download_cds combines each product before moving to the next one", {
+  skip_if_not_installed("ecmwfr")
+  skip_if_not_installed("ncdf4")
+
+  out_dir <- withr::local_tempdir()
+  calls <- new.env(parent = emptyenv())
+  calls$n <- 0L
+
+  make_nc <- function(path, tref, value) {
+    lon <- ncdf4::ncdim_def("longitude", "degrees_east", vals = c(0, 1))
+    lat <- ncdf4::ncdim_def("latitude", "degrees_north", vals = c(10, 11))
+    frt <- ncdf4::ncdim_def("forecast_reference_time", "days since 1900-01-01", vals = tref, unlim = TRUE)
+    var <- ncdf4::ncvar_def("tp", "m", list(lon, lat, frt), missval = -9999, prec = "float")
+    nc <- ncdf4::nc_create(path, var)
+    on.exit(ncdf4::nc_close(nc), add = TRUE)
+    ncdf4::ncvar_put(nc, "tp", array(value, dim = c(2, 2, 1)))
+  }
+
+  testthat::local_mocked_bindings(
+    wf_get_key = function(user = "ecmwfr", service = "cds") "dummy-key",
+    wf_request_batch = function(request_list, workers = 1, user = "ecmwfr", path = tempdir(),
+                                time_out = 3600, retry = 30, total_timeout = 3600) {
+      calls$n <- calls$n + 1L
+      for (req in request_list) {
+        yy <- as.integer(req$year[1])
+        make_nc(file.path(path, req$target), 40000 + yy, yy)
+      }
+      invisible(TRUE)
+    },
+    .package = "ecmwfr"
+  )
+
+  res <- wass2s_download_cds(
+    dataset_short_name = "seasonal-original-single-levels",
+    base_query = list(data_format = "netcdf"),
+    center_variables = c("ecmwf_51.PRCP", "dwd_22.PRCP"),
+    years = 2020:2021,
+    months = 1,
+    days = "01",
+    times = "00:00",
+    leadtime_hour = 24,
+    area = c(15, -2, 14, -1),
+    out_dir = out_dir,
+    user = "ecmwfr",
+    parallel = TRUE,
+    workers = 2,
+    max_requests_per_batch = 2,
+    combine = TRUE,
+    combine_filename_tpl = "{modelsys}_{var}_{period}.nc",
+    job_log = file.path(out_dir, "jobs.csv"),
+    verbose = FALSE
+  )
+
+  expect_equal(calls$n, 2L)
+  expect_true(all(res$combine_status == "ok"))
+  expect_true(file.exists(file.path(out_dir, "ecmwf_51_PRCP_2020_2021.nc")))
+  expect_true(file.exists(file.path(out_dir, "dwd_22_PRCP_2020_2021.nc")))
+})
 test_that("NetCDF combine handles NCEP-like files with scalar number variable", {
   skip_if_not_installed("ncdf4")
 
@@ -250,6 +309,48 @@ test_that("NetCDF combine handles NCEP-like files with scalar number variable", 
 })
 
 
+
+test_that("wass2s_download_cds does not resubmit failed batch jobs by default", {
+  skip_if_not_installed("ecmwfr")
+
+  out_dir <- withr::local_tempdir()
+  calls <- new.env(parent = emptyenv())
+  calls$n <- 0L
+
+  testthat::local_mocked_bindings(
+    wf_get_key = function(user = "ecmwfr", service = "cds") "dummy-key",
+    wf_request_batch = function(request_list, workers = 1, user = "ecmwfr", path = tempdir(),
+                                time_out = 3600, retry = 30, total_timeout = 3600) {
+      calls$n <- calls$n + 1L
+      stop("simulated still-running CDS transfer")
+    },
+    .package = "ecmwfr"
+  )
+
+  res <- wass2s_download_cds(
+    dataset_short_name = "seasonal-original-single-levels",
+    base_query = list(data_format = "netcdf"),
+    center_variables = "ecmwf_51.T2M",
+    years = 2020:2021,
+    months = 1,
+    days = "01",
+    times = "00:00",
+    leadtime_hour = 24,
+    area = c(15, -2, 14, -1),
+    out_dir = out_dir,
+    user = "ecmwfr",
+    parallel = TRUE,
+    workers = 2,
+    max_requests_per_batch = 2,
+    tries = 3,
+    job_log = NULL,
+    verbose = FALSE
+  )
+
+  expect_equal(calls$n, 1L)
+  expect_true(all(res$status == "fail"))
+  expect_match(res$error[1], "simulated still-running CDS transfer")
+})
 test_that("wass2s_download_cds retries missing files after a batch failure", {
   skip_if_not_installed("ecmwfr")
 
@@ -291,6 +392,7 @@ test_that("wass2s_download_cds retries missing files after a batch failure", {
     workers = 2,
     max_requests_per_batch = 2,
     tries = 2,
+    retry_failed_batches = TRUE,
     sleep_sec = 0,
     job_log = job_log,
     verbose = FALSE

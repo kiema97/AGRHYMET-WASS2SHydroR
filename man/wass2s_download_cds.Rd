@@ -31,10 +31,11 @@ wass2s_download_cds(
   cooldown_sec = 0,
   request_delay_sec = 0,
   dry_run = FALSE,
+  retry_failed_batches = FALSE,
   stop_on_error = FALSE,
   return_requests = FALSE,
   job_log = file.path(out_dir, "_wass2s_cds_jobs.csv"),
-  combine = FALSE,
+  combine = TRUE,
   combine_dir = out_dir,
   combine_filename_tpl = NULL,
   combine_dim = "auto",
@@ -104,6 +105,11 @@ submitted in one \code{wf_request_batch()} call. \code{NULL} uses \code{workers}
 
 \item{dry_run}{Logical. If \code{TRUE}, build and return the request plan without
 submitting anything to CDS.}
+
+\item{retry_failed_batches}{Logical. If \code{TRUE}, missing files after a
+failed \code{wf_request_batch()} call are resubmitted up to \code{tries}
+times. Default \code{FALSE} avoids creating duplicate CDS server jobs when
+ecmwfr reports partial transfers or still-running requests.}
 
 \item{stop_on_error}{Logical. If \code{FALSE} (default), failed downloads are
 recorded with \code{status = "fail"} and the remaining requests continue.
