@@ -625,6 +625,24 @@ wass2s__combine_downloads_if_needed <- function(res, jobs, combine, combine_dir,
   res
 }
 
+
+wass2s__combined_dim_vals <- function(ncs, dim_name, concat_dim) {
+  dims <- lapply(ncs, function(nc) nc$dim[[dim_name]])
+  vals_list <- lapply(dims, function(d) d$vals)
+  lens <- vapply(dims, function(d) d$len, integer(1))
+  if (identical(dim_name, concat_dim)) {
+    vals <- unlist(vals_list, use.names = FALSE)
+    if (is.null(vals) || !length(vals)) vals <- seq_len(sum(lens))
+    return(vals)
+  }
+  non_empty <- vals_list[vapply(vals_list, function(x) !is.null(x) && length(x) > 0L, logical(1))]
+  if (length(non_empty)) {
+    vals <- unlist(non_empty, use.names = FALSE)
+    vals <- if (is.numeric(vals)) sort(unique(vals)) else unique(vals)
+    if (length(vals) >= max(lens)) return(vals)
+  }
+  seq_len(max(lens))
+}
 wass2s__combine_netcdf <- function(files, output_file, concat_dim = "auto", overwrite = TRUE) {
   if (!requireNamespace("ncdf4", quietly = TRUE)) stop("Package 'ncdf4' is required.", call. = FALSE)
   files <- normalizePath(files, winslash = "/", mustWork = TRUE)
@@ -644,10 +662,14 @@ wass2s__combine_netcdf <- function(files, output_file, concat_dim = "auto", over
   names(dim_defs) <- dim_names
   for (dn in dim_names) {
     d0 <- first$dim[[dn]]
-    vals <- d0$vals
-    if (dn == cd) vals <- unlist(lapply(ncs, function(nc) nc$dim[[dn]]$vals), use.names = FALSE)
-    if (is.null(vals) || !length(vals)) vals <- seq_len(if (dn == cd) sum(vapply(ncs, function(nc) nc$dim[[dn]]$len, integer(1))) else d0$len)
-    dim_defs[[dn]] <- ncdf4::ncdim_def(name = dn, units = d0$units %||% "", vals = vals, unlim = isTRUE(d0$unlim), create_dimvar = TRUE)
+    vals <- wass2s__combined_dim_vals(ncs, dn, cd)
+    dim_defs[[dn]] <- ncdf4::ncdim_def(
+      name = dn,
+      units = d0$units %||% "",
+      vals = vals,
+      unlim = isTRUE(d0$unlim),
+      create_dimvar = TRUE
+    )
   }
 
   var_defs <- list()
@@ -682,15 +704,16 @@ wass2s__combine_netcdf <- function(files, output_file, concat_dim = "auto", over
     nc <- ncs[[fi]]
     clen <- nc$dim[[cd]]$len
     for (vn in names(first$var)) {
-      v0 <- first$var[[vn]]
+      if (!vn %in% names(nc$var)) next
+      v0 <- nc$var[[vn]]
       vdn <- vapply(v0$dim, `[[`, "", "name")
       vals <- ncdf4::ncvar_get(nc, vn, collapse_degen = FALSE)
+      vals <- wass2s__as_ncvar_array(vals, v0)
       if (cd %in% vdn) {
         dim_index <- match(cd, vdn)
         start <- rep(1L, length(vdn))
         start[dim_index] <- concat_pos
-        count <- dim(vals)
-        if (is.null(count)) count <- length(vals)
+        count <- vapply(v0$dim, `[[`, integer(1), "len")
         ncdf4::ncvar_put(out_nc, vn, vals, start = start, count = count)
       } else if (fi == 1L) {
         ncdf4::ncvar_put(out_nc, vn, vals)
@@ -702,6 +725,19 @@ wass2s__combine_netcdf <- function(files, output_file, concat_dim = "auto", over
   invisible(output_file)
 }
 
+
+wass2s__as_ncvar_array <- function(vals, var_def) {
+  target_dim <- vapply(var_def$dim, `[[`, integer(1), "len")
+  if (!length(target_dim)) return(vals)
+  if (is.null(dim(vals))) {
+    if (length(vals) == prod(target_dim)) return(array(vals, dim = target_dim))
+    return(vals)
+  }
+  current_dim <- dim(vals)
+  if (identical(as.integer(current_dim), as.integer(target_dim))) return(vals)
+  if (length(vals) == prod(target_dim)) return(array(vals, dim = target_dim))
+  vals
+}
 wass2s__detect_concat_dim <- function(ncs, concat_dim = "auto") {
   first <- ncs[[1]]
   if (!identical(concat_dim, "auto")) {
