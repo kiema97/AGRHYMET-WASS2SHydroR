@@ -1159,7 +1159,8 @@ get_any_Q <- function(data_by_product, basin_id, basin_col = "HYBAS_ID") {
     allow_par = TRUE,
     target_positive = FALSE,
     meta_guard = TRUE,
-    meta_min_improvement = 0.02
+    meta_min_improvement = 0.02,
+    meta_min_kge_delta = 0
 ) {
   pred_cols <- setdiff(names(df_tr), c(target, date_col))
   if (length(pred_cols) < 1L) {
@@ -1218,6 +1219,7 @@ get_any_Q <- function(data_by_product, basin_id, basin_col = "HYBAS_ID") {
   fit_fin <- NULL
   metrics_cv <- NULL
   baseline_cv <- NULL
+  meta_cv <- NULL
 
   if (!is.null(rset)) {
     baseline_cv <- .wass2s_cv_baseline_fusion(
@@ -1250,6 +1252,16 @@ get_any_Q <- function(data_by_product, basin_id, basin_col = "HYBAS_ID") {
   has_valid_metrics <- FALSE
   if (!is.null(rs)) {
     metrics_cv <- tryCatch(tune::collect_metrics(rs), error = function(e) NULL)
+    meta_cv <- tryCatch(compute_leaderboard_cv(rs, truth_col = target), error = function(e) NULL)
+    if (is.null(meta_cv)) {
+      meta_cv <- tibble::tibble(
+        .config = character(),
+        kge_mean = numeric(),
+        rmse_mean = numeric(),
+        mae_mean = numeric(),
+        n_splits = integer()
+      )
+    }
     has_valid_metrics <- !is.null(metrics_cv) && nrow(metrics_cv) > 0
   }
 
@@ -1259,15 +1271,20 @@ get_any_Q <- function(data_by_product, basin_id, basin_col = "HYBAS_ID") {
       fitted = NULL,
       pred_all = NULL,
       cv_rs = NULL,
+      cv_baselines = baseline_cv,
+      cv_meta = meta_cv,
       best_params = NULL
     ))
   }
 
-  meta_rmse <- metrics_cv |>
-    dplyr::filter(.data$.metric == "rmse", is.finite(.data$mean)) |>
-    dplyr::summarise(value = min(.data$mean), .groups = "drop") |>
-    dplyr::pull(.data$value)
+  meta_best_cv <- meta_cv |>
+    dplyr::filter(is.finite(.data$rmse_mean)) |>
+    dplyr::slice_min(.data$rmse_mean, n = 1, with_ties = FALSE)
+
+  meta_rmse <- meta_best_cv$rmse_mean
   if (length(meta_rmse) == 0L || !is.finite(meta_rmse)) meta_rmse <- Inf
+  meta_kge <- meta_best_cv$kge_mean
+  if (length(meta_kge) == 0L || !is.finite(meta_kge)) meta_kge <- NA_real_
 
   baseline_best <- baseline_cv |>
     dplyr::filter(is.finite(.data$mean_rmse)) |>
@@ -1275,13 +1292,20 @@ get_any_Q <- function(data_by_product, basin_id, basin_col = "HYBAS_ID") {
 
   if (isTRUE(meta_guard) && nrow(baseline_best) > 0L) {
     baseline_rmse <- baseline_best$mean_rmse[[1]]
+    baseline_kge <- baseline_best$mean_kge[[1]]
     required_rmse <- baseline_rmse * (1 - meta_min_improvement)
-    if (!is.finite(meta_rmse) || meta_rmse > required_rmse) {
+    rmse_guard_failed <- !is.finite(meta_rmse) || meta_rmse > required_rmse
+    kge_guard_failed <- is.finite(baseline_kge) &&
+      (!is.finite(meta_kge) || meta_kge < baseline_kge + meta_min_kge_delta)
+
+    if (rmse_guard_failed || kge_guard_failed) {
       if (!quiet) {
         message(
           "Meta-fusion guard: fallback to ", baseline_best$method[[1]],
           " (meta CV RMSE = ", signif(meta_rmse, 5),
-          ", baseline CV RMSE = ", signif(baseline_rmse, 5), ")."
+          ", baseline CV RMSE = ", signif(baseline_rmse, 5),
+          ", meta CV KGE = ", signif(meta_kge, 5),
+          ", baseline CV KGE = ", signif(baseline_kge, 5), ")."
         )
       }
       return(list(
@@ -1291,6 +1315,7 @@ get_any_Q <- function(data_by_product, basin_id, basin_col = "HYBAS_ID") {
         pred_all = NULL,
         cv_rs = metrics_cv,
         cv_baselines = baseline_cv,
+        cv_meta = meta_cv,
         best_params = NULL
       ))
     }
@@ -1313,6 +1338,7 @@ get_any_Q <- function(data_by_product, basin_id, basin_col = "HYBAS_ID") {
       pred_all = NULL,
       cv_rs = metrics_cv,
       cv_baselines = baseline_cv,
+      cv_meta = meta_cv,
       best_params = best
     ))
   }
@@ -1328,6 +1354,7 @@ get_any_Q <- function(data_by_product, basin_id, basin_col = "HYBAS_ID") {
     pred_all = pred_all,
     cv_rs = metrics_cv,
     cv_baselines = baseline_cv,
+    cv_meta = meta_cv,
     best_params = best
   )
 }
@@ -1350,7 +1377,8 @@ get_any_Q <- function(data_by_product, basin_id, basin_col = "HYBAS_ID") {
     allow_par = TRUE,
     target_positive = FALSE,
     meta_guard = TRUE,
-    meta_min_improvement = 0.02
+    meta_min_improvement = 0.02,
+    meta_min_kge_delta = 0
 ) {
   fusion_method <- match.arg(fusion_method)
 
@@ -1412,6 +1440,8 @@ get_any_Q <- function(data_by_product, basin_id, basin_col = "HYBAS_ID") {
 
   weights <- NULL
   cv_rs <- NULL
+  cv_baselines <- NULL
+  cv_meta <- NULL
   best_meta_params <- NULL
 
   if (fusion_method == "mean") {
@@ -1435,8 +1465,12 @@ get_any_Q <- function(data_by_product, basin_id, basin_col = "HYBAS_ID") {
       allow_par = allow_par,
       target_positive = target_positive,
       meta_guard = meta_guard,
-      meta_min_improvement = meta_min_improvement
+      meta_min_improvement = meta_min_improvement,
+      meta_min_kge_delta = meta_min_kge_delta
     )
+
+    cv_baselines <- meta_res$cv_baselines
+    cv_meta <- meta_res$cv_meta
 
     if (!isTRUE(meta_res$success)) {
       if (!quiet) {
@@ -1486,7 +1520,10 @@ get_any_Q <- function(data_by_product, basin_id, basin_col = "HYBAS_ID") {
     scores = scores,
     fusion_method = fusion_method,
     fusion_weights = weights,
+    final_fuser = final_fuser,
     cv_rs = cv_rs,
+    cv_baselines = cv_baselines,
+    cv_meta = cv_meta,
     best_meta_params = best_meta_params
   )
 }
