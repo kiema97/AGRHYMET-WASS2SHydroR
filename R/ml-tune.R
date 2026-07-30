@@ -3,6 +3,43 @@ min_analysis_n <- function(rset) {
   min(vapply(rset$splits, function(s) nrow(rsample::analysis(s)), integer(1)))
 }
 
+#' Machine-learning fit versus cross-validation diagnostics
+#'
+#' @keywords internal
+.wass2s_ml_fit_cv_diagnostics <- function(truth,
+                                          estimate,
+                                          cv_kge,
+                                          cv_rmse,
+                                          max_fit_cv_kge_gap = 0.50,
+                                          max_cv_fit_rmse_ratio = 4,
+                                          min_cv_kge = -Inf) {
+  ok <- is.finite(truth) & is.finite(estimate)
+  fit_kge <- if (sum(ok) >= 2L) wass2s_kge(truth[ok], estimate[ok]) else NA_real_
+  fit_rmse <- if (sum(ok) > 0L) wass2s_rmse(truth[ok], estimate[ok]) else NA_real_
+
+  kge_gap <- if (is.finite(fit_kge) && is.finite(cv_kge)) fit_kge - cv_kge else NA_real_
+  cv_fit_rmse_ratio <- if (is.finite(cv_rmse) && is.finite(fit_rmse) && fit_rmse > 0) {
+    cv_rmse / fit_rmse
+  } else {
+    NA_real_
+  }
+
+  overfit_flag <- FALSE
+  if (is.finite(kge_gap) && kge_gap > max_fit_cv_kge_gap) overfit_flag <- TRUE
+  if (is.finite(cv_fit_rmse_ratio) && cv_fit_rmse_ratio > max_cv_fit_rmse_ratio) overfit_flag <- TRUE
+  if (is.finite(min_cv_kge) && (!is.finite(cv_kge) || cv_kge < min_cv_kge)) overfit_flag <- TRUE
+
+  tibble::tibble(
+    fit_kge = fit_kge,
+    fit_rmse = fit_rmse,
+    cv_kge = cv_kge,
+    cv_rmse = cv_rmse,
+    fit_cv_kge_gap = kge_gap,
+    cv_fit_rmse_ratio = cv_fit_rmse_ratio,
+    overfit_flag = overfit_flag
+  )
+}
+
 #' Tune and predict for one product and one ML model
 #'
 #' This function performs cross-validation tuning for a single
@@ -106,6 +143,15 @@ min_analysis_n <- function(rset) {
 #' @param require_variance Logical; if \code{TRUE}, stop when a column has zero
 #'   standard deviation after imputation (default \code{TRUE}).
 #' @param min_data_required Minimum number of rows required to train.
+#' @param overfit_guard Logical. If \code{TRUE}, fitted ML models whose apparent
+#'   historical fit is much better than their cross-validated skill are flagged
+#'   and assigned a penalized selection score for downstream product fusion.
+#' @param max_fit_cv_kge_gap Maximum allowed difference between fitted-history
+#'   KGE and cross-validated KGE before flagging overfitting.
+#' @param max_cv_fit_rmse_ratio Maximum allowed ratio between cross-validated
+#'   RMSE and fitted-history RMSE before flagging overfitting.
+#' @param min_cv_kge Minimum acceptable cross-validated KGE when
+#'   \code{overfit_guard = TRUE}.
 #' @return A list with the following elements:
 #' \itemize{
 #'   \item \code{kge_cv_mean} Mean KGE of the best configuration across CV splits.
@@ -182,7 +228,11 @@ wass2s_tune_pred_ml <- function(
     max_na_frac = 0.3,
     impute = "median",
     require_variance = TRUE,
-    min_data_required = 10
+    min_data_required = 10,
+    overfit_guard = TRUE,
+    max_fit_cv_kge_gap = 0.50,
+    max_cv_fit_rmse_ratio = 4,
+    min_cv_kge = -Inf
 ){
   set.seed(seed)
 
@@ -394,7 +444,10 @@ wass2s_tune_pred_ml <- function(
       leaderboard_cfg = tibble::tibble(),
       param_grid      = tibble::tibble(),
       selected_config = NA_character_,
-      selection_metric = selection_metric
+      selection_metric = selection_metric,
+      kge_cv_raw = NA_real_,
+      fit_diagnostics = tibble::tibble(),
+      overfit_flag = isTRUE(overfit_guard)
     ))
   }
 
@@ -425,7 +478,10 @@ wass2s_tune_pred_ml <- function(
       preds = dplyr::select(preds, dplyr::all_of(keep_cols)),
       fit = fitted,
       selected_config = NA_character_,
-      selection_metric = selection_metric
+      selection_metric = selection_metric,
+      kge_cv_raw = NA_real_,
+      fit_diagnostics = tibble::tibble(),
+      overfit_flag = FALSE
     ))
   }
 
@@ -475,7 +531,10 @@ wass2s_tune_pred_ml <- function(
       leaderboard_cfg = tibble::tibble(),
       param_grid = grid,
       selected_config = NA_character_,
-      selection_metric = selection_metric
+      selection_metric = selection_metric,
+      kge_cv_raw = NA_real_,
+      fit_diagnostics = tibble::tibble(),
+      overfit_flag = isTRUE(overfit_guard)
     ))
   }
 
@@ -501,7 +560,10 @@ wass2s_tune_pred_ml <- function(
       leaderboard_cfg = pred_cv,
       param_grid = grid,
       selected_config = NA_character_,
-      selection_metric = selection_metric
+      selection_metric = selection_metric,
+      kge_cv_raw = NA_real_,
+      fit_diagnostics = tibble::tibble(),
+      overfit_flag = isTRUE(overfit_guard)
     ))
   }
 
@@ -527,9 +589,36 @@ wass2s_tune_pred_ml <- function(
   }
   keep_cols <- c(if (!is.null(id_col)) "ID", "YYYY","Q", "pred")
   selected_score <- selected$selected_score
+  train_pred <- preds |>
+    dplyr::filter(.data$YYYY %in% df_basin_product$YYYY)
+  fit_diagnostics <- .wass2s_ml_fit_cv_diagnostics(
+    truth = train_pred$Q,
+    estimate = train_pred$pred,
+    cv_kge = selected_score$kge_mean[[1]],
+    cv_rmse = selected_score$rmse_mean[[1]],
+    max_fit_cv_kge_gap = max_fit_cv_kge_gap,
+    max_cv_fit_rmse_ratio = max_cv_fit_rmse_ratio,
+    min_cv_kge = min_cv_kge
+  )
+  overfit_flag <- isTRUE(overfit_guard) && isTRUE(fit_diagnostics$overfit_flag[[1]])
+  kge_cv_raw <- selected_score$kge_mean[[1]]
+  overfit_penalty <- 0
+  if (overfit_flag) {
+    gap <- fit_diagnostics$fit_cv_kge_gap[[1]]
+    ratio <- fit_diagnostics$cv_fit_rmse_ratio[[1]]
+    overfit_penalty <- sum(
+      c(
+        if (is.finite(gap)) max(0, gap) else 0,
+        if (is.finite(ratio) && ratio > max_cv_fit_rmse_ratio) log(ratio / max_cv_fit_rmse_ratio) else 0
+      ),
+      na.rm = TRUE
+    )
+  }
+  kge_cv_for_fusion <- if (is.finite(kge_cv_raw)) kge_cv_raw - overfit_penalty else NA_real_
 
   list(
-    kge_cv_mean     = selected_score$kge_mean[[1]],
+    kge_cv_mean     = kge_cv_for_fusion,
+    kge_cv_raw      = kge_cv_raw,
     rmse_cv_mean    = selected_score$rmse_mean[[1]],
     mae_cv_mean     = selected_score$mae_mean[[1]],
     preds           = dplyr::select(preds, dplyr::all_of(keep_cols)),
@@ -537,7 +626,9 @@ wass2s_tune_pred_ml <- function(
     leaderboard_cfg = pred_cv,
     param_grid      = grid,
     selected_config = selected$selected_config,
-    selection_metric = selection_metric
+    selection_metric = selection_metric,
+    fit_diagnostics = fit_diagnostics,
+    overfit_flag = overfit_flag
   )
 }
 

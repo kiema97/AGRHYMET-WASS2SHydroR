@@ -105,13 +105,13 @@ model_spec <- function(name,p=NULL) {
          #   parsnip::set_mode("regression"),
 
          xgb = parsnip::boost_tree(
-           trees = 1000,
+           trees = 500,
            learn_rate = tune(),
            tree_depth = tune(),
            mtry = min(p, max(1L, floor(sqrt(p)))),
            min_n = tune(),
-           loss_reduction = 0,
-           sample_size = 0.8,
+           loss_reduction = tune(),
+           sample_size = 0.7,
            stop_iter = 50
          ) |>
            parsnip::set_engine("xgboost") |>
@@ -193,7 +193,7 @@ model_grid <- function(name, p, levels = 5, n_min = Inf) {
 
          rf = dials::grid_regular(
            dials::mtry(range = c(1L, max(1L, p))),
-           dials::min_n(range = c(2L, cap(40L, max(2L, floor(n_min/2))))),
+           dials::min_n(range = c(cap(5L, max(2L, n_min - 1L)), cap(40L, max(5L, floor(n_min/2))))),
            levels = levels
          ),
 
@@ -207,9 +207,10 @@ model_grid <- function(name, p, levels = 5, n_min = Inf) {
          # ),
 
          xgb = dials::grid_regular(
-           dials::learn_rate(range = c(-4, -1)),
-           dials::tree_depth(range = c(2L, cap(8L, max(2L, floor(log2(n_min)))))),
-           dials::min_n(range = c(2L, cap(40L, max(2L, floor(n_min / 2))))),
+           dials::learn_rate(range = c(-4, -2)),
+           dials::tree_depth(range = c(1L, cap(3L, max(1L, floor(log2(n_min)))))),
+           dials::min_n(range = c(cap(5L, max(2L, n_min - 1L)), cap(40L, max(5L, floor(n_min / 2))))),
+           dials::loss_reduction(range = c(-3, 1)),
            levels = levels
          ),
 
@@ -228,9 +229,9 @@ model_grid <- function(name, p, levels = 5, n_min = Inf) {
            levels = levels),
 
          mlp = dials::grid_regular(
-           dials::hidden_units(range = c(2L, cap(20L, max(2L, n_min - 2L)))),
-           dials::penalty(range = c(-6, -2)),
-           dials::epochs(range = c(50L, 200L)),
+           dials::hidden_units(range = c(1L, cap(6L, max(1L, floor(n_min / 4))))),
+           dials::penalty(range = c(-4, -1)),
+           dials::epochs(range = c(25L, 100L)),
            levels = levels
          ),
 

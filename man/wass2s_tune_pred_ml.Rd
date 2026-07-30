@@ -40,7 +40,11 @@ wass2s_tune_pred_ml(
   max_na_frac = 0.3,
   impute = "median",
   require_variance = TRUE,
-  min_data_required = 10
+  min_data_required = 10,
+  overfit_guard = TRUE,
+  max_fit_cv_kge_gap = 0.5,
+  max_cv_fit_rmse_ratio = 4,
+  min_cv_kge = -Inf
 )
 }
 \arguments{
@@ -172,6 +176,19 @@ If \code{"none"}, no imputation is performed after the guard (default \code{"med
 standard deviation after imputation (default \code{TRUE}).}
 
 \item{min_data_required}{Minimum number of rows required to train.}
+
+\item{overfit_guard}{Logical. If \code{TRUE}, fitted ML models whose apparent
+historical fit is much better than their cross-validated skill are flagged
+and assigned a penalized selection score for downstream product fusion.}
+
+\item{max_fit_cv_kge_gap}{Maximum allowed difference between fitted-history
+KGE and cross-validated KGE before flagging overfitting.}
+
+\item{max_cv_fit_rmse_ratio}{Maximum allowed ratio between cross-validated
+RMSE and fitted-history RMSE before flagging overfitting.}
+
+\item{min_cv_kge}{Minimum acceptable cross-validated KGE when
+\code{overfit_guard = TRUE}.}
 }
 \value{
 A list with the following elements:

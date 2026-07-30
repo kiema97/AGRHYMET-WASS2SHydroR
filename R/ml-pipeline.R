@@ -379,11 +379,14 @@ wass2s_run_bas_mod_ml <- function(
     scores_test = fusion_res$scores_test,
     fusion_method = fusion_res$fusion_method,
     fusion_weights = fusion_res$fusion_weights,
+    final_fuser = fusion_res$final_fuser,
     leaderboards = stats::setNames(
       purrr::map(outs, "leaderboard"),
       purrr::map_chr(outs, "model")
     ),
     cv_rs = fusion_res$cv_rs,
+    cv_baselines = fusion_res$cv_baselines,
+    cv_meta = fusion_res$cv_meta,
     best_meta_params = fusion_res$best_meta_params
   )
 }
