@@ -2,7 +2,7 @@
 
 ## CDS Configuration
 
-[`wass2s_download_cds()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_download_cds.md)
+[`wass2s_download_cds()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_download_cds.md)
 uses the `ecmwfr` package. The CDS key must be configured before
 downloading data:
 
@@ -32,7 +32,7 @@ domain:
 ``` r
 res_cds <- wass2s_download_cds(
   dataset_short_name = "seasonal-original-single-levels",
-  base_query = list(data_format = "netcdf"),
+  base_query = list(format = "netcdf"),
   center_variables = "ecmwf_51.T2M",
   years = 2020,
   months = 1,
@@ -81,95 +81,31 @@ Short variable names are mapped to CDS API names:
 | `PRCP`     | `total_precipitation`                         |
 | `SST`      | `sea_surface_temperature`                     |
 
-## Multi-Year Requests, Pacing, and Consolidation
+## Multi-Year Requests
 
-CDS can reject or delay very large requests.
-[`wass2s_download_cds()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_download_cds.md)
-therefore splits long periods into smaller year chunks. The default is
-`chunk_years = 1`, which means one CDS request per year. You can
-cautiously increase this value to 2 or 3 after validating the request
-size for your dataset, area, variables, and lead times.
-
-Before submitting many jobs, inspect the request plan without
-downloading:
-
-``` r
-plan_cds <- wass2s_download_cds(
-  dataset_short_name = "seasonal-original-single-levels",
-  base_query = list(data_format = "netcdf"),
-  center_variables = c("ecmwf_51.T2M", "meteo_france_9.T2M"),
-  years = 1993:1998,
-  months = 4,
-  days = "01",
-  times = "00:00",
-  leadtime_hour = seq(24, 240, 24),
-  out_dir = "data/cds",
-  chunk_years = 2,
-  dry_run = TRUE,
-  return_requests = TRUE
-)
-
-plan_cds
-```
-
-For operational downloads, use request pacing to avoid submitting too
-many jobs to Copernicus in a short time window:
+When several years are provided, requests are split year by year. This
+reduces request size and avoids overwriting output files:
 
 ``` r
 res_cds <- wass2s_download_cds(
   dataset_short_name = "seasonal-original-single-levels",
-  base_query = list(data_format = "netcdf"),
+  base_query = list(format = "netcdf"),
   center_variables = c("ecmwf_51.T2M", "meteo_france_9.T2M"),
-  years = 1993:1998,
+  years = 1993:1995,
   months = 4,
   days = "01",
   times = "00:00",
   leadtime_hour = seq(24, 240, 24),
-  out_dir = "data/cds",
-  chunk_years = 2,
-  parallel = TRUE,
-  workers = 4,
-  max_requests_per_batch = 4,
-  cooldown_sec = 30,
-  job_log = "data/cds/_wass2s_cds_jobs.csv"
+  out_dir = "data/cds"
 )
 ```
 
-When `combine = TRUE`, successful chunk files are combined into one
-NetCDF file per model/system/variable. For example, this can produce a
-file such as `ecmwf_51_PRCP_1993_2026.nc`:
-
-``` r
-res_cds <- wass2s_download_cds(
-  dataset_short_name = "seasonal-original-single-levels",
-  base_query = list(data_format = "netcdf"),
-  center_variables = "ecmwf_51.PRCP",
-  years = 1993:2026,
-  months = 5,
-  days = "01",
-  times = "00:00",
-  leadtime_hour = seq(24, 4416, 24),
-  out_dir = "data/cds",
-  chunk_years = 1,
-  parallel = TRUE,
-  workers = 4,
-  max_requests_per_batch = 4,
-  cooldown_sec = 30,
-  combine = TRUE,
-  combine_filename_tpl = "{modelsys}_{var}_{period}.nc",
-  keep_chunks = TRUE
-)
-
-unique(res_cds$combined_file)
-```
-
-Keep `keep_chunks = TRUE` until the combined file has been checked. Set
-`keep_chunks = FALSE` only when you are confident that the consolidated
-NetCDF is valid and you want to save disk space.
+If the filename template does not include `{year}`, the year is appended
+before the `.nc` extension.
 
 ## Prepare NetCDF Data
 
-[`wass2s_prepare_data()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_prepare_data.md)
+[`wass2s_prepare_data()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_prepare_data.md)
 reads NetCDF files or `stars` objects and returns a regular data frame
 with a reconstructed `DATE` column.
 
@@ -233,8 +169,3 @@ automatically when possible.
   `dim_lat`, `dim_time`, `dim_ref_time`, or `dim_period`.
 - Leave `job_name = NULL` outside RStudio. Supplying `job_name` triggers
   RStudio Jobs in `ecmwfr`.
-- With parallel = TRUE, CDS may first report that requests have been
-  submitted and are still being processed server-side. This is normal:
-  ecmwfr downloads each file once the corresponding CDS job is ready.
-  Keep the R session open when possible, or use the wf_transfer()
-  command printed by ecmwfr to retrieve a completed job later.

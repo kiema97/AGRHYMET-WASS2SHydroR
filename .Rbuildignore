@@ -2,18 +2,33 @@
 ^renv\.lock$
 ^.*\.Rproj$
 ^\.Rproj\.user$
-^\.RData$
-^\.RData_backup$
-^\.Rhistory$
-^\.Rprofile$
 ^LICENSE\.md$
-^docs$
-^_pkgdown\.yml$
+^\.RData$
+^\.Rhistory$
+^\.RData_backup$
+
+# Quarto / site
 ^README\.qmd$
+^_pkgdown\.yml$
 ^_quarto\.yml$
 ^quarto\.yml$
 ^_site$
 ^_resources$
+^docs$
+^docs/
+^pkgdown$
+^pkgdown/
+^scripts$
+^scripts/
+
+# NEW tout residu de vignettes rendues
+^inst/doc$
+^vignettes$
+^vignettes/
 ^vignettes/figure$
 ^vignettes/.*\.(html|md|qmd|mdx)$
-^pkgdown$
+
+# (optionnel) si tu n’as pas de README Rmd :
+# ^README\.Rmd$
+# ^README\.html$
+# ^README_files$

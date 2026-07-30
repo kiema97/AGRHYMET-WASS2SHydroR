@@ -4,7 +4,7 @@ For a given basin and a fixed statistical model (PCR/Ridge/Lasso), this
 function:
 
 1.  fits/tunes one model per product using
-    [`wass2s_tune_pred_stat()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_tune_pred_stat.md),
+    [`wass2s_tune_pred_stat()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_tune_pred_stat.md),
 
 2.  ranks products by cross-validated KGE,
 
@@ -97,7 +97,7 @@ wass2s_cons_mods_stat(
 - grid:
 
   Optional tibble of tuning parameters passed to
-  [`wass2s_tune_pred_stat()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_tune_pred_stat.md).
+  [`wass2s_tune_pred_stat()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_tune_pred_stat.md).
   If `NULL`, defaults are used.
 
 - product_fusion_method:
@@ -154,7 +154,7 @@ wass2s_cons_mods_stat(
   Optional numeric vector of length 2 giving the start and end years for
   a holdout prediction period. These years are excluded from training
   inside
-  [`wass2s_tune_pred_stat()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_tune_pred_stat.md)
+  [`wass2s_tune_pred_stat()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_tune_pred_stat.md)
   and predictions are generated on the concatenated (train + holdout)
   timeline after fitting.
 
@@ -165,40 +165,40 @@ wass2s_cons_mods_stat(
 - resamples:
 
   Optional `rsample::rset` object for resampling passed to
-  [`wass2s_tune_pred_stat()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_tune_pred_stat.md).
+  [`wass2s_tune_pred_stat()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_tune_pred_stat.md).
   If `NULL`, rolling-origin resampling is created via
-  [`make_rolling()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_rolling_cv.md)
+  [`make_rolling()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_rolling_cv.md)
   inside
-  [`wass2s_tune_pred_stat()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_tune_pred_stat.md).
+  [`wass2s_tune_pred_stat()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_tune_pred_stat.md).
 
 - pretrained_wflow:
 
   Optional
   [`workflows::workflow`](https://workflows.tidymodels.org/reference/workflow.html)
   object passed to
-  [`wass2s_tune_pred_stat()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_tune_pred_stat.md).
+  [`wass2s_tune_pred_stat()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_tune_pred_stat.md).
   If supplied, tuning is skipped and the workflow is used for prediction
   directly.
 
 - init_frac:
 
   Fraction of rows used for the initial training window passed to
-  [`wass2s_tune_pred_stat()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_tune_pred_stat.md).
+  [`wass2s_tune_pred_stat()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_tune_pred_stat.md).
 
 - assess_frac:
 
   Fraction of rows used for the assessment window passed to
-  [`wass2s_tune_pred_stat()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_tune_pred_stat.md).
+  [`wass2s_tune_pred_stat()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_tune_pred_stat.md).
 
 - n_splits:
 
   Optional integer, desired number of resamples (splits) passed to
-  [`wass2s_tune_pred_stat()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_tune_pred_stat.md).
+  [`wass2s_tune_pred_stat()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_tune_pred_stat.md).
 
 - cumulative:
 
   Logical; passed to
-  [`make_rolling()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_rolling_cv.md)
+  [`make_rolling()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_rolling_cv.md)
   (rolling-origin resampling).
 
 - quiet:
@@ -219,13 +219,13 @@ wass2s_cons_mods_stat(
 - verbose_tune:
 
   Logical; forwarded to
-  [`wass2s_tune_pred_stat()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_tune_pred_stat.md)
+  [`wass2s_tune_pred_stat()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_tune_pred_stat.md)
   to control tuning verbosity.
 
 - selection_metric:
 
   Character; forwarded to
-  [`wass2s_tune_pred_stat()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_tune_pred_stat.md).
+  [`wass2s_tune_pred_stat()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_tune_pred_stat.md).
   The default `"kge"` keeps the historical statistical-model selection
   behavior.
 
@@ -252,7 +252,7 @@ wass2s_cons_mods_stat(
 - ...:
 
   Additional arguments forwarded to
-  [`wass2s_tune_pred_stat()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_tune_pred_stat.md)
+  [`wass2s_tune_pred_stat()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_tune_pred_stat.md)
   and (when enabled) to tuning controls used internally.
 
 ## Value
@@ -269,7 +269,7 @@ A list with:
 
 - `all_results` (list): all individual per-product results as returned
   by
-  [`wass2s_tune_pred_stat()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_tune_pred_stat.md)
+  [`wass2s_tune_pred_stat()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_tune_pred_stat.md)
   (or `NULL`/empty entries for skipped products are omitted).
 
 ## Details

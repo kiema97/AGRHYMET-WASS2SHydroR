@@ -75,11 +75,15 @@ Supported values are:
 
 \item{quiet}{Logical; if \code{FALSE}, emits informative messages.}
 
-\item{target_positive}{Logical; passed to \code{wass2s_run_bas_mod_ml()} to truncate negative predictions to zero.}
+\item{target_positive}{Logical. If \code{TRUE}, constrain final predictions
+to be non-negative using \code{pmax(pred, 0)}.}
 
-\item{allow_par}{Logical; passed to lower-level tuning functions to allow parallel processing.}
+\item{allow_par}{Logical. If \code{TRUE}, allow parallel execution during
+hyperparameter tuning of the meta-learner.}
 
-\item{selection_metric}{Character; tuning-selection metric, either \code{"rmse"} or \code{"kge"}.}
+\item{selection_metric}{Character. Metric used to select tuned models.
+\code{"rmse"} selects the lowest RMSE; \code{"kge"} selects the highest
+Kling-Gupta Efficiency after tuning.}
 
 \item{...}{Other parameters passed to \code{wass2s_run_bas_mod_ml}.}
 }

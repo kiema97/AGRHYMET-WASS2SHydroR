@@ -11,7 +11,9 @@ wass2s_class_from_forecast(
   rmse = NULL,
   residuals = NULL,
   thresholds = NULL,
-  min_sigma_frac = 0.05
+  min_sigma_frac = 0.05,
+  distribution = c("normal", "student", "auto"),
+  df_student = NULL
 )
 }
 \arguments{
@@ -28,6 +30,14 @@ wass2s_class_from_forecast(
 \item{thresholds}{optional named numeric c(t1, t2); if NULL, computed from q_hist.}
 
 \item{min_sigma_frac}{minimal sigma as fraction of sd(q_hist) (default 0.05).}
+
+\item{distribution}{Predictive distribution used for class probabilities:
+\code{"normal"}, \code{"student"}, or \code{"auto"}. In \code{"auto"}
+mode, samples with fewer than 30 finite climatological observations use
+Student's t distribution.}
+
+\item{df_student}{Degrees of freedom for the Student distribution. If
+\code{NULL}, uses \code{max(3, n_hist - 1)}.}
 }
 \value{
 tibble: YYYY, pred, p_below, p_normal, p_above, class_hat, entropy.

@@ -12,6 +12,7 @@ wass2s_rolling_cv(
   assess_frac = 0.2,
   n_splits = NULL,
   cumulative = TRUE,
+  strategy = c("auto", "rolling", "small_sample"),
   quiet = TRUE
 )
 
@@ -33,6 +34,10 @@ If `NULL` (default), every possible split is produced (`skip = 0`).}
 
 \item{cumulative}{Logical; passed to `rsample::rolling_origin()`
 (default `TRUE`).}
+
+\item{strategy}{One of \code{"auto"}, \code{"rolling"}, or
+\code{"small_sample"}. The default \code{"auto"} uses a more conservative
+validation plan for small samples.}
 
 \item{quiet}{Logical; if `FALSE`, emits informative messages when the
 requested `n_splits` cannot be reached (default `TRUE`).}

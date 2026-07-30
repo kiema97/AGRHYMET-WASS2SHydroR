@@ -21,7 +21,7 @@ run_method.method_hydro <- function(method, data_by_product, cfg) {
 #' @param data_by_product named list of data.frames (one per product)
 #' @param cfg list with configuration
 #' @return Same structure as \code{run_method.method_hydro()}.
-#' @keywords internal
+#' @export
 run_method.method_ml <- function(method, data_by_product, cfg) {
   wass2s_run_pipeline_hydro(data_by_product, cfg)
 }
@@ -146,4 +146,3 @@ wass2s_run_pipeline_hydro <- function(data_by_product, cfg) {
   # Return results
   result
 }
-

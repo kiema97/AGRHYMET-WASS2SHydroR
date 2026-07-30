@@ -15,7 +15,7 @@ ecmwfr::wf_set_key(user = "ecmwfr")
 ```
 
 Use the same `user` value in
-[`wass2s_download_cds()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_download_cds.md).
+[`wass2s_download_cds()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_download_cds.md).
 
 ## CDS Download Fails Outside RStudio
 
@@ -26,7 +26,7 @@ sessions.
 ``` r
 wass2s_download_cds(
   dataset_short_name = "seasonal-original-single-levels",
-  base_query = list(data_format = "netcdf"),
+  base_query = list(format = "netcdf"),
   center_variables = "ecmwf_51.T2M",
   years = 2020,
   months = 1,
@@ -37,51 +37,7 @@ wass2s_download_cds(
 )
 ```
 
-## Large CDS Downloads and Server-Side Queues
-
-For long periods such as 1993–2026, avoid sending one very large request
-to CDS. Use year chunks and request pacing:
-
-``` r
-res_cds <- wass2s_download_cds(
-  dataset_short_name = "seasonal-original-single-levels",
-  base_query = list(data_format = "netcdf"),
-  center_variables = "ecmwf_51.PRCP",
-  years = 1993:2026,
-  months = 5,
-  days = "01",
-  times = "00:00",
-  leadtime_hour = seq(24, 4416, 24),
-  out_dir = "data/cds",
-  chunk_years = 1,
-  parallel = TRUE,
-  workers = 4,
-  max_requests_per_batch = 4,
-  cooldown_sec = 30,
-  job_log = "data/cds/_wass2s_cds_jobs.csv",
-  combine = TRUE,
-  combine_filename_tpl = "{modelsys}_{var}_{period}.nc"
-)
-```
-
-Useful safeguards:
-
-- run first with `dry_run = TRUE` and `return_requests = TRUE`;
-- keep `chunk_years = 1` for very large domains or long lead-time
-  vectors;
-- use `max_requests_per_batch` and `cooldown_sec` to avoid submitting
-  too many jobs in a short time window;
-- keep `job_log` enabled to retain a local audit trail;
-- keep the default `stop_on_error = FALSE` so one failed CDS request is
-  recorded as `status = "fail"` without stopping the remaining
-  downloads;
-- keep `keep_chunks = TRUE` until the combined NetCDF file has been
-  validated.
-
-Messages saying that a CDS request has been submitted and is still being
-processed are normal. Leave the R session open when possible; otherwise
-use the `wf_transfer()` command printed by `ecmwfr` to retrieve
-completed jobs later. \## NetCDF Dimensions Are Not Detected
+## NetCDF Dimensions Are Not Detected
 
 Provide dimension names explicitly:
 
@@ -152,7 +108,7 @@ selection_metric = "rmse"
 - Start with one basin and one model.
 - Use `quiet = FALSE` during setup.
 - Validate CDS files with
-  [`wass2s_prepare_data()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_prepare_data.md)
+  [`wass2s_prepare_data()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_prepare_data.md)
   before modelling.
 - Start with `fusion_method = "median"`.
 - Use `weighted_mean` only when product skill scores are reliable.

@@ -19,4 +19,3 @@ Same structure as \code{run_method.method_hydro()}.
 \description{
 \code{method_id("ml")} is an alias of the hydro/ML pipeline.
 }
-\keyword{internal}

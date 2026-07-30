@@ -79,7 +79,8 @@ to be non-negative using \code{pmax(pred, 0)}.}
 \item{allow_par}{Logical. If \code{TRUE}, allow parallel execution during
 hyperparameter tuning of the meta-learner.}
 
-\item{min_kge_model}{Minimum KGE threshold passed to basin-level statistical consolidation.}
+\item{min_kge_model}{Numeric. Minimum KGE threshold required for a model or
+product to receive non-zero weight during performance-based fusion.}
 
 \item{max_na_frac}{Numeric. Maximum fraction of missing values allowed per variable.}
 

@@ -14,44 +14,6 @@ pkgdown::build_site()
 
 The generated site is written to `docs/`.
 
-## Installation
-
-Install the development version from the `staging` branch on GitHub:
-
-``` r
-install.packages("remotes")
-
-remotes::install_github(
-  "kiema97/AGRHYMET-WASS2SHydroR",
-  ref = "staging",
-  build_vignettes = FALSE,
-  upgrade = "never",
-  dependencies = c("Depends", "Imports", "LinkingTo")
-)
-```
-
-This installs the package and its core dependencies without rebuilding
-the vignettes or upgrading packages already installed in your R library.
-
-For a fuller installation including optional packages used by CDS
-access, NetCDF processing, mapping, parallel execution, and additional
-ML engines, use:
-
-``` r
-remotes::install_github(
-  "kiema97/AGRHYMET-WASS2SHydroR",
-  ref = "staging",
-  build_vignettes = FALSE,
-  upgrade = "never",
-  dependencies = TRUE
-)
-```
-
-For local package development from a clone, run
-[`renv::restore()`](https://rstudio.github.io/renv/reference/restore.html)
-from the package root, then use `pkgload::load_all(".")` while editing
-the source.
-
 ## Quick Start
 
 ``` r
@@ -91,97 +53,97 @@ c("rf", "xgb", "glmnet", "kknn", "svmlinear", "mars", "cubist", "mlp")
 
 ## Data Acquisition and Preparation
 
-- [`wass2s_download_cds()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_download_cds.md)
-  : Robust Downloader for CDS/ECMWF Data with Chunking and Optional
-  NetCDF Merge
-- [`wass2s_prepare_data()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_prepare_data.md)
+- [`wass2s_download_cds()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_download_cds.md)
+  : Robust Parallel Downloader for CDS/ECMWF (via ecmwfr) with Year
+  Chunking
+- [`wass2s_prepare_data()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_prepare_data.md)
   : Prepare gridded hydro-climatic data from NetCDF or stars objects
-- [`make_toy_data_by_product()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/make_toy_data_by_product.md)
+- [`make_toy_data_by_product()`](https://kiema97.github.io/WASS2SHydroR/reference/make_toy_data_by_product.md)
   : Create synthetic multi-product hydrological dataset
 
 ## Statistical Forecasting
 
-- [`wass2s_tune_pred_stat()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_tune_pred_stat.md)
+- [`wass2s_tune_pred_stat()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_tune_pred_stat.md)
   : Tune and refit a single product/model, select configuration by KGE
-- [`wass2s_cons_mods_stat()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_cons_mods_stat.md)
+- [`wass2s_cons_mods_stat()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_cons_mods_stat.md)
   : Consolidate predictions across products for one statistical model
-- [`wass2s_run_basin_mods_stat()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_run_basin_mods_stat.md)
+- [`wass2s_run_basin_mods_stat()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_run_basin_mods_stat.md)
   : Run basin-level statistical model consolidation and fusion
-- [`wass2s_run_basins_stat()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_run_basins_stat.md)
+- [`wass2s_run_basins_stat()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_run_basins_stat.md)
   : Run the statistical method across multiple basins
-- [`wass2s_run_pipeline_stat()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_run_pipeline_stat.md)
+- [`wass2s_run_pipeline_stat()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_run_pipeline_stat.md)
   : Wrapper function called by the core (run_method) for statistical
   pipeline
 
 ## Machine Learning Forecasting
 
-- [`wass2s_tune_pred_ml()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_tune_pred_ml.md)
+- [`wass2s_tune_pred_ml()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_tune_pred_ml.md)
   : Tune and predict for one product and one ML model
-- [`wass2s_cons_mods_ml()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_cons_mods_ml.md)
+- [`wass2s_cons_mods_ml()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_cons_mods_ml.md)
   : Consolidate top-K products for one basin and one ML model
-- [`wass2s_run_bas_mod_ml()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_run_bas_mod_ml.md)
+- [`wass2s_run_bas_mod_ml()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_run_bas_mod_ml.md)
   : Run basin-level machine learning model consolidation and final
   fusion
-- [`wass2s_run_basins_ml()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_run_basins_ml.md)
+- [`wass2s_run_basins_ml()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_run_basins_ml.md)
   : Run the Hydro + ML pipeline for all basins
-- [`wass2s_run_pipeline_hydro()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_run_pipeline_hydro.md)
+- [`wass2s_run_pipeline_hydro()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_run_pipeline_hydro.md)
   : Wrapper function called by the core (run_method) for hydro (ML)
   pipeline
 
 ## HYPE Execution
 
-- [`wass2s_hype_run()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_hype_run.md)
+- [`wass2s_hype_run()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_hype_run.md)
   : Run HYPE in a given directory (non-GUI mode)
-- [`wass2s_hype_run_watchlog()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_hype_run_watchlog.md)
+- [`wass2s_hype_run_watchlog()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_hype_run_watchlog.md)
   : Run HYPE in "watch-log" mode (Windows GUI executables)
-- [`wass2s_hype_run_batch()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_hype_run_batch.md)
+- [`wass2s_hype_run_batch()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_hype_run_batch.md)
   : Run multiple HYPE scenarios (one directory each)
-- [`wass2s_hype_run_one_model()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_hype_run_one_model.md)
+- [`wass2s_hype_run_one_model()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_hype_run_one_model.md)
   : Run one model workflow: prepare OBS -\> update info.txt resultdir
   -\> run HYPE
-- [`wass2s_hype_run_all_models()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_hype_run_all_models.md)
+- [`wass2s_hype_run_all_models()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_hype_run_all_models.md)
   : Run the full workflow for all models discovered in a forcing
   directory
-- [`wass2s_detect_high_flow_periods()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_detect_high_flow_periods.md)
+- [`wass2s_detect_high_flow_periods()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_detect_high_flow_periods.md)
   : Detect high-flow periods from daily discharge time series
 
 ## Metrics and Diagnostics
 
-- [`wass2s_kge()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_kge.md)
+- [`wass2s_kge()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_kge.md)
   : Kling-Gupta Efficiency (vector form)
-- [`wass2s_rmse()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_rmse.md)
+- [`wass2s_rmse()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_rmse.md)
   : Root Mean Squared Error (vector)
-- [`wass2s_mae()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_mae.md)
+- [`wass2s_mae()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_mae.md)
   : Mean Absolute Error (vector)
-- [`wass2s_nse()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_nse.md)
+- [`wass2s_nse()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_nse.md)
   : Nash–Sutcliffe Efficiency (vector)
-- [`wass2s_corr()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_corr.md)
+- [`wass2s_corr()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_corr.md)
   : Pearson Correlation Coefficient (vector form)
-- [`wass2s_minmax()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_minmax.md)
+- [`wass2s_minmax()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_minmax.md)
   : Min–max normalization to a target range
-- [`wass2s_rolling_cv()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_rolling_cv.md)
-  [`make_rolling()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_rolling_cv.md)
+- [`wass2s_rolling_cv()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_rolling_cv.md)
+  [`make_rolling()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_rolling_cv.md)
   : Robust rolling-origin CV with target number of splits
 
 ## Forecast Classes and Maps
 
-- [`wass2s_class_from_forecast()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_class_from_forecast.md)
+- [`wass2s_class_from_forecast()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_class_from_forecast.md)
   : From forecast to class probabilities (Q1/Q3 classes by default)
-- [`wass2s_class_entropy()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_class_entropy.md)
+- [`wass2s_class_entropy()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_class_entropy.md)
   : Compute entropy of class probabilities (uncertainty indicator)
-- [`wass2s_plot_map()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_plot_map.md)
+- [`wass2s_plot_map()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_plot_map.md)
   : Generic map plotter for WASS2S products (probabilities, class,
   metrics)
 
 ## Generic Interface
 
-- [`run_wass2s()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/run_wass2s.md)
+- [`run_wass2s()`](https://kiema97.github.io/WASS2SHydroR/reference/run_wass2s.md)
   : High-level runner for WASS2S
-- [`run_method(`*`<method_hydro>`*`)`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/run_method.method_hydro.md)
+- [`run_method(`*`<method_hydro>`*`)`](https://kiema97.github.io/WASS2SHydroR/reference/run_method.method_hydro.md)
   : S3 entrypoint for method "hydro"
-- [`list_methods()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/list_methods.md)
+- [`list_methods()`](https://kiema97.github.io/WASS2SHydroR/reference/list_methods.md)
   : List available forecasting methods
-- [`hf_registry`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/hf_registry.md)
+- [`hf_registry`](https://kiema97.github.io/WASS2SHydroR/reference/hf_registry.md)
   : Registry of available forecasting methods
 
 # Articles
@@ -189,14 +151,14 @@ c("rf", "xgb", "glmnet", "kknn", "svmlinear", "mars", "cubist", "mlp")
 ### User Guide
 
 - [Get Started with
-  WASS2SHydroR](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/articles/get-started.md):
+  WASS2SHydroR](https://kiema97.github.io/WASS2SHydroR/articles/get-started.md):
 - [CDS Data Acquisition and
-  Preparation](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/articles/cds-data-preparation.md):
+  Preparation](https://kiema97.github.io/WASS2SHydroR/articles/cds-data-preparation.md):
 - [Statistical Forecasting
-  Workflow](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/articles/statistical-workflow.md):
+  Workflow](https://kiema97.github.io/WASS2SHydroR/articles/statistical-workflow.md):
 - [Machine Learning Forecasting
-  Workflow](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/articles/ml-workflow.md):
+  Workflow](https://kiema97.github.io/WASS2SHydroR/articles/ml-workflow.md):
 - [HYPE Execution
-  Workflow](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/articles/hype-workflow.md):
+  Workflow](https://kiema97.github.io/WASS2SHydroR/articles/hype-workflow.md):
 - [Troubleshooting and Best
-  Practices](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/articles/troubleshooting.md):
+  Practices](https://kiema97.github.io/WASS2SHydroR/articles/troubleshooting.md):

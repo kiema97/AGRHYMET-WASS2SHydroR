@@ -11,7 +11,7 @@ plot_class_map(
   sf_basins,
   class_df,
   basin_col = "HYBAS_ID",
-  colors = list(above = "#41AB5D", normal = "#FFFFD4", below = "#EC7014", climatology =
+  colors = list(above = "#41AB5D", normal = "#A1D937", below = "#EC7014", climatology =
     "#BEBEBE"),
   title = NULL,
   file = NULL,

@@ -18,7 +18,7 @@ wass2s_detect_high_flow_periods(
   hydro_year_start_month = 7L,
   detection_scope = c("id_year", "id"),
   threshold_method = c("quantile", "zscore"),
-  q_prob = 0.5,
+  q_prob = 0.8,
   z_thr = 1,
   smooth_k = 1L,
   min_len_days = 5L,

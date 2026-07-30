@@ -20,13 +20,10 @@ wass2s_run_basin_mods_stat(
   fusion_method = c("meta", "mean", "median", "weighted_mean"),
   final_fuser = "rf",
   grid_levels = 5,
-  sub_fuser = NULL,
-  sub_grid_levels = NULL,
   quiet = TRUE,
   verbose_tune = TRUE,
   target_positive = TRUE,
   allow_par = TRUE,
-  min_kge_model = 0.2,
   max_na_frac = 0.3,
   impute = "median",
   require_variance = TRUE,
@@ -115,16 +112,6 @@ wass2s_run_basin_mods_stat(
   Integer. Number of levels used to generate hyperparameter grids for
   tuning the meta-learner.
 
-- sub_fuser:
-
-  Optional meta-learner used to consolidate top-K products within each
-  statistical model. Defaults to `final_fuser`.
-
-- sub_grid_levels:
-
-  Optional grid size for the within-model product fuser. Defaults to
-  `grid_levels`.
-
 - quiet:
 
   Logical. If `TRUE`, suppress informational messages.
@@ -143,11 +130,6 @@ wass2s_run_basin_mods_stat(
   Logical. If `TRUE`, allow parallel execution during hyperparameter
   tuning of the meta-learner.
 
-- min_kge_model:
-
-  Minimum KGE threshold used when selecting products/models for
-  consolidation.
-
 - max_na_frac:
 
   Numeric. Maximum fraction of missing values allowed per variable.
@@ -164,7 +146,7 @@ wass2s_run_basin_mods_stat(
 - ...:
 
   Additional arguments passed to
-  [`wass2s_cons_mods_stat()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_cons_mods_stat.md).
+  [`wass2s_cons_mods_stat()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_cons_mods_stat.md).
 
 ## Value
 

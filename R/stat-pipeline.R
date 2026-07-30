@@ -55,9 +55,12 @@
 #' @param grid_levels Integer. Number of levels used to generate hyperparameter grids
 #'   for tuning the meta-learner.
 #'
-#' @param sub_fuser Optional meta-learner used to consolidate top-K products within each statistical model. Defaults to \code{final_fuser}.
-#' @param sub_grid_levels Optional grid size for the within-model product fuser. Defaults to \code{grid_levels}.
-#' @param min_kge_model Minimum KGE threshold used when selecting products/models for consolidation.
+#' @param sub_fuser Character. Meta-learner used to consolidate products before
+#'   the final model-level fusion. If \code{NULL}, \code{final_fuser} is used.
+#'
+#' @param sub_grid_levels Integer. Number of grid levels used for the product
+#'   consolidation meta-learner. If \code{NULL}, \code{grid_levels} is used.
+#'
 #' @param quiet Logical. If \code{TRUE}, suppress informational messages.
 #'
 #' @param verbose_tune Logical. If \code{TRUE}, print tuning progress.
@@ -67,6 +70,9 @@
 #'
 #' @param allow_par Logical. If \code{TRUE}, allow parallel execution during
 #'   hyperparameter tuning of the meta-learner.
+#'
+#' @param min_kge_model Numeric. Minimum KGE threshold required for a model or
+#'   product to receive non-zero weight during performance-based fusion.
 #'
 #' @param max_na_frac Numeric. Maximum fraction of missing values allowed per variable.
 #'
@@ -1087,7 +1093,6 @@ wass2s_run_basin_mods_stat <- function(
 #' @param pred_pattern_by_product Named character vector: product -> regex to
 #'   select predictor columns for that product.
 #' @param topK Integer, number of top products to keep in the fusion (by KGE).
-#' @param min_kge_model Minimum KGE threshold passed to basin-level statistical consolidation.
 #' @param final_fuser Name of the meta-learner to use (subset of \code{SUPPORTED_FUSERS}).
 #' @param grid_levels Integer. Number of levels used to generate hyperparameter grids
 #'   for tuning the meta-learner.
@@ -1122,6 +1127,9 @@ wass2s_run_basin_mods_stat <- function(
 #'
 #' @param allow_par Logical. If \code{TRUE}, allow parallel execution during
 #'   hyperparameter tuning of the meta-learner.
+#'
+#' @param min_kge_model Numeric. Minimum KGE threshold required for a model or
+#'   product to receive non-zero weight during performance-based fusion.
 #'
 #' @param max_na_frac Numeric. Maximum fraction of missing values allowed per variable.
 #'

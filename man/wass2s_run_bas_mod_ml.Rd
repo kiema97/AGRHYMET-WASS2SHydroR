@@ -89,7 +89,9 @@ for hydrological targets such as streamflow, which are physically non-negative.}
 hyperparameter tuning of the meta-learner when \code{fusion_method = "meta"}.
 If \code{FALSE}, tuning is forced to run sequentially.}
 
-\item{selection_metric}{Character; tuning-selection metric, either \code{"rmse"} or \code{"kge"}.}
+\item{selection_metric}{Character. Metric used to select tuned models.
+\code{"rmse"} selects the lowest RMSE; \code{"kge"} selects the highest
+Kling-Gupta Efficiency after tuning.}
 
 \item{max_na_frac}{Numeric in \eqn{[0, 1]}: maximum allowed fraction of missing
 values per column before stopping (default \code{0.20} = 20\%).}

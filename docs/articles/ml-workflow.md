@@ -123,7 +123,7 @@ res_all_ml <- wass2s_run_basins_ml(
 
 ## Preprocessing Controls
 
-[`wass2s_tune_pred_ml()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_tune_pred_ml.md)
+[`wass2s_tune_pred_ml()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_tune_pred_ml.md)
 provides several recipe controls:
 
 - `apply_impute`: impute missing predictors;

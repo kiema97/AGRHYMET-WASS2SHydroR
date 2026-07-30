@@ -14,41 +14,6 @@ pkgdown::build_site()
 
 The generated site is written to `docs/`.
 
-## Installation
-
-Install the development version from the `staging` branch on GitHub:
-
-```r
-install.packages("remotes")
-
-remotes::install_github(
-  "kiema97/AGRHYMET-WASS2SHydroR",
-  ref = "staging",
-  build_vignettes = FALSE,
-  upgrade = "never",
-  dependencies = c("Depends", "Imports", "LinkingTo")
-)
-```
-
-This installs the package and its core dependencies without rebuilding the
-vignettes or upgrading packages already installed in your R library.
-
-For a fuller installation including optional packages used by CDS access,
-NetCDF processing, mapping, parallel execution, and additional ML engines, use:
-
-```r
-remotes::install_github(
-  "kiema97/AGRHYMET-WASS2SHydroR",
-  ref = "staging",
-  build_vignettes = FALSE,
-  upgrade = "never",
-  dependencies = TRUE
-)
-```
-
-For local package development from a clone, run `renv::restore()` from the
-package root, then use `pkgload::load_all(".")` while editing the source.
-
 ## Quick Start
 
 ```r

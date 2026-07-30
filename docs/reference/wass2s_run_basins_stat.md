@@ -23,7 +23,6 @@ wass2s_run_basins_stat(
   verbose_tune = TRUE,
   target_positive = TRUE,
   allow_par = TRUE,
-  min_kge_model = 0.2,
   max_na_frac = 0.3,
   impute = "median",
   require_variance = TRUE,
@@ -120,10 +119,6 @@ wass2s_run_basins_stat(
 
   Logical. If `TRUE`, allow parallel execution during hyperparameter
   tuning of the meta-learner.
-
-- min_kge_model:
-
-  Minimum KGE threshold passed to basin-level statistical consolidation.
 
 - max_na_frac:
 

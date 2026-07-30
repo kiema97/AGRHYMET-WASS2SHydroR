@@ -787,7 +787,7 @@ wass2s_cons_mods_stat <- function(
 #           YYYY = .ensure_yyyymmdd(.data$YYYY),
 #           pred = .data$pred
 #         ) %>%
-#           dplyr::rename(!!.x$product := pred)
+#           dplyr::rename(!!.x$product := .data$pred)
 #       })
 #
 #       prods_wide <- Reduce(function(a, b) dplyr::full_join(a, b, by = "YYYY"), lst_wide)

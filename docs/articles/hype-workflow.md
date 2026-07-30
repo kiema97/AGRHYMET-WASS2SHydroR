@@ -56,7 +56,7 @@ and can check whether expected output files were created.
 
 Some Windows HYPE builds keep a window open after the simulation is
 complete.
-[`wass2s_hype_run_watchlog()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_hype_run_watchlog.md)
+[`wass2s_hype_run_watchlog()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_hype_run_watchlog.md)
 starts the executable, waits for a log file to appear and stabilize,
 then attempts to close the process gracefully.
 

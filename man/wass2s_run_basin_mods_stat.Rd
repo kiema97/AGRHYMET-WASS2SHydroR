@@ -80,9 +80,11 @@ Supported values are:
 \item{grid_levels}{Integer. Number of levels used to generate hyperparameter grids
 for tuning the meta-learner.}
 
-\item{sub_fuser}{Optional meta-learner used to consolidate top-K products within each statistical model. Defaults to \code{final_fuser}.}
+\item{sub_fuser}{Character. Meta-learner used to consolidate products before
+the final model-level fusion. If \code{NULL}, \code{final_fuser} is used.}
 
-\item{sub_grid_levels}{Optional grid size for the within-model product fuser. Defaults to \code{grid_levels}.}
+\item{sub_grid_levels}{Integer. Number of grid levels used for the product
+consolidation meta-learner. If \code{NULL}, \code{grid_levels} is used.}
 
 \item{quiet}{Logical. If \code{TRUE}, suppress informational messages.}
 
@@ -94,7 +96,8 @@ to be non-negative using \code{pmax(pred, 0)}.}
 \item{allow_par}{Logical. If \code{TRUE}, allow parallel execution during
 hyperparameter tuning of the meta-learner.}
 
-\item{min_kge_model}{Minimum KGE threshold used when selecting products/models for consolidation.}
+\item{min_kge_model}{Numeric. Minimum KGE threshold required for a model or
+product to receive non-zero weight during performance-based fusion.}
 
 \item{max_na_frac}{Numeric. Maximum fraction of missing values allowed per variable.}
 

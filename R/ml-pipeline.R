@@ -39,13 +39,15 @@
 #'   }
 #' @param quiet Logical; if \code{FALSE}, emits informative messages.
 #' @param verbose_tune A logical for logging results (other than warnings and errors, which are always shown) as they are generated during training in a single R process.
-#' @param selection_metric Character; tuning-selection metric, either \code{"rmse"} or \code{"kge"}.
 #' @param target_positive Logical. If \code{TRUE}, final fused predictions are
 #'   constrained to be non-negative using \code{pmax(pred, 0)}. This is useful
 #'   for hydrological targets such as streamflow, which are physically non-negative.
 #' @param allow_par Logical. If \code{TRUE}, parallel execution is allowed during
 #'   hyperparameter tuning of the meta-learner when \code{fusion_method = "meta"}.
 #'   If \code{FALSE}, tuning is forced to run sequentially.
+#' @param selection_metric Character. Metric used to select tuned models.
+#'   \code{"rmse"} selects the lowest RMSE; \code{"kge"} selects the highest
+#'   Kling-Gupta Efficiency after tuning.
 #' @param max_na_frac Numeric in \eqn{[0, 1]}: maximum allowed fraction of missing
 #'   values per column before stopping (default \code{0.20} = 20\%).
 #' @param impute Character, one of \code{"median"}, \code{"mean"}, or \code{"none"}.
@@ -1116,9 +1118,13 @@ wass2s_run_bas_mod_ml <- function(
 #'   }
 #' @param final_fuser Name of the meta-learner for final fusion.
 #' @param quiet Logical; if \code{FALSE}, emits informative messages.
-#' @param target_positive Logical; passed to \code{wass2s_run_bas_mod_ml()} to truncate negative predictions to zero.
-#' @param allow_par Logical; passed to lower-level tuning functions to allow parallel processing.
-#' @param selection_metric Character; tuning-selection metric, either \code{"rmse"} or \code{"kge"}.
+#' @param target_positive Logical. If \code{TRUE}, constrain final predictions
+#'   to be non-negative using \code{pmax(pred, 0)}.
+#' @param allow_par Logical. If \code{TRUE}, allow parallel execution during
+#'   hyperparameter tuning of the meta-learner.
+#' @param selection_metric Character. Metric used to select tuned models.
+#'   \code{"rmse"} selects the lowest RMSE; \code{"kge"} selects the highest
+#'   Kling-Gupta Efficiency after tuning.
 #' @param ... Other parameters passed to \code{wass2s_run_bas_mod_ml}.
 #'
 #' @return A named list: one element per basin, each the list returned by

@@ -181,7 +181,7 @@ wass2s_tune_pred_ml(
 
   Optional `rsample::rset` object for resampling. If `NULL`, a
   rolling-origin resampling is created via
-  [`make_rolling()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_rolling_cv.md).
+  [`make_rolling()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_rolling_cv.md).
 
 - grid_levels:
 
@@ -285,10 +285,8 @@ A list with the following elements:
 \- The target column is always standardized internally to `Q` and the
 date column to `YYYY` before modeling. - If `prediction_years` is given,
 those years are removed from the training data and used as an
-out-of-sample prediction set. - By default, model configurations are
-selected using RMSE because direct KGE optimization may be unstable for
-some ML learners. The reported KGE is always the KGE of the selected
-configuration.
+out-of-sample prediction set. - Model configurations are tuned using
+RMSE as the optimization metric but are ranked by KGE for reporting.
 
 ## Examples
 

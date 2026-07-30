@@ -28,59 +28,22 @@ modelling approaches.
 
 ## Installation
 
-For regular use, install WASS2SHydroR directly from the `staging` branch
-on GitHub:
-
-``` r
-install.packages("remotes")
-
-remotes::install_github(
-  "kiema97/AGRHYMET-WASS2SHydroR",
-  ref = "staging",
-  build_vignettes = FALSE,
-  upgrade = "never",
-  dependencies = c("Depends", "Imports", "LinkingTo")
-)
-```
-
-This recommended installation keeps the setup lightweight and
-reproducible: `build_vignettes = FALSE` avoids rebuilding local
-vignettes during installation, `upgrade = "never"` avoids changing
-packages that are already installed, and
-`dependencies = c("Depends", "Imports", "LinkingTo")` installs only the
-core runtime dependencies.
-
-For a fuller installation including optional packages used by CDS
-access, NetCDF processing, mapping, parallel execution, and additional
-ML engines, use:
-
-``` r
-remotes::install_github(
-  "kiema97/AGRHYMET-WASS2SHydroR",
-  ref = "staging",
-  build_vignettes = FALSE,
-  upgrade = "never",
-  dependencies = TRUE
-)
-```
-
-Then load the package:
-
-``` r
-library(WASS2SHydroR)
-```
-
-For local development from a cloned repository, restore the project
-environment from the package root:
+From the package root:
 
 ``` r
 renv::restore()
 ```
 
-During development, load the package without reinstalling it:
+During development:
 
 ``` r
 pkgload::load_all(".")
+```
+
+After installation:
+
+``` r
+library(WASS2SHydroR)
 ```
 
 Optional features require optional packages:
@@ -163,20 +126,20 @@ ml_res$scores
 
 | Area | Function | Purpose |
 |----|----|----|
-| Data | [`wass2s_download_cds()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_download_cds.md) | Download climate forecasts from CDS/ECMWF |
-| Data | [`wass2s_prepare_data()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_prepare_data.md) | Convert NetCDF or `stars` data to tabular form |
-| Statistics | [`wass2s_tune_pred_stat()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_tune_pred_stat.md) | Tune and predict one statistical product model |
-| Statistics | [`wass2s_cons_mods_stat()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_cons_mods_stat.md) | Combine products for one statistical model |
-| Statistics | [`wass2s_run_basin_mods_stat()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_run_basin_mods_stat.md) | Full statistical workflow for one basin |
-| Statistics | [`wass2s_run_basins_stat()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_run_basins_stat.md) | Statistical workflow for several basins |
-| ML | [`wass2s_tune_pred_ml()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_tune_pred_ml.md) | Tune and predict one ML product model |
-| ML | [`wass2s_cons_mods_ml()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_cons_mods_ml.md) | Combine products for one ML model |
-| ML | [`wass2s_run_bas_mod_ml()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_run_bas_mod_ml.md) | Full ML workflow for one basin |
-| ML | [`wass2s_run_basins_ml()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_run_basins_ml.md) | ML workflow for several basins |
-| HYPE | [`wass2s_hype_run()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_hype_run.md) | Run HYPE in standard mode |
-| HYPE | [`wass2s_hype_run_watchlog()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_hype_run_watchlog.md) | Run HYPE and monitor logs |
-| Metrics | [`wass2s_kge()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_kge.md) | Kling-Gupta Efficiency |
-| Interface | [`run_wass2s()`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/run_wass2s.md) | Generic method dispatcher |
+| Data | [`wass2s_download_cds()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_download_cds.md) | Download climate forecasts from CDS/ECMWF |
+| Data | [`wass2s_prepare_data()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_prepare_data.md) | Convert NetCDF or `stars` data to tabular form |
+| Statistics | [`wass2s_tune_pred_stat()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_tune_pred_stat.md) | Tune and predict one statistical product model |
+| Statistics | [`wass2s_cons_mods_stat()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_cons_mods_stat.md) | Combine products for one statistical model |
+| Statistics | [`wass2s_run_basin_mods_stat()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_run_basin_mods_stat.md) | Full statistical workflow for one basin |
+| Statistics | [`wass2s_run_basins_stat()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_run_basins_stat.md) | Statistical workflow for several basins |
+| ML | [`wass2s_tune_pred_ml()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_tune_pred_ml.md) | Tune and predict one ML product model |
+| ML | [`wass2s_cons_mods_ml()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_cons_mods_ml.md) | Combine products for one ML model |
+| ML | [`wass2s_run_bas_mod_ml()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_run_bas_mod_ml.md) | Full ML workflow for one basin |
+| ML | [`wass2s_run_basins_ml()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_run_basins_ml.md) | ML workflow for several basins |
+| HYPE | [`wass2s_hype_run()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_hype_run.md) | Run HYPE in standard mode |
+| HYPE | [`wass2s_hype_run_watchlog()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_hype_run_watchlog.md) | Run HYPE and monitor logs |
+| Metrics | [`wass2s_kge()`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_kge.md) | Kling-Gupta Efficiency |
+| Interface | [`run_wass2s()`](https://kiema97.github.io/WASS2SHydroR/reference/run_wass2s.md) | Generic method dispatcher |
 
 ## Implemented Model Registry
 

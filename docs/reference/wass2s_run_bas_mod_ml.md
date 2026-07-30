@@ -28,7 +28,6 @@ wass2s_run_bas_mod_ml(
   verbose_tune = TRUE,
   target_positive = TRUE,
   allow_par = TRUE,
-  selection_metric = c("rmse", "kge"),
   max_na_frac = 0.3,
   impute = "median",
   require_variance = TRUE,
@@ -142,10 +141,6 @@ wass2s_run_bas_mod_ml(
   `fusion_method = "meta"`. If `FALSE`, tuning is forced to run
   sequentially.
 
-- selection_metric:
-
-  Character; tuning-selection metric, either `"rmse"` or `"kge"`.
-
 - max_na_frac:
 
   Numeric in \\\[0, 1\]\\: maximum allowed fraction of missing values
@@ -164,7 +159,7 @@ wass2s_run_bas_mod_ml(
 - ...:
 
   Passed to
-  [`WASS2SHydroR::wass2s_cons_mods_ml`](https://kiema97.github.io/AGRHYMET-WASS2SHydroR/reference/wass2s_cons_mods_ml.md).
+  [`WASS2SHydroR::wass2s_cons_mods_ml`](https://kiema97.github.io/WASS2SHydroR/reference/wass2s_cons_mods_ml.md).
 
 ## Value
 
