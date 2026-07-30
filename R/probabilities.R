@@ -19,9 +19,8 @@ wass2s_class_thr <- function(q_hist, probs = c(0.25, 0.75), na.rm = TRUE) {
 #' Tercile thresholds from hydrological climatology
 #'
 #' Computes the two climatological tercile thresholds used to define
-#' \code{below}, \code{normal}, and \code{above} categories. This is the
-#' categorical convention used by PyCPT/CPT, exposed here explicitly for
-#' hydrological forecasts.
+#' \code{below}, \code{normal}, and \code{above} hydrological forecast
+#' categories.
 #'
 #' @param q_hist Numeric historical streamflow or hydrological predictand.
 #' @param na.rm Logical. Remove missing values before computing quantiles.
@@ -260,8 +259,8 @@ wass2s_class_from_forecast <- function(
 #'
 #' Convenience wrapper around \code{wass2s_class_from_forecast()} using
 #' climatological tercile thresholds. This produces categories consistent with
-#' the \code{below}/\code{normal}/\code{above} convention used in seasonal
-#' forecasting systems such as CPT/PyCPT.
+#' the \code{below}/\code{normal}/\code{above} convention used for seasonal
+#' hydrological forecasting.
 #'
 #' @param df Data frame with columns \code{YYYY} and \code{pred}.
 #' @param q_hist Numeric historical observations used to estimate terciles and,

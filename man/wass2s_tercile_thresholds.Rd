@@ -17,9 +17,8 @@ Named numeric vector \code{c(t1, t2)} where \code{t1} is the lower
 }
 \description{
 Computes the two climatological tercile thresholds used to define
-\code{below}, \code{normal}, and \code{above} categories. This is the
-categorical convention used by PyCPT/CPT, exposed here explicitly for
-hydrological forecasts.
+\code{below}, \code{normal}, and \code{above} hydrological forecast
+categories.
 }
 \examples{
 wass2s_tercile_thresholds(1:30)

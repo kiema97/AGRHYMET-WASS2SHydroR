@@ -42,7 +42,7 @@ to \code{saveRDS()}.}
 A list describing the write decision.
 }
 \description{
-This helper implements an operational update policy inspired by PyCPT:
-existing outputs are kept unless \code{update = TRUE} or the new summary is
-better according to \code{wass2s_compare_forecast_versions()}.
+This helper implements a conservative operational update policy: existing
+outputs are kept unless \code{update = TRUE} or the new summary is better
+according to \code{wass2s_compare_forecast_versions()}.
 }

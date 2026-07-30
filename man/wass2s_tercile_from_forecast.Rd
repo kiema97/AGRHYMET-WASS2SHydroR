@@ -21,6 +21,6 @@ Tibble with deterministic forecast, class probabilities, winning
 \description{
 Convenience wrapper around \code{wass2s_class_from_forecast()} using
 climatological tercile thresholds. This produces categories consistent with
-the \code{below}/\code{normal}/\code{above} convention used in seasonal
-forecasting systems such as CPT/PyCPT.
+the \code{below}/\code{normal}/\code{above} convention used for seasonal
+hydrological forecasting.
 }

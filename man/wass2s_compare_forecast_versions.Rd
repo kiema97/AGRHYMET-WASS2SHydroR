@@ -24,6 +24,7 @@ A list with \code{decision}, \code{new_score}, \code{old_score} and
 }
 \description{
 Scores a new and an old forecast summary using objective operational
-criteria. Higher is better. This helper supports safe update policies similar
-to PyCPT's "replace only if the new run is better" logic.
+criteria. Higher is better. This helper supports conservative update
+policies where an existing forecast is replaced only when the new run is
+objectively better.
 }

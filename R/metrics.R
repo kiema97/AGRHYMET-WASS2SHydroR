@@ -10,7 +10,8 @@
 #' @param estimate Numeric vector of predictions.
 #'
 #' @return A single numeric value (KGE). Returns `NA_real_` if not computable
-#'   (e.g., non-finite, zero variance, zero means leading to division by zero).
+#'   (e.g., fewer than two finite pairs, zero variance, zero means leading to
+#'   division by zero).
 #'
 #' @examples
 #' \dontrun{
@@ -25,7 +26,7 @@ wass2s_kge <- function(truth, estimate) {
   p <- as.numeric(estimate)
 
   ok <- is.finite(o) & is.finite(p)
-  if (!any(ok)) return(NA_real_)
+  if (sum(ok) < 2L) return(NA_real_)
   o <- o[ok]; p <- p[ok]
 
   so <- stats::sd(o); sp <- stats::sd(p)

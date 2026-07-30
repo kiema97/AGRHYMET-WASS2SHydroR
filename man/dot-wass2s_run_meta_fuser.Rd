@@ -15,7 +15,9 @@
   quiet = TRUE,
   verbose_tune = TRUE,
   allow_par = TRUE,
-  target_positive = FALSE
+  target_positive = FALSE,
+  meta_guard = TRUE,
+  meta_min_improvement = 0.02
 )
 }
 \description{

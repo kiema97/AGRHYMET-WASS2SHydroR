@@ -1,8 +1,8 @@
 #' Safely write an output only when allowed or objectively better
 #'
-#' This helper implements an operational update policy inspired by PyCPT:
-#' existing outputs are kept unless \code{update = TRUE} or the new summary is
-#' better according to \code{wass2s_compare_forecast_versions()}.
+#' This helper implements a conservative operational update policy: existing
+#' outputs are kept unless \code{update = TRUE} or the new summary is better
+#' according to \code{wass2s_compare_forecast_versions()}.
 #'
 #' @param object Object to write.
 #' @param path Destination path.

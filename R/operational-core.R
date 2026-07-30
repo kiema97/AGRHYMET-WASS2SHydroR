@@ -70,9 +70,8 @@ wass2s__parse_target_months <- function(target) {
 
 #' Midpoint month of a target season
 #'
-#' Computes the climatological midpoint month of a target season. This mirrors
-#' the operational convention used by PyCPT, but is exposed as a lightweight R
-#' helper for hydrological workflows.
+#' Computes the climatological midpoint month of a target season for
+#' hydrological forecast issue metadata.
 #'
 #' @param target Character target season such as \code{"Dec-Feb"},
 #'   \code{"Jun-Sep"}, or \code{"May"}.
@@ -213,8 +212,9 @@ wass2s_write_manifest <- function(manifest, path, overwrite = FALSE) {
 #' Compare two forecast versions
 #'
 #' Scores a new and an old forecast summary using objective operational
-#' criteria. Higher is better. This helper supports safe update policies similar
-#' to PyCPT's "replace only if the new run is better" logic.
+#' criteria. Higher is better. This helper supports conservative update
+#' policies where an existing forecast is replaced only when the new run is
+#' objectively better.
 #'
 #' @param new,old Named lists or one-row data frames containing any of:
 #'   \code{kge}, \code{nse}, \code{rmse}, \code{n_models},

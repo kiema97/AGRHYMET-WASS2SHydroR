@@ -972,7 +972,9 @@ get_any_Q <- function(data_by_product, basin_id, basin_col = "HYBAS_ID") {
   }
 
   scores <- vapply(pred_cols, function(col) {
-    wass2s_kge(df[[target]], df[[col]])
+    ok <- is.finite(df[[target]]) & is.finite(df[[col]])
+    if (sum(ok) < 2L) return(NA_real_)
+    wass2s_kge(df[[target]][ok], df[[col]][ok])
   }, numeric(1))
 
   scores_pos <- pmax(scores, 0)
@@ -1077,9 +1079,67 @@ get_any_Q <- function(data_by_product, basin_id, basin_col = "HYBAS_ID") {
 
   tibble::tibble(
     HYBAS_ID = basin_id,
-    kge = if (nrow(df_ok) > 0) wass2s_kge(df_ok[[target]], df_ok[[pred_col]]) else NA_real_,
+    kge = if (nrow(df_ok) >= 2L) wass2s_kge(df_ok[[target]], df_ok[[pred_col]]) else NA_real_,
     rmse = if (nrow(df_ok) > 0) yardstick::rmse_vec(df_ok[[target]], df_ok[[pred_col]]) else NA_real_
   )
+}
+
+
+#' Cross-validated baseline fusion scores
+#'
+#' @keywords internal
+.wass2s_cv_baseline_fusion <- function(rset,
+                                       pred_cols,
+                                       target = "Q",
+                                       target_positive = FALSE) {
+  if (is.null(rset) || length(pred_cols) == 0L) {
+    return(tibble::tibble())
+  }
+
+  methods <- c("mean", "median", "weighted_mean")
+  rows <- list()
+
+  for (i in seq_len(nrow(rset))) {
+    spl <- rset$splits[[i]]
+    ana <- rsample::analysis(spl)
+    ass <- rsample::assessment(spl)
+
+    for (method in methods) {
+      pred <- switch(
+        method,
+        mean = .wass2s_apply_simple_fusion(ass, pred_cols, method = "mean"),
+        median = .wass2s_apply_simple_fusion(ass, pred_cols, method = "median"),
+        weighted_mean = {
+          weights <- .wass2s_compute_kge_weights(ana, pred_cols, target = target)
+          .wass2s_apply_weighted_mean(ass, pred_cols, weights)
+        }
+      )
+      if (isTRUE(target_positive)) pred <- pmax(pred, 0)
+
+      ok <- is.finite(ass[[target]]) & is.finite(pred)
+      rows[[length(rows) + 1L]] <- tibble::tibble(
+        id = rset$id[[i]],
+        method = method,
+        n = sum(ok),
+        rmse = if (sum(ok) > 0L) yardstick::rmse_vec(ass[[target]][ok], pred[ok]) else NA_real_,
+        kge = if (sum(ok) >= 2L) wass2s_kge(ass[[target]][ok], pred[ok]) else NA_real_
+      )
+    }
+  }
+
+  dplyr::bind_rows(rows) |>
+    dplyr::group_by(.data$method) |>
+    dplyr::summarise(
+      mean_rmse = mean(.data$rmse, na.rm = TRUE),
+      mean_kge = mean(.data$kge, na.rm = TRUE),
+      n_splits = sum(is.finite(.data$rmse)),
+      .groups = "drop"
+    ) |>
+    dplyr::mutate(
+      mean_rmse = dplyr::if_else(is.nan(.data$mean_rmse), NA_real_, .data$mean_rmse),
+      mean_kge = dplyr::if_else(is.nan(.data$mean_kge), NA_real_, .data$mean_kge)
+    ) |>
+    dplyr::arrange(.data$mean_rmse)
 }
 
 
@@ -1097,7 +1157,9 @@ get_any_Q <- function(data_by_product, basin_id, basin_col = "HYBAS_ID") {
     quiet = TRUE,
     verbose_tune = TRUE,
     allow_par = TRUE,
-    target_positive = FALSE
+    target_positive = FALSE,
+    meta_guard = TRUE,
+    meta_min_improvement = 0.02
 ) {
   pred_cols <- setdiff(names(df_tr), c(target, date_col))
   if (length(pred_cols) < 1L) {
@@ -1155,8 +1217,16 @@ get_any_Q <- function(data_by_product, basin_id, basin_col = "HYBAS_ID") {
   best <- NULL
   fit_fin <- NULL
   metrics_cv <- NULL
+  baseline_cv <- NULL
 
   if (!is.null(rset)) {
+    baseline_cv <- .wass2s_cv_baseline_fusion(
+      rset = rset,
+      pred_cols = pred_cols,
+      target = target,
+      target_positive = target_positive
+    )
+
     ctrl <- tune::control_grid(
       save_pred = TRUE,
       verbose = verbose_tune,
@@ -1193,6 +1263,39 @@ get_any_Q <- function(data_by_product, basin_id, basin_col = "HYBAS_ID") {
     ))
   }
 
+  meta_rmse <- metrics_cv |>
+    dplyr::filter(.data$.metric == "rmse", is.finite(.data$mean)) |>
+    dplyr::summarise(value = min(.data$mean), .groups = "drop") |>
+    dplyr::pull(.data$value)
+  if (length(meta_rmse) == 0L || !is.finite(meta_rmse)) meta_rmse <- Inf
+
+  baseline_best <- baseline_cv |>
+    dplyr::filter(is.finite(.data$mean_rmse)) |>
+    dplyr::slice_min(.data$mean_rmse, n = 1, with_ties = FALSE)
+
+  if (isTRUE(meta_guard) && nrow(baseline_best) > 0L) {
+    baseline_rmse <- baseline_best$mean_rmse[[1]]
+    required_rmse <- baseline_rmse * (1 - meta_min_improvement)
+    if (!is.finite(meta_rmse) || meta_rmse > required_rmse) {
+      if (!quiet) {
+        message(
+          "Meta-fusion guard: fallback to ", baseline_best$method[[1]],
+          " (meta CV RMSE = ", signif(meta_rmse, 5),
+          ", baseline CV RMSE = ", signif(baseline_rmse, 5), ")."
+        )
+      }
+      return(list(
+        success = FALSE,
+        fallback_method = baseline_best$method[[1]],
+        fitted = NULL,
+        pred_all = NULL,
+        cv_rs = metrics_cv,
+        cv_baselines = baseline_cv,
+        best_params = NULL
+      ))
+    }
+  }
+
   best <- tune::select_best(rs, metric = "rmse")
   wf_fin <- tune::finalize_workflow(wf_meta, best)
 
@@ -1209,6 +1312,7 @@ get_any_Q <- function(data_by_product, basin_id, basin_col = "HYBAS_ID") {
       fitted = NULL,
       pred_all = NULL,
       cv_rs = metrics_cv,
+      cv_baselines = baseline_cv,
       best_params = best
     ))
   }
@@ -1223,6 +1327,7 @@ get_any_Q <- function(data_by_product, basin_id, basin_col = "HYBAS_ID") {
     fitted = fit_fin,
     pred_all = pred_all,
     cv_rs = metrics_cv,
+    cv_baselines = baseline_cv,
     best_params = best
   )
 }
@@ -1243,7 +1348,9 @@ get_any_Q <- function(data_by_product, basin_id, basin_col = "HYBAS_ID") {
     quiet = TRUE,
     verbose_tune = TRUE,
     allow_par = TRUE,
-    target_positive = FALSE
+    target_positive = FALSE,
+    meta_guard = TRUE,
+    meta_min_improvement = 0.02
 ) {
   fusion_method <- match.arg(fusion_method)
 
@@ -1326,15 +1433,23 @@ get_any_Q <- function(data_by_product, basin_id, basin_col = "HYBAS_ID") {
       quiet = quiet,
       verbose_tune = verbose_tune,
       allow_par = allow_par,
-      target_positive = target_positive
+      target_positive = target_positive,
+      meta_guard = meta_guard,
+      meta_min_improvement = meta_min_improvement
     )
 
     if (!isTRUE(meta_res$success)) {
       if (!quiet) {
-        message("Meta-fusion failed, fallback to mean.")
+        message("Meta-fusion failed or rejected, fallback to simple fusion.")
       }
-      fusion_method <- "mean"
-      fused_models$pred_final <- .wass2s_apply_simple_fusion(fused_models, pred_cols, method = "mean")
+      fusion_method <- meta_res$fallback_method %||% "mean"
+      if (identical(fusion_method, "weighted_mean")) {
+        weights <- .wass2s_compute_kge_weights(df_tr, pred_cols, target = target)
+        fused_models$pred_final <- .wass2s_apply_weighted_mean(fused_models, pred_cols, weights)
+      } else {
+        fused_models$pred_final <- .wass2s_apply_simple_fusion(fused_models, pred_cols, method = fusion_method)
+      }
+      cv_rs <- meta_res$cv_rs
     } else {
       fused_models$pred_final <- meta_res$pred_all
       cv_rs <- meta_res$cv_rs

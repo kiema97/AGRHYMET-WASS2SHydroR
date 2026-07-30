@@ -13,7 +13,8 @@ wass2s_kge(truth, estimate)
 }
 \value{
 A single numeric value (KGE). Returns `NA_real_` if not computable
-  (e.g., non-finite, zero variance, zero means leading to division by zero).
+  (e.g., fewer than two finite pairs, zero variance, zero means leading to
+  division by zero).
 }
 \description{
 Compute the Kling-Gupta Efficiency (KGE) between observations and predictions.

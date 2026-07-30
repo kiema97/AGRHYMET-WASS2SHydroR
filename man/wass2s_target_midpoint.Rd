@@ -15,9 +15,8 @@ Numeric month index. Fractional values indicate a midpoint inside a
   month, for example \code{1.5} for the middle of January.
 }
 \description{
-Computes the climatological midpoint month of a target season. This mirrors
-the operational convention used by PyCPT, but is exposed as a lightweight R
-helper for hydrological workflows.
+Computes the climatological midpoint month of a target season for
+hydrological forecast issue metadata.
 }
 \examples{
 wass2s_target_midpoint("Dec-Feb")
