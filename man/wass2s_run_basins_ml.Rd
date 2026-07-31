@@ -23,6 +23,7 @@ wass2s_run_basins_ml(
   target_positive = TRUE,
   allow_par = TRUE,
   selection_metric = c("rmse", "kge"),
+  allow_in_sample_meta = FALSE,
   ...
 )
 }
@@ -84,6 +85,11 @@ hyperparameter tuning of the meta-learner.}
 \item{selection_metric}{Character. Metric used to select tuned models.
 \code{"rmse"} selects the lowest RMSE; \code{"kge"} selects the highest
 Kling-Gupta Efficiency after tuning.}
+
+\item{allow_in_sample_meta}{Logical forwarded to
+\code{wass2s_run_bas_mod_ml()}. If \code{FALSE} (default), requested final
+ML \code{fusion_method = "meta"} is replaced by \code{"weighted_mean"}
+until strict out-of-fold stacking predictions are available.}
 
 \item{...}{Other parameters passed to \code{wass2s_run_bas_mod_ml}.}
 }

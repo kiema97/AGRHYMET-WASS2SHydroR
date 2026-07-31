@@ -24,6 +24,7 @@ wass2s_run_bas_mod_ml(
   target_positive = TRUE,
   allow_par = TRUE,
   selection_metric = c("rmse", "kge"),
+  allow_in_sample_meta = FALSE,
   max_na_frac = 0.3,
   impute = "median",
   require_variance = TRUE,
@@ -92,6 +93,12 @@ If \code{FALSE}, tuning is forced to run sequentially.}
 \item{selection_metric}{Character. Metric used to select tuned models.
 \code{"rmse"} selects the lowest RMSE; \code{"kge"} selects the highest
 Kling-Gupta Efficiency after tuning.}
+
+\item{allow_in_sample_meta}{Logical. If \code{FALSE} (default), requested
+final \code{fusion_method = "meta"} is replaced by \code{"weighted_mean"}.
+Current ML base-model training returns fitted-history predictions, not
+strict out-of-fold predictions, so final stacking would otherwise learn
+from overly optimistic in-sample base predictions.}
 
 \item{max_na_frac}{Numeric in \eqn{[0, 1]}: maximum allowed fraction of missing
 values per column before stopping (default \code{0.20} = 20\%).}

@@ -90,3 +90,34 @@ test_that("wass2s_cons_mods_ml returns correct structure and non-NA fusion (simp
   expect_true(all(c("YYYY", "pred_fused") %in% names(out$fused)))
   expect_true(sum(!is.na(out$fused$pred_fused)) > 0)
 })
+
+test_that("ML final meta fusion is guarded unless explicitly allowed", {
+  skip_if_not_installed("tune")
+  skip_if_not_installed("glmnet")
+  skip_if_not_installed("ranger")
+
+  data_by_product <- make_toy_data_by_product(
+    basins = c(1040021500),
+    years = 1990:2010,
+    products = c("SST_CMCC", "SST_ECMWF"),
+    p = 4,
+    seed = 123
+  )
+
+  out <- wass2s_run_bas_mod_ml(
+    data_by_product = data_by_product,
+    basin_id = 1040021500,
+    models = c("glmnet", "rf"),
+    topK = 2,
+    prediction_years = c(2001, 2005),
+    product_fusion_method = "median",
+    fusion_method = "meta",
+    final_fuser = "glmnet",
+    grid_levels = 2,
+    quiet = TRUE
+  )
+
+  expect_equal(out$requested_fusion_method, "meta")
+  expect_false(out$allow_in_sample_meta)
+  expect_equal(out$fusion_method, "weighted_mean")
+})

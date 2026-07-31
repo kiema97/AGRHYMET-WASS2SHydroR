@@ -48,6 +48,11 @@
 #' @param selection_metric Character. Metric used to select tuned models.
 #'   \code{"rmse"} selects the lowest RMSE; \code{"kge"} selects the highest
 #'   Kling-Gupta Efficiency after tuning.
+#' @param allow_in_sample_meta Logical. If \code{FALSE} (default), requested
+#'   final \code{fusion_method = "meta"} is replaced by \code{"weighted_mean"}.
+#'   Current ML base-model training returns fitted-history predictions, not
+#'   strict out-of-fold predictions, so final stacking would otherwise learn
+#'   from overly optimistic in-sample base predictions.
 #' @param max_na_frac Numeric in \eqn{[0, 1]}: maximum allowed fraction of missing
 #'   values per column before stopping (default \code{0.20} = 20\%).
 #' @param impute Character, one of \code{"median"}, \code{"mean"}, or \code{"none"}.
@@ -109,6 +114,7 @@ wass2s_run_bas_mod_ml <- function(
     target_positive = TRUE,
     allow_par = TRUE,
     selection_metric = c("rmse", "kge"),
+    allow_in_sample_meta = FALSE,
     max_na_frac = 0.3,
     impute = "median",
     require_variance = TRUE,
@@ -116,6 +122,17 @@ wass2s_run_bas_mod_ml <- function(
 ) {
   fusion_method <- match.arg(fusion_method)
   selection_metric <- match.arg(selection_metric)
+  requested_fusion_method <- fusion_method
+  if (identical(fusion_method, "meta") && !isTRUE(allow_in_sample_meta)) {
+    fusion_method <- "weighted_mean"
+    if (!quiet) {
+      message(
+        "ML final fusion_method = 'meta' replaced by 'weighted_mean' because ",
+        "base-model training predictions are not out-of-fold. Set ",
+        "allow_in_sample_meta = TRUE only for experimental diagnostics."
+      )
+    }
+  }
 
   # ----------------------------
   # Validate models & packages
@@ -378,6 +395,8 @@ wass2s_run_bas_mod_ml <- function(
     scores_train = fusion_res$scores_train,
     scores_test = fusion_res$scores_test,
     fusion_method = fusion_res$fusion_method,
+    requested_fusion_method = requested_fusion_method,
+    allow_in_sample_meta = allow_in_sample_meta,
     fusion_weights = fusion_res$fusion_weights,
     final_fuser = fusion_res$final_fuser,
     leaderboards = stats::setNames(
@@ -1128,6 +1147,10 @@ wass2s_run_bas_mod_ml <- function(
 #' @param selection_metric Character. Metric used to select tuned models.
 #'   \code{"rmse"} selects the lowest RMSE; \code{"kge"} selects the highest
 #'   Kling-Gupta Efficiency after tuning.
+#' @param allow_in_sample_meta Logical forwarded to
+#'   \code{wass2s_run_bas_mod_ml()}. If \code{FALSE} (default), requested final
+#'   ML \code{fusion_method = "meta"} is replaced by \code{"weighted_mean"}
+#'   until strict out-of-fold stacking predictions are available.
 #' @param ... Other parameters passed to \code{wass2s_run_bas_mod_ml}.
 #'
 #' @return A named list: one element per basin, each the list returned by
@@ -1155,6 +1178,7 @@ wass2s_run_basins_ml <- function(
     target_positive = TRUE,
     allow_par = TRUE,
     selection_metric = c("rmse", "kge"),
+    allow_in_sample_meta = FALSE,
     ...
 ) {
   selection_metric <- match.arg(selection_metric)
@@ -1203,6 +1227,7 @@ wass2s_run_basins_ml <- function(
         target_positive = target_positive,
         allow_par = allow_par,
         selection_metric = selection_metric,
+        allow_in_sample_meta = allow_in_sample_meta,
         product_fusion_method=product_fusion_method,
         fusion_method = fusion_method,
         prediction_years=prediction_years,
