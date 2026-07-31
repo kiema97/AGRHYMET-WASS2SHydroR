@@ -12,7 +12,7 @@ wass2s_run_basins_stat(
   final_fuser = "rf",
   grid_levels = 5,
   product_fusion_method = "median",
-  fusion_method = c("meta", "mean", "median", "weighted_mean"),
+  fusion_method = c("auto", "meta", "mean", "median", "weighted_mean", "best"),
   basins = NULL,
   parallel = FALSE,
   workers = 4,
@@ -21,6 +21,9 @@ wass2s_run_basins_stat(
   target_positive = TRUE,
   allow_par = TRUE,
   min_kge_model = 0.2,
+  best_model_guard = TRUE,
+  best_model_min_improvement = 0,
+  best_model_metric = c("rmse", "kge"),
   max_na_frac = 0.3,
   impute = "median",
   require_variance = TRUE,
@@ -55,12 +58,15 @@ Supported values are:
 \item{fusion_method}{Character string specifying the final fusion strategy.
 Supported values are:
 \itemize{
+  \item \code{"auto"}: score deterministic fusion candidates on the training
+    subset and retain the best candidate;
   \item \code{"meta"}: train a meta-learner on the consolidated model predictions;
   \item \code{"mean"}: use the simple arithmetic mean across consolidated predictions;
   \item \code{"median"}: use the median across consolidated predictions;
   \item \code{"weighted_mean"}: use a performance-based weighted mean, where
     weights are derived from the Kling-Gupta Efficiency (KGE) computed on the
-    training subset.
+    training subset;
+  \item \code{"best"}: keep the best individual consolidated model.
 }}
 
 \item{basins}{Optional vector of basin IDs to process; default uses all found.}
@@ -81,6 +87,18 @@ hyperparameter tuning of the meta-learner.}
 
 \item{min_kge_model}{Numeric. Minimum KGE threshold required for a model or
 product to receive non-zero weight during performance-based fusion.}
+
+\item{best_model_guard}{Logical. If \code{TRUE} (default), compare the final
+fusion against the best individual consolidated model on the training subset.
+If the fusion does not improve the selected metric, the best individual
+model is retained instead.}
+
+\item{best_model_min_improvement}{Numeric. Minimum relative RMSE improvement
+or absolute KGE improvement required for a fusion to beat the best individual
+model when \code{best_model_guard = TRUE}.}
+
+\item{best_model_metric}{Character. Metric used by the best-model guard.
+\code{"rmse"} favours lower RMSE; \code{"kge"} favours higher KGE.}
 
 \item{max_na_frac}{Numeric. Maximum fraction of missing values allowed per variable.}
 

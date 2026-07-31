@@ -30,12 +30,15 @@
 #' @param fusion_method Character string specifying the final fusion strategy.
 #'   Supported values are:
 #'   \itemize{
+#'     \item \code{"auto"}: score deterministic fusion candidates on the training
+#'       subset and retain the best candidate;
 #'     \item \code{"meta"}: train a meta-learner on the consolidated model predictions;
 #'     \item \code{"mean"}: use the simple arithmetic mean across consolidated predictions;
 #'     \item \code{"median"}: use the median across consolidated predictions;
 #'     \item \code{"weighted_mean"}: use a performance-based weighted mean, where
 #'       weights are derived from the Kling-Gupta Efficiency (KGE) computed on the
-#'       training subset.
+#'       training subset;
+#'     \item \code{"best"}: keep the best individual consolidated model.
 #'   }
 #' @param quiet Logical; if \code{FALSE}, emits informative messages.
 #' @param verbose_tune A logical for logging results (other than warnings and errors, which are always shown) as they are generated during training in a single R process.
@@ -53,6 +56,15 @@
 #'   Current ML base-model training returns fitted-history predictions, not
 #'   strict out-of-fold predictions, so final stacking would otherwise learn
 #'   from overly optimistic in-sample base predictions.
+#' @param best_model_guard Logical. If \code{TRUE} (default), compare the final
+#'   fusion against the best individual consolidated model on the training subset.
+#'   If the fusion does not improve the selected metric, the best individual
+#'   model is retained instead.
+#' @param best_model_min_improvement Numeric. Minimum relative RMSE improvement
+#'   or absolute KGE improvement required for a fusion to beat the best individual
+#'   model when \code{best_model_guard = TRUE}.
+#' @param best_model_metric Character. Metric used by the best-model guard.
+#'   \code{"rmse"} favours lower RMSE; \code{"kge"} favours higher KGE.
 #' @param max_na_frac Numeric in \eqn{[0, 1]}: maximum allowed fraction of missing
 #'   values per column before stopping (default \code{0.20} = 20\%).
 #' @param impute Character, one of \code{"median"}, \code{"mean"}, or \code{"none"}.
@@ -83,6 +95,9 @@
 #'   \item \code{fusion_method}: the fusion strategy effectively used;
 #'   \item \code{fusion_weights}: named numeric vector of weights when
 #'     \code{fusion_method = "weighted_mean"}, otherwise \code{NULL};
+#'   \item \code{fusion_candidates}: data frame containing the predictions
+#'     produced by each deterministic final fusion candidate, retained for audit
+#'     even when the candidate is not selected;
 #'   \item \code{leaderboards}: per-model leaderboards returned from the
 #'     consolidation stage;
 #'   \item \code{cv_rs}: tuning metrics collected from the meta-learner when
@@ -107,7 +122,7 @@ wass2s_run_bas_mod_ml <- function(
     min_kge_model = -Inf,
     grid_levels = 5,
     product_fusion_method = "median",
-    fusion_method = c("meta", "mean", "median", "weighted_mean"),
+    fusion_method = c("auto", "meta", "mean", "median", "weighted_mean", "best"),
     final_fuser = "rf",
     quiet = TRUE,
     verbose_tune = TRUE,
@@ -115,6 +130,9 @@ wass2s_run_bas_mod_ml <- function(
     allow_par = TRUE,
     selection_metric = c("rmse", "kge"),
     allow_in_sample_meta = FALSE,
+    best_model_guard = TRUE,
+    best_model_min_improvement = 0,
+    best_model_metric = c("rmse", "kge"),
     max_na_frac = 0.3,
     impute = "median",
     require_variance = TRUE,
@@ -122,6 +140,7 @@ wass2s_run_bas_mod_ml <- function(
 ) {
   fusion_method <- match.arg(fusion_method)
   selection_metric <- match.arg(selection_metric)
+  best_model_metric <- match.arg(best_model_metric)
   requested_fusion_method <- fusion_method
   if (identical(fusion_method, "meta") && !isTRUE(allow_in_sample_meta)) {
     fusion_method <- "weighted_mean"
@@ -273,6 +292,7 @@ wass2s_run_bas_mod_ml <- function(
       ),
       fusion_method = fusion_method,
       fusion_weights = NULL,
+      fusion_candidates = out_empty[, intersect(c("YYYY", "Q", "pred_final"), names(out_empty)), drop = FALSE],
       leaderboards = stats::setNames(
         purrr::map(outs, "leaderboard"),
         purrr::map_chr(outs, "model")
@@ -354,6 +374,7 @@ wass2s_run_bas_mod_ml <- function(
       ),
       fusion_method = fusion_method,
       fusion_weights = NULL,
+      fusion_candidates = fused_models[, intersect(c("YYYY", "Q"), names(fused_models)), drop = FALSE],
       leaderboards = stats::setNames(
         purrr::map(outs, "leaderboard"),
         purrr::map_chr(outs, "model")
@@ -378,7 +399,10 @@ wass2s_run_bas_mod_ml <- function(
     quiet = quiet,
     verbose_tune = verbose_tune,
     allow_par = allow_par,
-    target_positive = target_positive
+    target_positive = target_positive,
+    best_model_guard = best_model_guard,
+    best_model_min_improvement = best_model_min_improvement,
+    best_model_metric = best_model_metric
   )
 
   if (!quiet) {
@@ -398,6 +422,9 @@ wass2s_run_bas_mod_ml <- function(
     requested_fusion_method = requested_fusion_method,
     allow_in_sample_meta = allow_in_sample_meta,
     fusion_weights = fusion_res$fusion_weights,
+    best_model = fusion_res$best_model,
+    best_model_scores = fusion_res$best_model_scores,
+    fusion_candidates = fusion_res$fusion_candidates,
     final_fuser = fusion_res$final_fuser,
     leaderboards = stats::setNames(
       purrr::map(outs, "leaderboard"),
@@ -406,7 +433,8 @@ wass2s_run_bas_mod_ml <- function(
     cv_rs = fusion_res$cv_rs,
     cv_baselines = fusion_res$cv_baselines,
     cv_meta = fusion_res$cv_meta,
-    best_meta_params = fusion_res$best_meta_params
+    best_meta_params = fusion_res$best_meta_params,
+    fusion_report = fusion_res$fusion_report
   )
 }
 
@@ -1131,12 +1159,15 @@ wass2s_run_bas_mod_ml <- function(
 #' @param fusion_method Character string specifying the final fusion strategy.
 #'   Supported values are:
 #'   \itemize{
+#'     \item \code{"auto"}: score deterministic fusion candidates on the training
+#'       subset and retain the best candidate;
 #'     \item \code{"meta"}: train a meta-learner on the consolidated model predictions;
 #'     \item \code{"mean"}: use the simple arithmetic mean across consolidated predictions;
 #'     \item \code{"median"}: use the median across consolidated predictions;
 #'     \item \code{"weighted_mean"}: use a performance-based weighted mean, where
 #'       weights are derived from the Kling-Gupta Efficiency (KGE) computed on the
-#'       training subset.
+#'       training subset;
+#'     \item \code{"best"}: keep the best individual consolidated model.
 #'   }
 #' @param final_fuser Name of the meta-learner for final fusion.
 #' @param quiet Logical; if \code{FALSE}, emits informative messages.
@@ -1151,6 +1182,15 @@ wass2s_run_bas_mod_ml <- function(
 #'   \code{wass2s_run_bas_mod_ml()}. If \code{FALSE} (default), requested final
 #'   ML \code{fusion_method = "meta"} is replaced by \code{"weighted_mean"}
 #'   until strict out-of-fold stacking predictions are available.
+#' @param best_model_guard Logical. If \code{TRUE} (default), compare the final
+#'   fusion against the best individual consolidated model on the training subset.
+#'   If the fusion does not improve the selected metric, the best individual
+#'   model is retained instead.
+#' @param best_model_min_improvement Numeric. Minimum relative RMSE improvement
+#'   or absolute KGE improvement required for a fusion to beat the best individual
+#'   model when \code{best_model_guard = TRUE}.
+#' @param best_model_metric Character. Metric used by the best-model guard.
+#'   \code{"rmse"} favours lower RMSE; \code{"kge"} favours higher KGE.
 #' @param ... Other parameters passed to \code{wass2s_run_bas_mod_ml}.
 #'
 #' @return A named list: one element per basin, each the list returned by
@@ -1172,16 +1212,20 @@ wass2s_run_basins_ml <- function(
     workers = 4,
     grid_levels = 5,
     product_fusion_method = "median",
-    fusion_method = c("meta", "mean", "median", "weighted_mean"),
+    fusion_method = c("auto", "meta", "mean", "median", "weighted_mean", "best"),
     final_fuser = "rf",
     quiet = TRUE,
     target_positive = TRUE,
     allow_par = TRUE,
     selection_metric = c("rmse", "kge"),
     allow_in_sample_meta = FALSE,
+    best_model_guard = TRUE,
+    best_model_min_improvement = 0,
+    best_model_metric = c("rmse", "kge"),
     ...
 ) {
   selection_metric <- match.arg(selection_metric)
+  best_model_metric <- match.arg(best_model_metric)
 
   .require_pkg(engine_pkg[c(final_fuser, models)])
 
@@ -1228,6 +1272,9 @@ wass2s_run_basins_ml <- function(
         allow_par = allow_par,
         selection_metric = selection_metric,
         allow_in_sample_meta = allow_in_sample_meta,
+        best_model_guard = best_model_guard,
+        best_model_min_improvement = best_model_min_improvement,
+        best_model_metric = best_model_metric,
         product_fusion_method=product_fusion_method,
         fusion_method = fusion_method,
         prediction_years=prediction_years,

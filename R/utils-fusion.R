@@ -1018,6 +1018,125 @@ get_any_Q <- function(data_by_product, basin_id, basin_col = "HYBAS_ID") {
 }
 
 
+#' Select the best individual predictor column on a training period
+#'
+#' @keywords internal
+.wass2s_best_individual_model <- function(df,
+                                          pred_cols,
+                                          target = "Q") {
+  if (!is.data.frame(df) || length(pred_cols) == 0L || !target %in% names(df)) {
+    return(tibble::tibble())
+  }
+
+  rows <- lapply(pred_cols, function(col) {
+    ok <- is.finite(df[[target]]) & is.finite(df[[col]])
+    tibble::tibble(
+      model = col,
+      n = sum(ok),
+      kge = if (sum(ok) >= 2L) wass2s_kge(df[[target]][ok], df[[col]][ok]) else NA_real_,
+      rmse = if (sum(ok) > 0L) wass2s_rmse(df[[target]][ok], df[[col]][ok]) else NA_real_
+    )
+  })
+
+  dplyr::bind_rows(rows) |>
+    dplyr::arrange(.data$rmse, dplyr::desc(.data$kge))
+}
+
+
+#' Score deterministic final fusion candidates on the training period
+#'
+#' @keywords internal
+.wass2s_final_fusion_candidates <- function(fused_models,
+                                            df_tr,
+                                            pred_cols,
+                                            basin_id,
+                                            target = "Q",
+                                            date_col = "YYYY",
+                                            target_positive = FALSE) {
+  methods <- c("mean", "median", "weighted_mean", "best")
+  rows <- list()
+
+  weights <- .wass2s_compute_kge_weights(df_tr, pred_cols, target = target)
+  best_scores <- .wass2s_best_individual_model(df_tr, pred_cols, target = target)
+  best_row <- best_scores |>
+    dplyr::filter(is.finite(.data$rmse)) |>
+    dplyr::slice(1)
+  best_model <- if (nrow(best_row) > 0L) best_row$model[[1]] else NA_character_
+
+  for (method in methods) {
+    pred <- switch(
+      method,
+      mean = .wass2s_apply_simple_fusion(fused_models, pred_cols, method = "mean"),
+      median = .wass2s_apply_simple_fusion(fused_models, pred_cols, method = "median"),
+      weighted_mean = .wass2s_apply_weighted_mean(fused_models, pred_cols, weights),
+      best = if (!is.na(best_model)) fused_models[[best_model]] else rep(NA_real_, nrow(fused_models))
+    )
+    if (isTRUE(target_positive)) pred <- pmax(pred, 0)
+
+    tmp <- fused_models
+    tmp$pred_final <- pred
+    sc <- .wass2s_score_fusion(
+      tmp %>% dplyr::filter(.data[[date_col]] %in% df_tr[[date_col]]),
+      basin_id = basin_id,
+      target = target
+    )
+
+    rows[[length(rows) + 1L]] <- tibble::tibble(
+      method = method,
+      model = if (identical(method, "best")) best_model else NA_character_,
+      kge = sc$kge[[1]],
+      rmse = sc$rmse[[1]]
+    )
+  }
+
+  dplyr::bind_rows(rows) |>
+    dplyr::mutate(.priority = dplyr::if_else(.data$method == "best", 0L, 1L)) |>
+    dplyr::arrange(.data$rmse, dplyr::desc(.data$kge), .data$.priority) |>
+    dplyr::select(-".priority")
+}
+
+
+#' Build deterministic final fusion candidate predictions
+#'
+#' @keywords internal
+.wass2s_final_fusion_candidate_predictions <- function(fused_models,
+                                                       df_tr,
+                                                       pred_cols,
+                                                       target = "Q",
+                                                       date_col = "YYYY",
+                                                       target_positive = FALSE) {
+  out <- fused_models[, c(date_col, target), drop = FALSE]
+
+  if (length(pred_cols) == 0L) {
+    return(out)
+  }
+
+  weights <- .wass2s_compute_kge_weights(df_tr, pred_cols, target = target)
+  best_scores <- .wass2s_best_individual_model(df_tr, pred_cols, target = target)
+  best_row <- best_scores |>
+    dplyr::filter(is.finite(.data$rmse)) |>
+    dplyr::slice(1)
+  best_model <- if (nrow(best_row) > 0L) best_row$model[[1]] else NA_character_
+
+  preds <- list(
+    pred_mean = .wass2s_apply_simple_fusion(fused_models, pred_cols, method = "mean"),
+    pred_median = .wass2s_apply_simple_fusion(fused_models, pred_cols, method = "median"),
+    pred_weighted_mean = .wass2s_apply_weighted_mean(fused_models, pred_cols, weights),
+    pred_best = if (!is.na(best_model)) fused_models[[best_model]] else rep(NA_real_, nrow(fused_models))
+  )
+
+  if (isTRUE(target_positive)) {
+    preds <- lapply(preds, function(x) pmax(x, 0))
+  }
+
+  for (nm in names(preds)) {
+    out[[nm]] <- as.numeric(preds[[nm]])
+  }
+
+  out
+}
+
+
 #' Internal helper to apply a simple row-wise fusion
 #'
 #' @keywords internal
@@ -1369,7 +1488,7 @@ get_any_Q <- function(data_by_product, basin_id, basin_col = "HYBAS_ID") {
     target = "Q",
     date_col = "YYYY",
     prediction_years = NULL,
-    fusion_method = c("meta", "mean", "median", "weighted_mean"),
+    fusion_method = c("auto", "meta", "mean", "median", "weighted_mean", "best"),
     final_fuser = "rf",
     grid_levels = 5,
     quiet = TRUE,
@@ -1378,9 +1497,14 @@ get_any_Q <- function(data_by_product, basin_id, basin_col = "HYBAS_ID") {
     target_positive = FALSE,
     meta_guard = TRUE,
     meta_min_improvement = 0.02,
-    meta_min_kge_delta = 0
+    meta_min_kge_delta = 0,
+    best_model_guard = TRUE,
+    best_model_min_improvement = 0,
+    best_model_metric = c("rmse", "kge")
 ) {
   fusion_method <- match.arg(fusion_method)
+  requested_fusion_method <- fusion_method
+  best_model_metric <- match.arg(best_model_metric)
 
   if (!is.data.frame(fused_models)) {
     stop("`fused_models` must be a data.frame.", call. = FALSE)
@@ -1409,6 +1533,9 @@ get_any_Q <- function(data_by_product, basin_id, basin_col = "HYBAS_ID") {
       ),
       fusion_method = fusion_method,
       fusion_weights = NULL,
+      best_model = NULL,
+      best_model_scores = tibble::tibble(),
+      fusion_candidates = out[, c(date_col, target, "pred_final"), drop = FALSE],
       cv_rs = NULL,
       best_meta_params = NULL
     ))
@@ -1443,6 +1570,39 @@ get_any_Q <- function(data_by_product, basin_id, basin_col = "HYBAS_ID") {
   cv_baselines <- NULL
   cv_meta <- NULL
   best_meta_params <- NULL
+  best_model <- NULL
+  best_model_scores <- .wass2s_best_individual_model(df_tr, pred_cols, target = target)
+  candidate_scores <- .wass2s_final_fusion_candidates(
+    fused_models = fused_models,
+    df_tr = df_tr,
+    pred_cols = pred_cols,
+    basin_id = basin_id,
+    target = target,
+    date_col = date_col,
+    target_positive = target_positive
+  )
+  candidate_predictions <- .wass2s_final_fusion_candidate_predictions(
+    fused_models = fused_models,
+    df_tr = df_tr,
+    pred_cols = pred_cols,
+    target = target,
+    date_col = date_col,
+    target_positive = target_positive
+  )
+  selection_reason <- "requested_method"
+
+  if (identical(fusion_method, "auto")) {
+    best_candidate <- candidate_scores |>
+      dplyr::filter(is.finite(.data$rmse)) |>
+      dplyr::slice(1)
+    if (nrow(best_candidate) > 0L) {
+      fusion_method <- best_candidate$method[[1]]
+      selection_reason <- "auto_best_training_rmse"
+    } else {
+      fusion_method <- "mean"
+      selection_reason <- "auto_fallback_mean_no_valid_candidate"
+    }
+  }
 
   if (fusion_method == "mean") {
     fused_models$pred_final <- .wass2s_apply_simple_fusion(fused_models, pred_cols, method = "mean")
@@ -1451,6 +1611,16 @@ get_any_Q <- function(data_by_product, basin_id, basin_col = "HYBAS_ID") {
   } else if (fusion_method == "weighted_mean") {
     weights <- .wass2s_compute_kge_weights(df_tr, pred_cols, target = target)
     fused_models$pred_final <- .wass2s_apply_weighted_mean(fused_models, pred_cols, weights)
+  } else if (fusion_method == "best") {
+    best_row <- best_model_scores |>
+      dplyr::filter(is.finite(.data$rmse)) |>
+      dplyr::slice(1)
+    if (nrow(best_row) == 0L) {
+      fused_models$pred_final <- NA_real_
+    } else {
+      best_model <- best_row$model[[1]]
+      fused_models$pred_final <- fused_models[[best_model]]
+    }
   } else if (fusion_method == "meta") {
     meta_res <- .wass2s_run_meta_fuser(
       df_tr = df_tr,
@@ -1501,6 +1671,46 @@ get_any_Q <- function(data_by_product, basin_id, basin_col = "HYBAS_ID") {
     target = target
   )
 
+  if (isTRUE(best_model_guard) &&
+      !identical(fusion_method, "best") &&
+      nrow(best_model_scores) > 0L) {
+    best_row <- best_model_scores |>
+      dplyr::filter(is.finite(.data$rmse)) |>
+      dplyr::slice(1)
+
+    if (nrow(best_row) > 0L) {
+      rmse_failed <- is.finite(best_row$rmse[[1]]) &&
+        (!is.finite(train_scores$rmse[[1]]) ||
+           train_scores$rmse[[1]] >= best_row$rmse[[1]] * (1 - best_model_min_improvement))
+      kge_failed <- identical(best_model_metric, "kge") &&
+        is.finite(best_row$kge[[1]]) &&
+        (!is.finite(train_scores$kge[[1]]) ||
+           train_scores$kge[[1]] <= best_row$kge[[1]] + best_model_min_improvement)
+
+      if (rmse_failed || kge_failed) {
+        best_model <- best_row$model[[1]]
+        if (!quiet) {
+          message(
+            "Final fusion guard: fallback to best individual model '", best_model,
+            "' because fusion did not improve training ", best_model_metric, "."
+          )
+        }
+        fusion_method <- "best"
+        selection_reason <- "fallback_best_individual_no_fusion_gain"
+        weights <- NULL
+        fused_models$pred_final <- fused_models[[best_model]]
+        if (isTRUE(target_positive)) {
+          fused_models$pred_final <- pmax(fused_models$pred_final, 0)
+        }
+        train_scores <- .wass2s_score_fusion(
+          fused_models %>% dplyr::filter(.data[[date_col]] %in% df_tr[[date_col]]),
+          basin_id = basin_id,
+          target = target
+        )
+      }
+    }
+  }
+
   test_scores <- .wass2s_score_fusion(
     fused_models %>% dplyr::filter(.data[[date_col]] %in% df_te[[date_col]]),
     basin_id = basin_id,
@@ -1518,13 +1728,27 @@ get_any_Q <- function(data_by_product, basin_id, basin_col = "HYBAS_ID") {
     scores_train = train_scores,
     scores_test = test_scores,
     scores = scores,
+    requested_fusion_method = requested_fusion_method,
     fusion_method = fusion_method,
     fusion_weights = weights,
+    best_model = best_model,
+    best_model_scores = best_model_scores,
+    fusion_candidates = candidate_predictions,
     final_fuser = final_fuser,
     cv_rs = cv_rs,
     cv_baselines = cv_baselines,
     cv_meta = cv_meta,
-    best_meta_params = best_meta_params
+    best_meta_params = best_meta_params,
+    fusion_report = list(
+      requested_fusion_method = requested_fusion_method,
+      selected_fusion_method = fusion_method,
+      selection_reason = selection_reason,
+      best_model = best_model,
+      candidate_scores = candidate_scores |>
+        dplyr::mutate(selected = .data$method == fusion_method),
+      candidate_predictions = candidate_predictions,
+      best_model_scores = best_model_scores
+    )
   )
 }
 

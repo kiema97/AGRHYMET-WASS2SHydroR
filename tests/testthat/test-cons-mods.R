@@ -119,5 +119,5 @@ test_that("ML final meta fusion is guarded unless explicitly allowed", {
 
   expect_equal(out$requested_fusion_method, "meta")
   expect_false(out$allow_in_sample_meta)
-  expect_equal(out$fusion_method, "weighted_mean")
+  expect_true(out$fusion_method %in% c("weighted_mean", "best"))
 })

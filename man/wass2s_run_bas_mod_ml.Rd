@@ -17,7 +17,7 @@ wass2s_run_bas_mod_ml(
   min_kge_model = -Inf,
   grid_levels = 5,
   product_fusion_method = "median",
-  fusion_method = c("meta", "mean", "median", "weighted_mean"),
+  fusion_method = c("auto", "meta", "mean", "median", "weighted_mean", "best"),
   final_fuser = "rf",
   quiet = TRUE,
   verbose_tune = TRUE,
@@ -25,6 +25,9 @@ wass2s_run_bas_mod_ml(
   allow_par = TRUE,
   selection_metric = c("rmse", "kge"),
   allow_in_sample_meta = FALSE,
+  best_model_guard = TRUE,
+  best_model_min_improvement = 0,
+  best_model_metric = c("rmse", "kge"),
   max_na_frac = 0.3,
   impute = "median",
   require_variance = TRUE,
@@ -68,12 +71,15 @@ Supported values are:
 \item{fusion_method}{Character string specifying the final fusion strategy.
 Supported values are:
 \itemize{
+  \item \code{"auto"}: score deterministic fusion candidates on the training
+    subset and retain the best candidate;
   \item \code{"meta"}: train a meta-learner on the consolidated model predictions;
   \item \code{"mean"}: use the simple arithmetic mean across consolidated predictions;
   \item \code{"median"}: use the median across consolidated predictions;
   \item \code{"weighted_mean"}: use a performance-based weighted mean, where
     weights are derived from the Kling-Gupta Efficiency (KGE) computed on the
-    training subset.
+    training subset;
+  \item \code{"best"}: keep the best individual consolidated model.
 }}
 
 \item{final_fuser}{Name of the meta-learner to use (subset of \code{SUPPORTED_FUSERS}).}
@@ -100,6 +106,18 @@ Current ML base-model training returns fitted-history predictions, not
 strict out-of-fold predictions, so final stacking would otherwise learn
 from overly optimistic in-sample base predictions.}
 
+\item{best_model_guard}{Logical. If \code{TRUE} (default), compare the final
+fusion against the best individual consolidated model on the training subset.
+If the fusion does not improve the selected metric, the best individual
+model is retained instead.}
+
+\item{best_model_min_improvement}{Numeric. Minimum relative RMSE improvement
+or absolute KGE improvement required for a fusion to beat the best individual
+model when \code{best_model_guard = TRUE}.}
+
+\item{best_model_metric}{Character. Metric used by the best-model guard.
+\code{"rmse"} favours lower RMSE; \code{"kge"} favours higher KGE.}
+
 \item{max_na_frac}{Numeric in \eqn{[0, 1]}: maximum allowed fraction of missing
 values per column before stopping (default \code{0.20} = 20\%).}
 
@@ -125,6 +143,9 @@ A list containing:
   \item \code{fusion_method}: the fusion strategy effectively used;
   \item \code{fusion_weights}: named numeric vector of weights when
     \code{fusion_method = "weighted_mean"}, otherwise \code{NULL};
+  \item \code{fusion_candidates}: data frame containing the predictions
+    produced by each deterministic final fusion candidate, retained for audit
+    even when the candidate is not selected;
   \item \code{leaderboards}: per-model leaderboards returned from the
     consolidation stage;
   \item \code{cv_rs}: tuning metrics collected from the meta-learner when

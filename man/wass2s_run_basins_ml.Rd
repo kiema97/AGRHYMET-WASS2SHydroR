@@ -17,13 +17,16 @@ wass2s_run_basins_ml(
   workers = 4,
   grid_levels = 5,
   product_fusion_method = "median",
-  fusion_method = c("meta", "mean", "median", "weighted_mean"),
+  fusion_method = c("auto", "meta", "mean", "median", "weighted_mean", "best"),
   final_fuser = "rf",
   quiet = TRUE,
   target_positive = TRUE,
   allow_par = TRUE,
   selection_metric = c("rmse", "kge"),
   allow_in_sample_meta = FALSE,
+  best_model_guard = TRUE,
+  best_model_min_improvement = 0,
+  best_model_metric = c("rmse", "kge"),
   ...
 )
 }
@@ -64,12 +67,15 @@ Supported values are:
 \item{fusion_method}{Character string specifying the final fusion strategy.
 Supported values are:
 \itemize{
+  \item \code{"auto"}: score deterministic fusion candidates on the training
+    subset and retain the best candidate;
   \item \code{"meta"}: train a meta-learner on the consolidated model predictions;
   \item \code{"mean"}: use the simple arithmetic mean across consolidated predictions;
   \item \code{"median"}: use the median across consolidated predictions;
   \item \code{"weighted_mean"}: use a performance-based weighted mean, where
     weights are derived from the Kling-Gupta Efficiency (KGE) computed on the
-    training subset.
+    training subset;
+  \item \code{"best"}: keep the best individual consolidated model.
 }}
 
 \item{final_fuser}{Name of the meta-learner for final fusion.}
@@ -90,6 +96,18 @@ Kling-Gupta Efficiency after tuning.}
 \code{wass2s_run_bas_mod_ml()}. If \code{FALSE} (default), requested final
 ML \code{fusion_method = "meta"} is replaced by \code{"weighted_mean"}
 until strict out-of-fold stacking predictions are available.}
+
+\item{best_model_guard}{Logical. If \code{TRUE} (default), compare the final
+fusion against the best individual consolidated model on the training subset.
+If the fusion does not improve the selected metric, the best individual
+model is retained instead.}
+
+\item{best_model_min_improvement}{Numeric. Minimum relative RMSE improvement
+or absolute KGE improvement required for a fusion to beat the best individual
+model when \code{best_model_guard = TRUE}.}
+
+\item{best_model_metric}{Character. Metric used by the best-model guard.
+\code{"rmse"} favours lower RMSE; \code{"kge"} favours higher KGE.}
 
 \item{...}{Other parameters passed to \code{wass2s_run_bas_mod_ml}.}
 }

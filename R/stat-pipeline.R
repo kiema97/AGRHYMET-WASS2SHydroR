@@ -41,12 +41,15 @@
 #' @param fusion_method Character string specifying the final fusion strategy.
 #'   Supported values are:
 #'   \itemize{
+#'     \item \code{"auto"}: score deterministic fusion candidates on the training
+#'       subset and retain the best candidate;
 #'     \item \code{"meta"}: train a meta-learner on the consolidated model predictions;
 #'     \item \code{"mean"}: use the simple arithmetic mean across consolidated predictions;
 #'     \item \code{"median"}: use the median across consolidated predictions;
 #'     \item \code{"weighted_mean"}: use a performance-based weighted mean, where
 #'       weights are derived from the Kling-Gupta Efficiency (KGE) computed on the
-#'       training subset.
+#'       training subset;
+#'     \item \code{"best"}: keep the best individual consolidated model.
 #'   }
 #'
 #' @param final_fuser Character. Meta-learner used when
@@ -73,6 +76,18 @@
 #'
 #' @param min_kge_model Numeric. Minimum KGE threshold required for a model or
 #'   product to receive non-zero weight during performance-based fusion.
+#'
+#' @param best_model_guard Logical. If \code{TRUE} (default), compare the final
+#'   fusion against the best individual consolidated model on the training subset.
+#'   If the fusion does not improve the selected metric, the best individual
+#'   model is retained instead.
+#'
+#' @param best_model_min_improvement Numeric. Minimum relative RMSE improvement
+#'   or absolute KGE improvement required for a fusion to beat the best individual
+#'   model when \code{best_model_guard = TRUE}.
+#'
+#' @param best_model_metric Character. Metric used by the best-model guard.
+#'   \code{"rmse"} favours lower RMSE; \code{"kge"} favours higher KGE.
 #'
 #' @param max_na_frac Numeric. Maximum fraction of missing values allowed per variable.
 #'
@@ -109,6 +124,9 @@
 #'   \item \code{fusion_method}: Fusion strategy effectively used;
 #'   \item \code{fusion_weights}: Named numeric vector of weights when using
 #'     \code{"weighted_mean"}, otherwise \code{NULL};
+#'   \item \code{fusion_candidates}: Data frame containing the predictions
+#'     produced by each deterministic final fusion candidate, retained for audit
+#'     even when the candidate is not selected;
 #'   \item \code{leaderboards}: Per-model ranking of selected predictors/products;
 #'   \item \code{cv_rs}: Cross-validation metrics from meta-learner tuning
 #'     (only when \code{fusion_method = "meta"});
@@ -149,7 +167,7 @@ wass2s_run_basin_mods_stat <- function(
     prediction_years = NULL,
     topK = 3,
     product_fusion_method = "median",
-    fusion_method = c("meta", "mean", "median", "weighted_mean"),
+    fusion_method = c("auto", "meta", "mean", "median", "weighted_mean", "best"),
     final_fuser = "rf",
     grid_levels = 5,
     sub_fuser = NULL,
@@ -159,6 +177,9 @@ wass2s_run_basin_mods_stat <- function(
     target_positive = TRUE,
     allow_par = TRUE,
     min_kge_model = 0.2,
+    best_model_guard = TRUE,
+    best_model_min_improvement = 0,
+    best_model_metric = c("rmse", "kge"),
     max_na_frac = 0.3,
     impute = "median",
     require_variance = TRUE,
@@ -166,6 +187,7 @@ wass2s_run_basin_mods_stat <- function(
 ) {
 
   fusion_method <- match.arg(fusion_method)
+  best_model_metric <- match.arg(best_model_metric)
   if (is.null(sub_fuser)) sub_fuser <- final_fuser
   if (is.null(sub_grid_levels)) sub_grid_levels <- grid_levels
 
@@ -350,7 +372,10 @@ wass2s_run_basin_mods_stat <- function(
     quiet = quiet,
     verbose_tune = verbose_tune,
     allow_par = allow_par,
-    target_positive = target_positive
+    target_positive = target_positive,
+    best_model_guard = best_model_guard,
+    best_model_min_improvement = best_model_min_improvement,
+    best_model_metric = best_model_metric
   )
 
   # =========================
@@ -365,13 +390,17 @@ wass2s_run_basin_mods_stat <- function(
     scores_test = fusion_res$scores_test,
     fusion_method = fusion_res$fusion_method,
     fusion_weights = fusion_res$fusion_weights,
+    best_model = fusion_res$best_model,
+    best_model_scores = fusion_res$best_model_scores,
+    fusion_candidates = fusion_res$fusion_candidates,
     leaderboards = list(
       PCR   = models$PCR$leaderboard_products,
       RIDGE = models$RIDGE$leaderboard_products,
       LASSO = models$LASSO$leaderboard_products
     ),
     cv_rs = fusion_res$cv_rs,
-    best_meta_params = fusion_res$best_meta_params
+    best_meta_params = fusion_res$best_meta_params,
+    fusion_report = fusion_res$fusion_report
   )
 }
 
@@ -1108,12 +1137,15 @@ wass2s_run_basin_mods_stat <- function(
 #' @param fusion_method Character string specifying the final fusion strategy.
 #'   Supported values are:
 #'   \itemize{
+#'     \item \code{"auto"}: score deterministic fusion candidates on the training
+#'       subset and retain the best candidate;
 #'     \item \code{"meta"}: train a meta-learner on the consolidated model predictions;
 #'     \item \code{"mean"}: use the simple arithmetic mean across consolidated predictions;
 #'     \item \code{"median"}: use the median across consolidated predictions;
 #'     \item \code{"weighted_mean"}: use a performance-based weighted mean, where
 #'       weights are derived from the Kling-Gupta Efficiency (KGE) computed on the
-#'       training subset.
+#'       training subset;
+#'     \item \code{"best"}: keep the best individual consolidated model.
 #'   }
 #' @param basins Optional vector of basin IDs to process; default uses all found.
 #' @param parallel Logical, run basins in parallel using \pkg{furrr}.
@@ -1130,6 +1162,18 @@ wass2s_run_basin_mods_stat <- function(
 #'
 #' @param min_kge_model Numeric. Minimum KGE threshold required for a model or
 #'   product to receive non-zero weight during performance-based fusion.
+#'
+#' @param best_model_guard Logical. If \code{TRUE} (default), compare the final
+#'   fusion against the best individual consolidated model on the training subset.
+#'   If the fusion does not improve the selected metric, the best individual
+#'   model is retained instead.
+#'
+#' @param best_model_min_improvement Numeric. Minimum relative RMSE improvement
+#'   or absolute KGE improvement required for a fusion to beat the best individual
+#'   model when \code{best_model_guard = TRUE}.
+#'
+#' @param best_model_metric Character. Metric used by the best-model guard.
+#'   \code{"rmse"} favours lower RMSE; \code{"kge"} favours higher KGE.
 #'
 #' @param max_na_frac Numeric. Maximum fraction of missing values allowed per variable.
 #'
@@ -1154,7 +1198,7 @@ wass2s_run_basins_stat <- function(data_by_product,
                                    final_fuser = "rf",
                                    grid_levels = 5,
                                    product_fusion_method = "median",
-                                   fusion_method = c("meta", "mean", "median", "weighted_mean"),
+                                   fusion_method = c("auto", "meta", "mean", "median", "weighted_mean", "best"),
                                    basins = NULL,
                                    parallel = FALSE,
                                    workers = 4,
@@ -1163,10 +1207,14 @@ wass2s_run_basins_stat <- function(data_by_product,
                                    target_positive=TRUE,
                                    allow_par = TRUE,
                                    min_kge_model = 0.2,
+                                   best_model_guard = TRUE,
+                                   best_model_min_improvement = 0,
+                                   best_model_metric = c("rmse", "kge"),
                                    max_na_frac = 0.3,
                                    impute = "median",
                                    require_variance = TRUE,
                                    ...) {
+  best_model_metric <- match.arg(best_model_metric)
 
   .require_pkg(engine_pkg[final_fuser])
 
@@ -1216,6 +1264,9 @@ wass2s_run_basins_stat <- function(data_by_product,
         target_positive=target_positive,
         allow_par=allow_par,
         min_kge_model=min_kge_model,
+        best_model_guard=best_model_guard,
+        best_model_min_improvement=best_model_min_improvement,
+        best_model_metric=best_model_metric,
         max_na_frac=max_na_frac,
         impute=impute,
         require_variance=require_variance,

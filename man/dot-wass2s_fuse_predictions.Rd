@@ -10,7 +10,7 @@
   target = "Q",
   date_col = "YYYY",
   prediction_years = NULL,
-  fusion_method = c("meta", "mean", "median", "weighted_mean"),
+  fusion_method = c("auto", "meta", "mean", "median", "weighted_mean", "best"),
   final_fuser = "rf",
   grid_levels = 5,
   quiet = TRUE,
@@ -19,7 +19,10 @@
   target_positive = FALSE,
   meta_guard = TRUE,
   meta_min_improvement = 0.02,
-  meta_min_kge_delta = 0
+  meta_min_kge_delta = 0,
+  best_model_guard = TRUE,
+  best_model_min_improvement = 0,
+  best_model_metric = c("rmse", "kge")
 )
 }
 \description{
