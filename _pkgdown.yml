@@ -72,9 +72,13 @@ reference:
   - wass2s_corr
   - wass2s_minmax
   - wass2s_rolling_cv
+  - wass2s_run_report
+  - wass2s_plot_skill_matrix
 - title: Forecast Classes and Maps
   contents:
   - wass2s_class_from_forecast
+  - wass2s_tercile_from_forecast
+  - wass2s_probabilistic_skill
   - wass2s_class_entropy
   - wass2s_plot_map
 - title: Generic Interface

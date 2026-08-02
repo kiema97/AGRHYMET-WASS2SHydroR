@@ -35,7 +35,11 @@ wass2s_tune_pred_stat(
   selection_metric = c("kge", "rmse"),
   max_na_frac = 0.3,
   impute = "median",
-  require_variance = TRUE
+  require_variance = TRUE,
+  overfit_guard = TRUE,
+  max_fit_cv_kge_gap = 0.5,
+  max_cv_fit_rmse_ratio = 4,
+  min_cv_kge = -Inf
 )
 }
 \arguments{
@@ -144,6 +148,18 @@ If \code{"none"}, no imputation is performed after the guard (default \code{"med
 
 \item{require_variance}{Logical; if \code{TRUE}, stop when a column has zero
 standard deviation after imputation (default \code{TRUE}).}
+
+\item{overfit_guard}{Logical. If \code{TRUE}, flag models whose apparent
+historical fit is much better than their cross-validated skill.}
+
+\item{max_fit_cv_kge_gap}{Maximum allowed difference between fitted-history
+KGE and cross-validated KGE before flagging overfitting.}
+
+\item{max_cv_fit_rmse_ratio}{Maximum allowed ratio between cross-validated
+RMSE and fitted-history RMSE before flagging overfitting.}
+
+\item{min_cv_kge}{Minimum acceptable cross-validated KGE when
+\code{overfit_guard = TRUE}.}
 }
 \value{
 A list with:

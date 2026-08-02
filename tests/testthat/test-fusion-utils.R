@@ -122,8 +122,10 @@ test_that("auto final fusion compares candidates and reports decision", {
   expect_equal(res$fusion_method, "best")
   expect_type(res$fusion_report, "list")
   expect_true(all(c("method", "kge", "rmse", "selected") %in% names(res$fusion_report$candidate_scores)))
+  expect_true(all(c("method", "cv_kge", "cv_rmse", "selected") %in% names(res$fusion_report$candidate_cv_scores)))
   expect_true(any(res$fusion_report$candidate_scores$selected))
-  expect_equal(res$fusion_report$selection_reason, "auto_best_training_rmse")
+  expect_equal(res$fusion_report$selection_reason, "auto_best_cv_rmse_train_period")
+  expect_false(res$fusion_report$diagnostics$decision$used_test_for_selection[[1]])
 })
 
 test_that("explicit fusion can be imposed by disabling best-model guard", {

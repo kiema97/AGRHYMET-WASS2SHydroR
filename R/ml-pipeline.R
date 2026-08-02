@@ -425,6 +425,9 @@ wass2s_run_bas_mod_ml <- function(
     best_model = fusion_res$best_model,
     best_model_scores = fusion_res$best_model_scores,
     fusion_candidates = fusion_res$fusion_candidates,
+    diagnostics = fusion_res$diagnostics,
+    probabilities = fusion_res$probabilities,
+    probabilistic_skill = fusion_res$probabilistic_skill,
     final_fuser = fusion_res$final_fuser,
     leaderboards = stats::setNames(
       purrr::map(outs, "leaderboard"),

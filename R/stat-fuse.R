@@ -412,6 +412,9 @@ wass2s_cons_mods_stat <- function(
     list(
       product = p,
       score   = out$kge_cv_mean,     # standardized key for fusion util
+      score_raw = out$kge_cv_raw %||% out$kge_cv_mean,
+      overfit_flag = isTRUE(out$overfit_flag),
+      fit_diagnostics = out$fit_diagnostics,
       rsq     = out$rsq_cv_mean,
       preds   = preds,
       n_pred  = length(predictors),
@@ -465,6 +468,31 @@ wass2s_cons_mods_stat <- function(
   if (nrow(fusion$leaderboard_products) > 0 && "score" %in% names(fusion$leaderboard_products)) {
     fusion$leaderboard_products <- fusion$leaderboard_products |>
       dplyr::rename(kge = "score")
+  }
+
+  if (nrow(fusion$leaderboard_products) > 0) {
+    audit <- tibble::tibble(
+      product = purrr::map_chr(results_std, "product"),
+      kge_raw = purrr::map_dbl(results_std, ~ .x$score_raw %||% NA_real_),
+      overfit_flag = purrr::map_lgl(results_std, ~ isTRUE(.x$overfit_flag)),
+      fit_kge = purrr::map_dbl(results_std, ~ {
+        d <- .x$fit_diagnostics
+        if (is.null(d) || nrow(d) == 0L) NA_real_ else d$fit_kge[[1]]
+      }),
+      fit_cv_kge_gap = purrr::map_dbl(results_std, ~ {
+        d <- .x$fit_diagnostics
+        if (is.null(d) || nrow(d) == 0L) NA_real_ else d$fit_cv_kge_gap[[1]]
+      }),
+      cv_fit_rmse_ratio = purrr::map_dbl(results_std, ~ {
+        d <- .x$fit_diagnostics
+        if (is.null(d) || nrow(d) == 0L) NA_real_ else d$cv_fit_rmse_ratio[[1]]
+      })
+    )
+    fusion$leaderboard_products <- dplyr::left_join(
+      fusion$leaderboard_products,
+      audit,
+      by = "product"
+    )
   }
 
   fusion$all_results <- results_std

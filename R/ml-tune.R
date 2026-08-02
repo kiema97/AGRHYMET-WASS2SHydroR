@@ -13,30 +13,14 @@ min_analysis_n <- function(rset) {
                                           max_fit_cv_kge_gap = 0.50,
                                           max_cv_fit_rmse_ratio = 4,
                                           min_cv_kge = -Inf) {
-  ok <- is.finite(truth) & is.finite(estimate)
-  fit_kge <- if (sum(ok) >= 2L) wass2s_kge(truth[ok], estimate[ok]) else NA_real_
-  fit_rmse <- if (sum(ok) > 0L) wass2s_rmse(truth[ok], estimate[ok]) else NA_real_
-
-  kge_gap <- if (is.finite(fit_kge) && is.finite(cv_kge)) fit_kge - cv_kge else NA_real_
-  cv_fit_rmse_ratio <- if (is.finite(cv_rmse) && is.finite(fit_rmse) && fit_rmse > 0) {
-    cv_rmse / fit_rmse
-  } else {
-    NA_real_
-  }
-
-  overfit_flag <- FALSE
-  if (is.finite(kge_gap) && kge_gap > max_fit_cv_kge_gap) overfit_flag <- TRUE
-  if (is.finite(cv_fit_rmse_ratio) && cv_fit_rmse_ratio > max_cv_fit_rmse_ratio) overfit_flag <- TRUE
-  if (is.finite(min_cv_kge) && (!is.finite(cv_kge) || cv_kge < min_cv_kge)) overfit_flag <- TRUE
-
-  tibble::tibble(
-    fit_kge = fit_kge,
-    fit_rmse = fit_rmse,
+  .wass2s_fit_cv_diagnostics(
+    truth = truth,
+    estimate = estimate,
     cv_kge = cv_kge,
     cv_rmse = cv_rmse,
-    fit_cv_kge_gap = kge_gap,
-    cv_fit_rmse_ratio = cv_fit_rmse_ratio,
-    overfit_flag = overfit_flag
+    max_fit_cv_kge_gap = max_fit_cv_kge_gap,
+    max_cv_fit_rmse_ratio = max_cv_fit_rmse_ratio,
+    min_cv_kge = min_cv_kge
   )
 }
 

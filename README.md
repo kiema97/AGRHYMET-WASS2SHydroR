@@ -25,15 +25,38 @@ basin_id <- unique(data_by_product[[1]]$HYBAS_ID)[1]
 res <- wass2s_run_basin_mods_stat(
   basin_id = basin_id,
   data_by_product = data_by_product,
-  fusion_method = "median",
+  fusion_method = "auto",
+  best_model_guard = TRUE,
   quiet = FALSE
 )
 
 res$scores
+res$probabilities
+
+report <- wass2s_run_report(res, approach = "STAT")
+report$summary
 ```
 
 See the website articles for the complete CDS, data preparation, statistical,
 machine learning, and HYPE workflows.
+
+## Recommended Operational Outputs
+
+For operational runs, use `fusion_method = "auto"` with
+`best_model_guard = TRUE`. The package compares candidate fusion methods and
+individual models using validation information from the training period, keeps
+all candidate outputs for audit, and leaves the test period for evaluation.
+
+STAT and ML basin-level workflows return a common set of outputs:
+
+- `scores`, `scores_train`, `scores_test`
+- `diagnostics`
+- `fusion_report`
+- `probabilities`
+- `probabilistic_skill`
+
+Use `wass2s_run_report()` to create a compact summary for user-facing scripts
+and reports.
 
 ## Implemented ML Models
 

@@ -209,6 +209,172 @@ wass2s_write_manifest <- function(manifest, path, overwrite = FALSE) {
   invisible(path)
 }
 
+#' Build a concise report from a WASS2S forecast result
+#'
+#' Creates a standardized, script-friendly summary from STAT, ML, or HYDRO-like
+#' WASS2S result objects. The report is intentionally compact: it exposes the
+#' selected fusion method, deterministic skill, probabilistic skill, train/test
+#' diagnostics, warnings, and the run decision in a common structure.
+#'
+#' @param x A WASS2S result object returned by functions such as
+#'   \code{wass2s_run_basin_mods_stat()} or \code{wass2s_run_bas_mod_ml()}, a
+#'   named list of basin-level results, or a HYPE execution table returned by
+#'   \code{wass2s_hype_run_all_models()}.
+#' @param approach Optional character label, for example \code{"STAT"},
+#'   \code{"ML"}, or \code{"HYDRO"}.
+#'
+#' @return A list with class \code{"wass2s_run_report"} containing summary
+#'   tables and warnings.
+#'
+#' @examples
+#' \dontrun{
+#' report <- wass2s_run_report(res, approach = "ML")
+#' report$summary
+#' }
+#'
+#' @export
+wass2s_run_report <- function(x, approach = NULL) {
+  is_result <- function(obj) {
+    is.list(obj) && any(c(
+      "scores", "scores_train", "scores_test", "fused_by_model",
+      "fusion_report", "diagnostics"
+    ) %in% names(obj))
+  }
+  result_warnings <- function(obj) {
+    if (!is.list(obj)) return(character())
+    diag <- obj$diagnostics
+    frep <- obj$fusion_report
+    c(
+      if (is.list(diag)) diag$warnings %||% character() else character(),
+      if (is.list(frep) && is.list(frep$diagnostics)) frep$diagnostics$warnings %||% character() else character()
+    )
+  }
+  hype_report <- function(df) {
+    tibble::tibble(
+      id = if ("resultdir" %in% names(df)) as.character(df$resultdir) else as.character(seq_len(nrow(df))),
+      approach = approach %||% "HYDRO",
+      success = if ("success" %in% names(df)) as.logical(df$success) else NA,
+      exit_status = if ("exit_status" %in% names(df)) as.integer(df$exit_status) else NA_integer_,
+      duration_sec = if ("duration_sec" %in% names(df)) as.numeric(df$duration_sec) else NA_real_,
+      n_outputs = if ("n_outputs" %in% names(df)) as.integer(df$n_outputs) else NA_integer_,
+      result_dir = if ("result_dir" %in% names(df)) as.character(df$result_dir) else NA_character_,
+      n_warnings = 0L
+    )
+  }
+
+  one <- function(obj, id = NA_character_) {
+    scores <- obj$scores %||% tibble::tibble()
+    scores_train <- obj$scores_train %||% {
+      if ("split" %in% names(scores)) dplyr::filter(scores, .data$split == "train") else tibble::tibble()
+    }
+    scores_test <- obj$scores_test %||% {
+      if ("split" %in% names(scores)) dplyr::filter(scores, .data$split == "test") else tibble::tibble()
+    }
+    diagnostics <- obj$diagnostics %||% obj$fusion_report$diagnostics %||% list()
+    perf_gap <- diagnostics$performance_gap %||% tibble::tibble()
+    split_diag <- diagnostics$split %||% tibble::tibble()
+    decision <- diagnostics$decision %||% tibble::tibble()
+    prob_skill <- obj$probabilistic_skill %||% obj$fusion_report$probabilistic_skill %||% tibble::tibble()
+    warnings <- diagnostics$warnings %||% character()
+
+    tibble::tibble(
+      id = as.character(id),
+      approach = approach %||% NA_character_,
+      requested_fusion_method = obj$requested_fusion_method %||%
+        obj$fusion_report$requested_fusion_method %||% NA_character_,
+      selected_fusion_method = obj$fusion_method %||%
+        obj$fusion_report$selected_fusion_method %||% NA_character_,
+      selection_reason = obj$fusion_report$selection_reason %||%
+        if (nrow(decision) > 0L) decision$selection_reason[[1]] else NA_character_,
+      best_model = obj$best_model %||% obj$fusion_report$best_model %||% NA_character_,
+      train_kge = if (nrow(scores_train) > 0L) scores_train$kge[[1]] else NA_real_,
+      test_kge = if (nrow(scores_test) > 0L) scores_test$kge[[1]] else NA_real_,
+      train_rmse = if (nrow(scores_train) > 0L) scores_train$rmse[[1]] else NA_real_,
+      test_rmse = if (nrow(scores_test) > 0L) scores_test$rmse[[1]] else NA_real_,
+      train_test_kge_gap = if (nrow(perf_gap) > 0L) perf_gap$train_test_kge_gap[[1]] else NA_real_,
+      test_train_rmse_ratio = if (nrow(perf_gap) > 0L) perf_gap$test_train_rmse_ratio[[1]] else NA_real_,
+      overfit_flag = if (nrow(perf_gap) > 0L) isTRUE(perf_gap$overfit_flag[[1]]) else NA,
+      n_train = if (nrow(split_diag) > 0L) split_diag$n_train[[1]] else NA_integer_,
+      n_test = if (nrow(split_diag) > 0L) split_diag$n_test[[1]] else NA_integer_,
+      leakage_risk = if (nrow(split_diag) > 0L) split_diag$leakage_risk[[1]] else NA_character_,
+      used_test_for_selection = if (nrow(decision) > 0L) decision$used_test_for_selection[[1]] else FALSE,
+      probabilistic_rpss = if (nrow(prob_skill) > 0L) prob_skill$rpss[[1]] else NA_real_,
+      probabilistic_accuracy = if (nrow(prob_skill) > 0L) prob_skill$accuracy[[1]] else NA_real_,
+      n_warnings = length(warnings)
+    )
+  }
+
+  if (is.data.frame(x) && any(c("success", "exit_status", "duration_sec", "resultdir") %in% names(x))) {
+    summary <- hype_report(x)
+    report <- list(
+      created_at = format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z"),
+      approach = approach %||% "HYDRO",
+      summary = summary,
+      warnings = character(),
+      recommendations = if (any(summary$success %in% FALSE, na.rm = TRUE)) {
+        "Inspect failed HYPE runs, stderr logs, and expected output files."
+      } else {
+        "No major execution warning detected in the standardized report."
+      }
+    )
+    class(report) <- c("wass2s_run_report", "list")
+    return(report)
+  }
+
+  is_basin_result <- is_result(x)
+  if (is_basin_result) {
+    summary <- one(x)
+    warnings <- result_warnings(x)
+  } else if (is.list(x)) {
+    rows <- lapply(names(x), function(nm) {
+      obj <- x[[nm]]
+      if (is.list(obj) && length(obj) == 1L && is_result(obj[[1]])) {
+        obj <- obj[[1]]
+      }
+      if (!is_result(obj)) return(NULL)
+      one(obj, id = nm)
+    })
+    summary <- dplyr::bind_rows(rows)
+    warnings <- unlist(lapply(x, function(obj) {
+      if (is.list(obj) && length(obj) == 1L && is_result(obj[[1]])) obj <- obj[[1]]
+      result_warnings(obj)
+    }), use.names = FALSE)
+  } else {
+    stop("x must be a WASS2S result object or a list of result objects.", call. = FALSE)
+  }
+
+  report <- list(
+    created_at = format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z"),
+    approach = approach,
+    summary = summary,
+    warnings = unique(as.character(warnings)),
+    recommendations = .wass2s_report_recommendations(summary)
+  )
+  class(report) <- c("wass2s_run_report", "list")
+  report
+}
+
+.wass2s_report_recommendations <- function(summary) {
+  if (!is.data.frame(summary) || nrow(summary) == 0L) {
+    return("No valid result rows were available for reporting.")
+  }
+  out <- character()
+  if (any(summary$used_test_for_selection %in% TRUE, na.rm = TRUE)) {
+    out <- c(out, "Review workflow: at least one row indicates test data were used for selection.")
+  }
+  if (any(summary$overfit_flag %in% TRUE, na.rm = TRUE)) {
+    out <- c(out, "Inspect overfit_flag rows and prefer simpler models or best-model fallback.")
+  }
+  if (any(summary$leakage_risk != "low", na.rm = TRUE)) {
+    out <- c(out, "Provide explicit prediction_years for strict train/test reporting.")
+  }
+  if (any(!is.finite(summary$test_kge), na.rm = TRUE)) {
+    out <- c(out, "Some test KGE values are unavailable; check test sample size.")
+  }
+  if (length(out) == 0L) out <- "No major operational warning detected in the standardized report."
+  out
+}
+
 #' Compare two forecast versions
 #'
 #' Scores a new and an old forecast summary using objective operational

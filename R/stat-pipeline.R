@@ -393,6 +393,9 @@ wass2s_run_basin_mods_stat <- function(
     best_model = fusion_res$best_model,
     best_model_scores = fusion_res$best_model_scores,
     fusion_candidates = fusion_res$fusion_candidates,
+    diagnostics = fusion_res$diagnostics,
+    probabilities = fusion_res$probabilities,
+    probabilistic_skill = fusion_res$probabilistic_skill,
     leaderboards = list(
       PCR   = models$PCR$leaderboard_products,
       RIDGE = models$RIDGE$leaderboard_products,
