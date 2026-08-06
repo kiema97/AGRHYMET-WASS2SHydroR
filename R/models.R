@@ -67,6 +67,37 @@ engine_pkg <- c(
   invisible(TRUE)
 }
 
+.wass2s_model_p <- function(p) {
+  if (is.null(p) || length(p) != 1L || !is.finite(p) || p < 1) {
+    return(1L)
+  }
+  as.integer(max(1L, floor(p)))
+}
+
+.wass2s_model_n <- function(n_min) {
+  if (is.null(n_min) || length(n_min) != 1L || !is.finite(n_min) || n_min < 2) {
+    return(50L)
+  }
+  as.integer(max(2L, floor(n_min)))
+}
+
+.wass2s_int_range <- function(lower, upper, min_value = 1L) {
+  lower <- as.integer(max(min_value, floor(lower)))
+  upper <- as.integer(max(min_value, floor(upper)))
+  if (upper < lower) upper <- lower
+  c(lower, upper)
+}
+
+.wass2s_grid_regular_limited <- function(..., levels = 5, grid_max = 80) {
+  levels <- as.integer(max(1L, floor(levels)))
+  grid <- dials::grid_regular(..., levels = levels)
+  if (!is.finite(grid_max) || nrow(grid) <= grid_max) {
+    return(grid)
+  }
+  idx <- unique(as.integer(round(seq(1, nrow(grid), length.out = grid_max))))
+  grid[idx, , drop = FALSE]
+}
+
 # parsnip specs (unifiées)
 #' Model specification factory (parsnip)
 #'
@@ -74,13 +105,14 @@ engine_pkg <- c(
 #' CPU-friendly algorithm.
 #'
 #' @param name One of \code{SUPPORTED_MODELS}, e.g. \code{"rf"}, \code{"xgb"},
-#'   \code{"lgbm"}, \code{"mlp"}, \code{"kknn"}, \code{"svmlinear"}, \code{"mars"}, \code{"cubist"}.
+#'   \code{"mlp"}, \code{"kknn"}, \code{"svmlinear"}, \code{"mars"}, \code{"cubist"}.
 #' @return A \pkg{parsnip} model specification (mode = regression).
 #' @seealso \code{\link{model_grid}}
 #' @keywords internal
 #' @noRd
 model_spec <- function(name,p=NULL) {
   name <- match.arg(name, SUPPORTED_MODELS)
+  p <- .wass2s_model_p(p)
   pkg <- engine_pkg[[name]]
   .require_pkg(pkg)
 
@@ -130,7 +162,7 @@ model_spec <- function(name,p=NULL) {
            penalty = tune(),
            epochs = tune()
          ) |>
-           parsnip::set_engine("nnet") |>
+           parsnip::set_engine("nnet", trace = FALSE, MaxNWts = 5000) |>
            parsnip::set_mode("regression"),
 
          kknn = parsnip::nearest_neighbor(
@@ -171,30 +203,37 @@ model_spec <- function(name,p=NULL) {
 #' @seealso \code{\link{model_spec}}
 #' @keywords internal
 #' @noRd
-model_grid <- function(name, p, levels = 5, n_min = Inf) {
+model_grid <- function(name, p, levels = 5, n_min = Inf, grid_max = 80) {
   name <- match.arg(name, SUPPORTED_MODELS)
+  p <- .wass2s_model_p(p)
+  n_min <- .wass2s_model_n(n_min)
   pkg <- engine_pkg[[name]]
   .require_pkg(pkg)
-  # helper borne
-  cap <- function(x, m) max(1L, min(x, m))
+  cap <- function(x, m) max(1L, min(as.integer(x), as.integer(m)))
 
   switch(name,
-         kknn = dials::grid_regular(
-           dials::neighbors(range = c(3L, cap(25L, n_min - 1L))),
+         kknn = .wass2s_grid_regular_limited(
+           dials::neighbors(range = .wass2s_int_range(3L, cap(25L, n_min - 1L))),
            dials::weight_func(values = c("rectangular", "triangular", "epanechnikov")),
-           levels = levels
+           levels = levels,
+           grid_max = grid_max
          ),
 
-         mars = dials::grid_regular(
-           dials::num_terms(range = c(4L, cap(40L, n_min - 1L))),
-           dials::prod_degree(range = c(1L, 2L)),
-           levels = levels
+         mars = .wass2s_grid_regular_limited(
+           dials::num_terms(range = .wass2s_int_range(2L, cap(20L, n_min - 1L))),
+           dials::prod_degree(range = .wass2s_int_range(1L, 2L)),
+           levels = levels,
+           grid_max = grid_max
          ),
 
-         rf = dials::grid_regular(
-           dials::mtry(range = c(1L, max(1L, p))),
-           dials::min_n(range = c(cap(5L, max(2L, n_min - 1L)), cap(40L, max(5L, floor(n_min/2))))),
-           levels = levels
+         rf = .wass2s_grid_regular_limited(
+           dials::mtry(range = .wass2s_int_range(1L, p)),
+           dials::min_n(range = .wass2s_int_range(
+             min(5L, max(2L, floor(n_min / 3))),
+             min(40L, max(2L, floor(n_min / 2)))
+           )),
+           levels = levels,
+           grid_max = grid_max
          ),
 
          # xgb = dials::grid_regular(
@@ -206,44 +245,43 @@ model_grid <- function(name, p, levels = 5, n_min = Inf) {
          #   levels = levels
          # ),
 
-         xgb = dials::grid_regular(
+         xgb = .wass2s_grid_regular_limited(
            dials::learn_rate(range = c(-4, -2)),
-           dials::tree_depth(range = c(1L, cap(3L, max(1L, floor(log2(n_min)))))),
-           dials::min_n(range = c(cap(5L, max(2L, n_min - 1L)), cap(40L, max(5L, floor(n_min / 2))))),
+           dials::tree_depth(range = .wass2s_int_range(1L, cap(3L, max(1L, floor(log2(n_min)))))),
+           dials::min_n(range = .wass2s_int_range(
+             min(5L, max(2L, floor(n_min / 3))),
+             min(40L, max(2L, floor(n_min / 2)))
+           )),
            dials::loss_reduction(range = c(-3, 1)),
-           levels = levels
+           levels = levels,
+           grid_max = grid_max
          ),
 
-         lgbm = dials::grid_regular(
-           dials::learn_rate(range = c(-3, -1)),
-           dials::tree_depth(range = c(2L, cap(6L, max(2L, floor(log2(n_min)))))),
-           dials::loss_reduction(),
-           dials::mtry(range = c(1L, max(1L, p))),
-           dials::min_n(range = c(2L, cap(40L, max(2L, floor(n_min/2))))),
-           levels = levels
-         ),
-
-         glmnet = dials::grid_regular(
+         glmnet = .wass2s_grid_regular_limited(
            dials::penalty(range = c(-6, 1)),
            dials::mixture(range = c(0, 1) ),
-           levels = levels),
+           levels = levels,
+           grid_max = grid_max),
 
-         mlp = dials::grid_regular(
-           dials::hidden_units(range = c(1L, cap(6L, max(1L, floor(n_min / 4))))),
+         mlp = .wass2s_grid_regular_limited(
+           dials::hidden_units(range = .wass2s_int_range(1L, cap(4L, max(1L, floor(n_min / 5))))),
            dials::penalty(range = c(-4, -1)),
-           dials::epochs(range = c(25L, 100L)),
-           levels = levels
+           dials::epochs(range = .wass2s_int_range(25L, 75L)),
+           levels = levels,
+           grid_max = grid_max
          ),
 
-         svmlinear = dials::grid_regular(
+         svmlinear = .wass2s_grid_regular_limited(
            dials::cost(range = c(-6, 4)),
-           levels = levels
+           levels = levels,
+           grid_max = grid_max
          ),
 
-         cubist = dials::grid_regular(
-           rules::committees(range = c(1L, cap(50L, max(1L, floor(n_min/2))))),
-           dials::neighbors(range = c(0L, cap(9L, max(0L, n_min - 1L)))),
-           levels = levels
+         cubist = .wass2s_grid_regular_limited(
+           rules::committees(range = .wass2s_int_range(1L, cap(25L, max(1L, floor(n_min / 3))))),
+           dials::neighbors(range = .wass2s_int_range(0L, cap(9L, max(0L, n_min - 1L)), min_value = 0L)),
+           levels = levels,
+           grid_max = grid_max
          )
   )
 }

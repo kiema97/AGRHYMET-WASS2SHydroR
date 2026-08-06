@@ -595,10 +595,11 @@ fuse_products_predictions_ <- function(
           recipes::step_impute_median(recipes::all_predictors()) %>%
           recipes::step_normalize(recipes::all_predictors())
 
-        spec <- model_spec(sub_fuser)
         pred_cols <- setdiff(names(df_tr), c("YYYY", "Q"))
+        spec <- model_spec(sub_fuser, p = length(pred_cols))
         grid_sub <- model_grid(sub_fuser, p = length(pred_cols),
-                               levels = sub_grid_levels)
+                               levels = sub_grid_levels,
+                               n_min = nrow(df_tr))
 
         wf <- workflows::workflow() |>
           workflows::add_recipe(rec) |>
