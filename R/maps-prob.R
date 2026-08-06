@@ -19,6 +19,41 @@ as_sf <- function(x) {
   stop("as_sf(): provide an sf/sfc object or a valid file path.", call. = FALSE)
 }
 
+.wass2s_prob_fill_scale <- function(palette, limits = c(0, 1)) {
+  if (inherits(palette, "Scale") || inherits(palette, "ggproto")) {
+    return(palette)
+  }
+
+  if (is.character(palette) && length(palette) >= 2L) {
+    return(ggplot2::scale_fill_gradient(
+      limits = limits,
+      name = "Probability",
+      low = palette[[1]],
+      high = palette[[2]],
+      na.value = "#f0f0f0"
+    ))
+  }
+
+  has_viridis <- requireNamespace("viridis", quietly = TRUE)
+  if (has_viridis) {
+    option <- if (is.character(palette) && length(palette) >= 1L) palette[[1]] else "viridis"
+    viridis::scale_fill_viridis(
+      option = option,
+      limits = limits,
+      name = "Probability",
+      na.value = "#f0f0f0"
+    )
+  } else {
+    ggplot2::scale_fill_gradient(
+      limits = limits,
+      name = "Probability",
+      low = "white",
+      high = "steelblue",
+      na.value = "#f0f0f0"
+    )
+  }
+}
+
 
 #' Plot probability maps for below/normal/above classes (faceted) with extra layers
 #'
@@ -176,23 +211,7 @@ plot_prob_maps <- function(
   }
 
   # ---- fill scale ----
-  has_viridis <- requireNamespace("viridis", quietly = TRUE)
-  scale_fill_prob <- if (has_viridis) {
-    viridis::scale_fill_viridis(
-      option = palette[1],
-      limits = limits,
-      name = "Probability",
-      na.value = "#f0f0f0"
-    )
-  } else {
-    ggplot2::scale_fill_gradient(
-      limits = limits,
-      name = "Probability",
-      low = "white",
-      high = "steelblue",
-      na.value = "#f0f0f0"
-    )
-  }
+  scale_fill_prob <- .wass2s_prob_fill_scale(palette = palette, limits = limits)
 
   # ---- build plot ----
   p <- ggplot2::ggplot()
@@ -320,23 +339,8 @@ plot_prob_maps_ <- function(
                            levels = c( "p_above", "p_normal","p_below"),
                            labels =c( "p_above", "p_normal","p_below") ))
 
-  # Palette: use viridis if available; fallback to default continuous
-  has_viridis <- requireNamespace("viridis", quietly = TRUE)
-  scale_fill_prob <- if (has_viridis) {
-    viridis::scale_fill_viridis(
-      option = palette[1],
-      limits = limits,
-      name = "Probability",
-      na.value = "#f0f0f0"
-    )
-  } else {
-    ggplot2::scale_fill_gradient(
-      limits = limits,
-      name = "Probability",
-      low = "white", high = "steelblue",
-      na.value = "#f0f0f0"
-    )
-  }
+  # Palette: accept either a ggplot2 fill scale, two colors, or a viridis option.
+  scale_fill_prob <- .wass2s_prob_fill_scale(palette = palette, limits = limits)
 
   p <- ggplot2::ggplot(long_df) +
     ggplot2::geom_sf(ggplot2::aes(fill = prob), color = "grey70", size = 0.1) +

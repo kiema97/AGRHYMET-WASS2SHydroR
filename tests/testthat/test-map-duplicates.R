@@ -21,10 +21,22 @@ test_that("generic map plotters tolerate duplicated basin rows", {
   )
 
   p_prob <- wass2s_plot_map(sf_basins, probs, basin_col = "HYBAS_ID")
+  p_prob_custom_scale <- wass2s_plot_map(
+    sf_basins,
+    probs,
+    basin_col = "HYBAS_ID",
+    palette = ggplot2::scale_fill_gradient(
+      low = "#C6DBEF",
+      high = "#2171B5",
+      name = "Probability"
+    )
+  )
   p_class <- wass2s_plot_map(sf_basins, probs, basin_col = "HYBAS_ID", type = "class")
 
   expect_s3_class(p_prob, "ggplot")
+  expect_s3_class(p_prob_custom_scale, "ggplot")
   expect_s3_class(p_class, "ggplot")
   expect_silent(ggplot2::ggplot_build(p_prob))
+  expect_silent(ggplot2::ggplot_build(p_prob_custom_scale))
   expect_silent(ggplot2::ggplot_build(p_class))
 })
