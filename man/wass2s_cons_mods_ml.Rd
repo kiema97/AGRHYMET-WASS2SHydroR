@@ -28,6 +28,12 @@ wass2s_cons_mods_ml(
   verbose = TRUE,
   allow_par = TRUE,
   selection_metric = c("rmse", "kge"),
+  overfit_guard = TRUE,
+  reject_overfit = TRUE,
+  allow_guard_fallback = TRUE,
+  max_fit_cv_kge_gap = 0.35,
+  max_cv_fit_rmse_ratio = 2,
+  min_cv_kge = -0.05,
   max_na_frac = 0.3,
   impute = "median",
   require_variance = TRUE,
@@ -97,6 +103,25 @@ meta-fusion behavior in downstream fusion helpers.}
 \item{selection_metric}{Character; forwarded to \code{wass2s_tune_pred_ml()}.
 The default \code{"rmse"} keeps RMSE tuning but reports product KGE for the
 same selected configuration.}
+
+\item{overfit_guard}{Logical; if \code{TRUE}, apply the ML generalization
+guard identically to every product/model candidate.}
+
+\item{reject_overfit}{Logical; if \code{TRUE}, candidates flagged by the
+guard are kept in the audit tables but excluded from product fusion.}
+
+\item{allow_guard_fallback}{Logical; if \code{TRUE} and all candidates are
+rejected by the guard, retain only the least-risk candidate according to
+raw CV skill minus guard severity. This keeps operational runs from becoming
+empty while making the fallback explicit in the audit table.}
+
+\item{max_fit_cv_kge_gap}{Maximum tolerated gap between fitted-history KGE
+and cross-validated KGE before a candidate is flagged.}
+
+\item{max_cv_fit_rmse_ratio}{Maximum tolerated ratio between cross-validated
+RMSE and fitted-history RMSE before a candidate is flagged.}
+
+\item{min_cv_kge}{Minimum acceptable cross-validated KGE for a candidate.}
 
 \item{max_na_frac}{Numeric in [0,1]; maximum allowed missingness per guarded column (default: 0.3).}
 

@@ -74,6 +74,7 @@ reference:
   - wass2s_rolling_cv
   - wass2s_run_report
   - wass2s_plot_skill_matrix
+  - wass2s_plot_skill_maps
 - title: Forecast Classes and Maps
   contents:
   - wass2s_class_from_forecast

@@ -10,9 +10,9 @@ min_analysis_n <- function(rset) {
                                           estimate,
                                           cv_kge,
                                           cv_rmse,
-                                          max_fit_cv_kge_gap = 0.50,
-                                          max_cv_fit_rmse_ratio = 4,
-                                          min_cv_kge = -Inf) {
+                                          max_fit_cv_kge_gap = 0.35,
+                                          max_cv_fit_rmse_ratio = 2,
+                                          min_cv_kge = -0.05) {
   .wass2s_fit_cv_diagnostics(
     truth = truth,
     estimate = estimate,
@@ -130,6 +130,10 @@ min_analysis_n <- function(rset) {
 #' @param overfit_guard Logical. If \code{TRUE}, fitted ML models whose apparent
 #'   historical fit is much better than their cross-validated skill are flagged
 #'   and assigned a penalized selection score for downstream product fusion.
+#' @param reject_overfit Logical. If \code{TRUE}, configurations flagged by the
+#'   generalization guard receive \code{NA} as fusion score and therefore cannot
+#'   be selected by default. Raw CV metrics and predictions are still returned
+#'   for audit.
 #' @param max_fit_cv_kge_gap Maximum allowed difference between fitted-history
 #'   KGE and cross-validated KGE before flagging overfitting.
 #' @param max_cv_fit_rmse_ratio Maximum allowed ratio between cross-validated
@@ -214,9 +218,10 @@ wass2s_tune_pred_ml <- function(
     require_variance = TRUE,
     min_data_required = 10,
     overfit_guard = TRUE,
-    max_fit_cv_kge_gap = 0.50,
-    max_cv_fit_rmse_ratio = 4,
-    min_cv_kge = -Inf
+    reject_overfit = TRUE,
+    max_fit_cv_kge_gap = 0.35,
+    max_cv_fit_rmse_ratio = 2,
+    min_cv_kge = -0.05
 ){
   set.seed(seed)
 
@@ -431,7 +436,11 @@ wass2s_tune_pred_ml <- function(
       selection_metric = selection_metric,
       kge_cv_raw = NA_real_,
       fit_diagnostics = tibble::tibble(),
-      overfit_flag = isTRUE(overfit_guard)
+      overfit_flag = isTRUE(overfit_guard),
+      generalization_ok = !isTRUE(overfit_guard),
+      reject_overfit = isTRUE(reject_overfit),
+      guard_reason = "insufficient_data",
+      guard_severity = Inf
     ))
   }
 
@@ -465,7 +474,11 @@ wass2s_tune_pred_ml <- function(
       selection_metric = selection_metric,
       kge_cv_raw = NA_real_,
       fit_diagnostics = tibble::tibble(),
-      overfit_flag = FALSE
+      overfit_flag = FALSE,
+      generalization_ok = TRUE,
+      reject_overfit = isTRUE(reject_overfit),
+      guard_reason = "pretrained_no_cv_guard",
+      guard_severity = 0
     ))
   }
 
@@ -518,7 +531,11 @@ wass2s_tune_pred_ml <- function(
       selection_metric = selection_metric,
       kge_cv_raw = NA_real_,
       fit_diagnostics = tibble::tibble(),
-      overfit_flag = isTRUE(overfit_guard)
+      overfit_flag = isTRUE(overfit_guard),
+      generalization_ok = !isTRUE(overfit_guard),
+      reject_overfit = isTRUE(reject_overfit),
+      guard_reason = "cv_tuning_failed",
+      guard_severity = Inf
     ))
   }
 
@@ -547,7 +564,11 @@ wass2s_tune_pred_ml <- function(
       selection_metric = selection_metric,
       kge_cv_raw = NA_real_,
       fit_diagnostics = tibble::tibble(),
-      overfit_flag = isTRUE(overfit_guard)
+      overfit_flag = isTRUE(overfit_guard),
+      generalization_ok = !isTRUE(overfit_guard),
+      reject_overfit = isTRUE(reject_overfit),
+      guard_reason = "no_selected_configuration",
+      guard_severity = Inf
     ))
   }
 
@@ -585,20 +606,27 @@ wass2s_tune_pred_ml <- function(
     min_cv_kge = min_cv_kge
   )
   overfit_flag <- isTRUE(overfit_guard) && isTRUE(fit_diagnostics$overfit_flag[[1]])
+  generalization_ok <- !overfit_flag
+  guard_reason <- fit_diagnostics$guard_reason[[1]] %||% if (generalization_ok) "accepted" else "overfit_guard"
   kge_cv_raw <- selected_score$kge_mean[[1]]
   overfit_penalty <- 0
   if (overfit_flag) {
     gap <- fit_diagnostics$fit_cv_kge_gap[[1]]
     ratio <- fit_diagnostics$cv_fit_rmse_ratio[[1]]
+    cv_kge <- fit_diagnostics$cv_kge[[1]]
     overfit_penalty <- sum(
       c(
         if (is.finite(gap)) max(0, gap) else 0,
-        if (is.finite(ratio) && ratio > max_cv_fit_rmse_ratio) log(ratio / max_cv_fit_rmse_ratio) else 0
+        if (is.finite(ratio) && ratio > max_cv_fit_rmse_ratio) log(ratio / max_cv_fit_rmse_ratio) else 0,
+        if (is.finite(min_cv_kge) && is.finite(cv_kge)) max(0, min_cv_kge - cv_kge) else 0
       ),
       na.rm = TRUE
     )
   }
   kge_cv_for_fusion <- if (is.finite(kge_cv_raw)) kge_cv_raw - overfit_penalty else NA_real_
+  if (isTRUE(reject_overfit) && overfit_flag) {
+    kge_cv_for_fusion <- NA_real_
+  }
 
   list(
     kge_cv_mean     = kge_cv_for_fusion,
@@ -612,7 +640,11 @@ wass2s_tune_pred_ml <- function(
     selected_config = selected$selected_config,
     selection_metric = selection_metric,
     fit_diagnostics = fit_diagnostics,
-    overfit_flag = overfit_flag
+    overfit_flag = overfit_flag,
+    generalization_ok = generalization_ok,
+    reject_overfit = isTRUE(reject_overfit),
+    guard_reason = guard_reason,
+    guard_severity = overfit_penalty
   )
 }
 

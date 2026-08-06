@@ -42,9 +42,10 @@ wass2s_tune_pred_ml(
   require_variance = TRUE,
   min_data_required = 10,
   overfit_guard = TRUE,
-  max_fit_cv_kge_gap = 0.5,
-  max_cv_fit_rmse_ratio = 4,
-  min_cv_kge = -Inf
+  reject_overfit = TRUE,
+  max_fit_cv_kge_gap = 0.35,
+  max_cv_fit_rmse_ratio = 2,
+  min_cv_kge = -0.05
 )
 }
 \arguments{
@@ -180,6 +181,11 @@ standard deviation after imputation (default \code{TRUE}).}
 \item{overfit_guard}{Logical. If \code{TRUE}, fitted ML models whose apparent
 historical fit is much better than their cross-validated skill are flagged
 and assigned a penalized selection score for downstream product fusion.}
+
+\item{reject_overfit}{Logical. If \code{TRUE}, configurations flagged by the
+generalization guard receive \code{NA} as fusion score and therefore cannot
+be selected by default. Raw CV metrics and predictions are still returned
+for audit.}
 
 \item{max_fit_cv_kge_gap}{Maximum allowed difference between fitted-history
 KGE and cross-validated KGE before flagging overfitting.}

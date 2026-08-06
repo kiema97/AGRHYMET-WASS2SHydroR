@@ -53,6 +53,19 @@
 #' @param selection_metric Character; forwarded to \code{wass2s_tune_pred_ml()}.
 #'   The default \code{"rmse"} keeps RMSE tuning but reports product KGE for the
 #'   same selected configuration.
+#' @param overfit_guard Logical; if \code{TRUE}, apply the ML generalization
+#'   guard identically to every product/model candidate.
+#' @param reject_overfit Logical; if \code{TRUE}, candidates flagged by the
+#'   guard are kept in the audit tables but excluded from product fusion.
+#' @param allow_guard_fallback Logical; if \code{TRUE} and all candidates are
+#'   rejected by the guard, retain only the least-risk candidate according to
+#'   raw CV skill minus guard severity. This keeps operational runs from becoming
+#'   empty while making the fallback explicit in the audit table.
+#' @param max_fit_cv_kge_gap Maximum tolerated gap between fitted-history KGE
+#'   and cross-validated KGE before a candidate is flagged.
+#' @param max_cv_fit_rmse_ratio Maximum tolerated ratio between cross-validated
+#'   RMSE and fitted-history RMSE before a candidate is flagged.
+#' @param min_cv_kge Minimum acceptable cross-validated KGE for a candidate.
 #' @param max_na_frac Numeric in [0,1]; maximum allowed missingness per guarded column (default: 0.3).
 #' @param impute Character; one of "median", "mean", "none" (default: "median").
 #' @param require_variance Logical; if TRUE, requires non-zero variance after guard (default: TRUE).
@@ -100,6 +113,12 @@ wass2s_cons_mods_ml <- function(
     verbose = TRUE,
     allow_par = TRUE,
     selection_metric = c("rmse", "kge"),
+    overfit_guard = TRUE,
+    reject_overfit = TRUE,
+    allow_guard_fallback = TRUE,
+    max_fit_cv_kge_gap = 0.35,
+    max_cv_fit_rmse_ratio = 2,
+    min_cv_kge = -0.05,
 
     # --- data quality guards ---
     max_na_frac = 0.3,
@@ -225,6 +244,11 @@ wass2s_cons_mods_ml <- function(
         quiet            = quiet,
         allow_par        = allow_par,
         selection_metric = selection_metric,
+        overfit_guard    = overfit_guard,
+        reject_overfit   = reject_overfit,
+        max_fit_cv_kge_gap = max_fit_cv_kge_gap,
+        max_cv_fit_rmse_ratio = max_cv_fit_rmse_ratio,
+        min_cv_kge       = min_cv_kge,
         max_na_frac      = max_na_frac,
         impute           = impute,
         require_variance = require_variance,
@@ -251,6 +275,11 @@ wass2s_cons_mods_ml <- function(
       score   = out$kge_cv_mean,   # standardized score for the util
       score_raw = out$kge_cv_raw %||% out$kge_cv_mean,
       overfit_flag = isTRUE(out$overfit_flag),
+      generalization_ok = isTRUE(out$generalization_ok),
+      reject_overfit = isTRUE(out$reject_overfit),
+      guard_reason = out$guard_reason %||% NA_character_,
+      guard_severity = out$guard_severity %||% NA_real_,
+      guard_fallback_used = FALSE,
       fit_diagnostics = out$fit_diagnostics,
       preds   = preds,
       # optional extra info (kept for debugging / downstream)
@@ -270,6 +299,35 @@ wass2s_cons_mods_ml <- function(
       leaderboard_products = tibble::tibble(),
       all_results = list()
     ))
+  }
+
+  usable_scores <- purrr::map_lgl(results_std, ~ is.finite(.x$score %||% NA_real_))
+  if (isTRUE(allow_guard_fallback) && !any(usable_scores)) {
+    fallback_scores <- purrr::map_dbl(results_std, ~ {
+      raw <- .x$score_raw %||% NA_real_
+      sev <- .x$guard_severity %||% NA_real_
+      if (!is.finite(raw)) {
+        NA_real_
+      } else if (is.finite(sev)) {
+        raw - sev
+      } else {
+        raw
+      }
+    })
+    if (any(is.finite(fallback_scores))) {
+      best_i <- which.max(fallback_scores)
+      for (i in seq_along(results_std)) {
+        results_std[[i]]$score <- NA_real_
+        results_std[[i]]$guard_fallback_used <- FALSE
+      }
+      results_std[[best_i]]$score <- fallback_scores[[best_i]]
+      results_std[[best_i]]$guard_fallback_used <- TRUE
+      .msg(
+        quiet, verbose,
+        "[", model, "] all product candidates failed the ML generalization guard; ",
+        "retaining least-risk product '", results_std[[best_i]]$product, "' for operational continuity."
+      )
+    }
   }
 
   # ---------------------------
@@ -303,6 +361,11 @@ wass2s_cons_mods_ml <- function(
       product = purrr::map_chr(results_std, "product"),
       kge_raw = purrr::map_dbl(results_std, ~ .x$score_raw %||% NA_real_),
       overfit_flag = purrr::map_lgl(results_std, ~ isTRUE(.x$overfit_flag)),
+      generalization_ok = purrr::map_lgl(results_std, ~ isTRUE(.x$generalization_ok)),
+      reject_overfit = purrr::map_lgl(results_std, ~ isTRUE(.x$reject_overfit)),
+      guard_reason = purrr::map_chr(results_std, ~ .x$guard_reason %||% NA_character_),
+      guard_severity = purrr::map_dbl(results_std, ~ .x$guard_severity %||% NA_real_),
+      guard_fallback_used = purrr::map_lgl(results_std, ~ isTRUE(.x$guard_fallback_used)),
       fit_kge = purrr::map_dbl(results_std, ~ {
         d <- .x$fit_diagnostics
         if (is.null(d) || nrow(d) == 0L) NA_real_ else d$fit_kge[[1]]

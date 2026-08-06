@@ -74,6 +74,12 @@ plot_prob_maps <- function(
   layer_position <- match.arg(layer_position)
 
   sf_b <- as_sf(sf_basins)
+  sf_b[[basin_col]] <- as.character(sf_b[[basin_col]])
+  if (anyDuplicated(sf_b[[basin_col]]) > 0L) {
+    sf_b <- sf_b |>
+      dplyr::group_by(dplyr::across(dplyr::all_of(basin_col))) |>
+      dplyr::summarise(.groups = "drop")
+  }
 
   # ---- validation ----
   required_cols <- c(basin_col, "p_below", "p_normal", "p_above")
@@ -83,6 +89,18 @@ plot_prob_maps <- function(
       "plot_prob_maps(): missing columns in probs_df: %s",
       paste(miss, collapse = ", ")
     ), call. = FALSE)
+  }
+
+  probs_df[[basin_col]] <- as.character(probs_df[[basin_col]])
+  if (anyDuplicated(probs_df[[basin_col]]) > 0L) {
+    probs_df <- probs_df |>
+      dplyr::group_by(dplyr::across(dplyr::all_of(basin_col))) |>
+      dplyr::summarise(
+        p_below = mean(.data$p_below, na.rm = TRUE),
+        p_normal = mean(.data$p_normal, na.rm = TRUE),
+        p_above = mean(.data$p_above, na.rm = TRUE),
+        .groups = "drop"
+      )
   }
 
   # ---- join geometry ----

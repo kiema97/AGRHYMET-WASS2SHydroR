@@ -89,6 +89,12 @@ test_that("wass2s_cons_mods_ml returns correct structure and non-NA fusion (simp
   expect_s3_class(out$fused, "tbl_df")
   expect_true(all(c("YYYY", "pred_fused") %in% names(out$fused)))
   expect_true(sum(!is.na(out$fused$pred_fused)) > 0)
+  if (nrow(out$leaderboard_products) > 0) {
+    expect_true(all(c(
+      "kge_raw", "overfit_flag", "generalization_ok", "guard_reason",
+      "guard_severity", "guard_fallback_used"
+    ) %in% names(out$leaderboard_products)))
+  }
 })
 
 test_that("ML final meta fusion is guarded unless explicitly allowed", {

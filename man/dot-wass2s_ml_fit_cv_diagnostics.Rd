@@ -9,9 +9,9 @@
   estimate,
   cv_kge,
   cv_rmse,
-  max_fit_cv_kge_gap = 0.5,
-  max_cv_fit_rmse_ratio = 4,
-  min_cv_kge = -Inf
+  max_fit_cv_kge_gap = 0.35,
+  max_cv_fit_rmse_ratio = 2,
+  min_cv_kge = -0.05
 )
 }
 \description{

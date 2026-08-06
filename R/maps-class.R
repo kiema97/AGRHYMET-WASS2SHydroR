@@ -53,6 +53,12 @@ plot_class_map <- function(
   layer_position <- match.arg(layer_position)
 
   sf_b <- as_sf(sf_basins)
+  sf_b[[basin_col]] <- as.character(sf_b[[basin_col]])
+  if (anyDuplicated(sf_b[[basin_col]]) > 0L) {
+    sf_b <- sf_b |>
+      dplyr::group_by(dplyr::across(dplyr::all_of(basin_col))) |>
+      dplyr::summarise(.groups = "drop")
+  }
 
   # ---- validation: class_df ----
   required_cols <- c(basin_col, "class_hat")
@@ -62,6 +68,19 @@ plot_class_map <- function(
       "plot_class_map(): missing columns in class_df: %s",
       paste(miss, collapse = ", ")
     ), call. = FALSE)
+  }
+
+  class_df[[basin_col]] <- as.character(class_df[[basin_col]])
+  if (anyDuplicated(class_df[[basin_col]]) > 0L) {
+    class_df <- class_df |>
+      dplyr::group_by(dplyr::across(dplyr::all_of(basin_col))) |>
+      dplyr::summarise(
+        class_hat = {
+          vals <- stats::na.omit(as.character(.data$class_hat))
+          if (length(vals) == 0L) NA_character_ else names(sort(table(vals), decreasing = TRUE))[1]
+        },
+        .groups = "drop"
+      )
   }
 
   # ---- join ----

@@ -2,9 +2,9 @@
                                        estimate,
                                        cv_kge,
                                        cv_rmse,
-                                       max_fit_cv_kge_gap = 0.50,
-                                       max_cv_fit_rmse_ratio = 4,
-                                       min_cv_kge = -Inf) {
+                                       max_fit_cv_kge_gap = 0.35,
+                                       max_cv_fit_rmse_ratio = 2,
+                                       min_cv_kge = -0.05) {
   ok <- is.finite(truth) & is.finite(estimate)
   fit_kge <- if (sum(ok) >= 2L) wass2s_kge(truth[ok], estimate[ok]) else NA_real_
   fit_rmse <- if (sum(ok) > 0L) wass2s_rmse(truth[ok], estimate[ok]) else NA_real_
@@ -16,10 +16,17 @@
     NA_real_
   }
 
-  overfit_flag <- FALSE
-  if (is.finite(kge_gap) && kge_gap > max_fit_cv_kge_gap) overfit_flag <- TRUE
-  if (is.finite(cv_fit_rmse_ratio) && cv_fit_rmse_ratio > max_cv_fit_rmse_ratio) overfit_flag <- TRUE
-  if (is.finite(min_cv_kge) && (!is.finite(cv_kge) || cv_kge < min_cv_kge)) overfit_flag <- TRUE
+  reasons <- character()
+  if (is.finite(kge_gap) && kge_gap > max_fit_cv_kge_gap) {
+    reasons <- c(reasons, "fit_cv_kge_gap")
+  }
+  if (is.finite(cv_fit_rmse_ratio) && cv_fit_rmse_ratio > max_cv_fit_rmse_ratio) {
+    reasons <- c(reasons, "cv_fit_rmse_ratio")
+  }
+  if (is.finite(min_cv_kge) && (!is.finite(cv_kge) || cv_kge < min_cv_kge)) {
+    reasons <- c(reasons, "cv_kge_below_min")
+  }
+  overfit_flag <- length(reasons) > 0L
 
   tibble::tibble(
     fit_kge = fit_kge,
@@ -28,7 +35,9 @@
     cv_rmse = cv_rmse,
     fit_cv_kge_gap = kge_gap,
     cv_fit_rmse_ratio = cv_fit_rmse_ratio,
-    overfit_flag = overfit_flag
+    overfit_flag = overfit_flag,
+    generalization_ok = !overfit_flag,
+    guard_reason = if (overfit_flag) paste(reasons, collapse = ";") else "accepted"
   )
 }
 
